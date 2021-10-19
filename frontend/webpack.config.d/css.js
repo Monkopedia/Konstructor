@@ -1,4 +1,4 @@
-config.resolve.modules.push("../browser/build/processedResources/js/main");
+config.resolve.modules.push("../frontend/src/jsMain/resources");
 //
 config.devServer = config.devServer || {}
 config.devServer.historyApiFallback = {

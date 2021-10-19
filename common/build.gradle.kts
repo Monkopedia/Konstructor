@@ -16,6 +16,7 @@
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization") version "1.5.31"
+    id("com.monkopedia.ksrpc.plugin") version "0.4.1"
 
     java
 }

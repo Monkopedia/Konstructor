@@ -16,8 +16,6 @@
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization") version "1.5.31"
-
-    id("kotlin-dce-js")
 }
 
 version = "0.1"
@@ -36,18 +34,28 @@ repositories {
 kotlin {
     js(IR) {
         browser {
-            useCommonJs()
+//            useCommonJs()
             webpackTask {
                 output.libraryTarget =
-                    org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackOutput.Target.GLOBAL
+                    org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackOutput.Target.COMMONJS
             }
-            binaries.executable()
+            dceTask {
+                keep += "kotlin.defineModule"
+                keep += "io.ktor.http.Headers"
+                keep += "kotlin.math.pow"
+                println("Adding to $name")
+            }
         }
+        binaries.executable()
     }
     sourceSets["jsMain"].apply {
         kotlin.srcDir("three-kt/threejs-wrapper/src/main/kotlin")
+        kotlin.exclude {
+            it.name == "Math.kt"
+        }
     }
     sourceSets["jsMain"].dependencies {
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-js:1.5.31")
         compileOnly("io.ktor:ktor-client-core:1.6.4")
         compileOnly("io.ktor:ktor-client-js:1.6.4")
         implementation("org.jetbrains.kotlin-wrappers:kotlin-css:1.0.0-pre.236-kotlin-1.5.30")
@@ -57,7 +65,6 @@ kotlin {
         implementation("org.jetbrains.kotlin-wrappers:kotlin-react-router-dom:5.2.0-pre.236-kotlin-1.5.30")
         implementation("org.jetbrains.kotlin-wrappers:kotlin-extensions:1.0.1-pre.236-kotlin-1.5.30")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-js:1.5.2-native-mt")
-        implementation("org.jetbrains.kotlin:kotlin-stdlib-js")
         implementation("io.ktor:ktor-http:1.5.0")
         implementation("io.ktor:ktor-http-cio:1.5.0")
         implementation("io.ktor:ktor-client-core:1.5.0")
@@ -77,12 +84,6 @@ kotlin {
         implementation(npm("react-router-dom", "5.3.0"))
         implementation(npm("three", "0.133.1"))
     }
-}
-
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinJsDce::class) {
-    keep += "kotlin.defineModule"
-    keep += "io.ktor.http.Headers"
-    println("Adding to $name")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
