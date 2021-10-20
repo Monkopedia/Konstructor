@@ -17,11 +17,6 @@ package com.monkopedia.konstructor
 
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
-import com.monkopedia.FileLogger
-import com.monkopedia.Log
-import com.monkopedia.StdoutLogger
-import com.monkopedia.error
-import com.monkopedia.imdex.Scriptorium
 import com.monkopedia.ksrpc.SerializedChannel
 import com.monkopedia.ksrpc.ServiceApp
 import com.monkopedia.ksrpc.serializedChannel
@@ -107,16 +102,7 @@ class App : ServiceApp("scriptorium") {
     }
 
     override fun createChannel(): SerializedChannel {
-        return Scriptorium.serializedChannel(
-            service,
-            errorListener = { e ->
-                Log.error(
-                    StringWriter().also {
-                        e.printStackTrace(PrintWriter(it))
-                    }.toString()
-                )
-            }
-        )
+        return error("Not implemented")
     }
 }
 

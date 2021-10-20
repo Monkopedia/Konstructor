@@ -16,7 +16,7 @@
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization") version "1.5.31"
-    id("com.monkopedia.ksrpc.plugin") version "0.4.1"
+    id("com.monkopedia.ksrpc.plugin")
 
     java
 }
@@ -38,7 +38,7 @@ kotlin {
         browser {}
     }
     sourceSets["commonMain"].dependencies {
-        api("com.monkopedia:ksrpc:0.4.1")
+        api("com.monkopedia:ksrpc:0.4.2")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.0")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.0")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2-native-mt")

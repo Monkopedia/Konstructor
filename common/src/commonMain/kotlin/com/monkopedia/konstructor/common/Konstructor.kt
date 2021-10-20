@@ -2,6 +2,7 @@ package com.monkopedia.konstructor.common
 
 import com.monkopedia.ksrpc.KsMethod
 import com.monkopedia.ksrpc.KsService
+import com.monkopedia.ksrpc.RpcService
 import kotlinx.serialization.Serializable
 
 enum class KonstructionType {
@@ -17,7 +18,7 @@ data class Konstruction(
 )
 
 @KsService
-interface Konstructor {
+interface Konstructor : RpcService {
     @KsMethod("/list")
     suspend fun list(u: Unit): List<Konstruction>
 

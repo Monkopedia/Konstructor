@@ -2,6 +2,7 @@ package com.monkopedia.konstructor.common
 
 import com.monkopedia.ksrpc.KsMethod
 import com.monkopedia.ksrpc.KsService
+import com.monkopedia.ksrpc.RpcService
 import io.ktor.utils.io.ByteReadChannel
 import kotlinx.serialization.Serializable
 
@@ -23,7 +24,7 @@ data class TaskResult(
 )
 
 @KsService
-interface KonstructionService {
+interface KonstructionService : RpcService {
     @KsMethod("/name")
     suspend fun getName(u: Unit): String
 
