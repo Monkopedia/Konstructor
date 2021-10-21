@@ -17,38 +17,45 @@ package com.monkopedia.konstructor
 
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
+import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.ksrpc.SerializedChannel
 import com.monkopedia.ksrpc.ServiceApp
-import com.monkopedia.ksrpc.serializedChannel
+import com.monkopedia.ksrpc.serialized
 import com.monkopedia.ksrpc.serve
 import com.monkopedia.ksrpc.serveOnStd
-import io.ktor.application.*
-import io.ktor.features.*
-import io.ktor.http.*
-import io.ktor.http.content.*
-import io.ktor.response.*
-import io.ktor.routing.*
-import io.ktor.server.engine.*
-import io.ktor.server.netty.*
+import io.ktor.application.call
+import io.ktor.application.install
+import io.ktor.features.CORS
+import io.ktor.features.StatusPages
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.defaultResource
+import io.ktor.http.content.resolveResource
+import io.ktor.http.content.resources
+import io.ktor.http.content.static
+import io.ktor.response.respond
+import io.ktor.routing.get
+import io.ktor.routing.routing
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.netty.Netty
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.PrintWriter
-import java.io.StringWriter
 import java.net.ServerSocket
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) = App().main(args)
 
-class App : ServiceApp("scriptorium") {
+class App : ServiceApp("konstructor") {
     private val log by option("-l", "--log", help = "Path to log to, or stdout")
         .default("/tmp/scriptorium.log")
+    private val config by lazy {
+        Config()
+    }
     private val service by lazy {
-        KonstructorService()
+        KonstructorImpl(config)
     }
 
     override fun run() {
@@ -86,8 +93,10 @@ class App : ServiceApp("scriptorium") {
                 }
                 routing {
                     serve("/${appName.decapitalize()}", createChannel())
+                    get("/test") {
+                        call.respond("Test response")
+                    }
                     static("/") {
-//                        default("index.html")
                         resources("web")
                         defaultResource("web/index.html")
                     }
@@ -102,7 +111,6 @@ class App : ServiceApp("scriptorium") {
     }
 
     override fun createChannel(): SerializedChannel {
-        return error("Not implemented")
+        return service.serialized(Konstructor)
     }
 }
-

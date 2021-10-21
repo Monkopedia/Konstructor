@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 plugins {
-    kotlin("multiplatform")
-    kotlin("plugin.serialization") version "1.5.31"
-    id("com.monkopedia.ksrpc.plugin")
-
     java
+    kotlin("multiplatform")
+    kotlin("plugin.serialization")
+    id("com.monkopedia.ksrpc.plugin")
 }
 
 repositories {
@@ -31,27 +30,27 @@ repositories {
 }
 
 kotlin {
-    jvm {
-        withJava()
-    }
     js(IR) {
         browser {}
+    }
+    jvm {
+        withJava()
     }
     sourceSets["commonMain"].dependencies {
         api("com.monkopedia:ksrpc:0.4.2")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.0")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.0")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2-native-mt")
-        compileOnly("io.ktor:ktor-io:1.4.0")
+        compileOnly("io.ktor:ktor-io:1.6.2")
     }
     sourceSets["jvmMain"].dependencies {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
         implementation("org.slf4j:slf4j-api:1.6.1")
-        compileOnly("io.ktor:ktor-server-core:1.4.0")
-        compileOnly("io.ktor:ktor-server-host-common:1.4.0")
-        compileOnly("io.ktor:ktor-server-netty:1.4.0")
-        compileOnly("io.ktor:ktor-client-core:1.4.0")
+        compileOnly("io.ktor:ktor-server-core:1.6.2")
+        compileOnly("io.ktor:ktor-server-host-common:1.6.2")
+        compileOnly("io.ktor:ktor-server-netty:1.6.2")
+        compileOnly("io.ktor:ktor-client-core:1.6.2")
 
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.0")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.0")
@@ -59,8 +58,8 @@ kotlin {
         implementation("ch.qos.logback:logback-classic:1.2.3")
     }
     sourceSets["jsMain"].dependencies {
-        compileOnly("io.ktor:ktor-client-core:1.4.0")
-        compileOnly("io.ktor:ktor-client-js:1.4.0")
+        compileOnly("io.ktor:ktor-client-core:1.6.2")
+        compileOnly("io.ktor:ktor-client-js:1.6.2")
     }
 }
 

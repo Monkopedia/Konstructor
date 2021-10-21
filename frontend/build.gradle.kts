@@ -15,7 +15,8 @@
  */
 plugins {
     kotlin("multiplatform")
-    kotlin("plugin.serialization") version "1.5.31"
+    kotlin("plugin.serialization")
+    id("com.monkopedia.ksrpc.plugin")
 }
 
 version = "0.1"
@@ -72,7 +73,7 @@ kotlin {
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.0")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.0")
         implementation("com.ccfraser.muirwik:muirwik-components:0.9.0")
-        implementation(project(":common"))
+        implementation(project(":protocol"))
         implementation(npm("codemirror", "5.63.3"))
         implementation(npm("css-loader", "3.5.2"))
         implementation(npm("style-loader", "1.1.3"))
