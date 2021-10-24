@@ -1,5 +1,7 @@
 package com.monkopedia.konstructor
 
+import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
@@ -21,6 +23,10 @@ class KonstructorImpl(private val config: Config) : Konstructor {
                 config.json.decodeFromStream<Space>(input)
             }
         }
+    }
+
+    override suspend fun konstruction(id: Konstruction): KonstructionService {
+        return KonstructionServiceImpl(config, id.workspaceId, id.id)
     }
 
     override suspend fun get(id: String): Workspace {

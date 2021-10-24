@@ -30,21 +30,21 @@ private val themeOptions: ThemeOptions = (js { } as ThemeOptions).also { themeOp
     } as TypographyStyle
     // themeOptions.typography?.fontSize = 12
     themeOptions.palette = js {
-        type = "light"
-        primary = js {
-            main = "#1a237e"
-            light = "#534bae"
-            dark = "#000051"
-        }
+        mode = "light"
         secondary = js {
-            main = "#009688"
-            light = "#52c7b8"
-            dark = "#00675b"
+            main = "#212121"
+            light = "#9E9E9E"
+            dark = "#212121"
+        }
+        primary = js {
+            main = "#FF5722"
+            light = "#FFCCBC"
+            dark = "#E64A19"
         }
         text = js {
-            main = "#111111"
-            primary = "#212121"
-            secondary = "#616161"
+            main = "#FFFFFF"
+            primary = "#FAFAFA"
+            secondary = "#757575"
         }
     } as PaletteOptions
 }
@@ -56,21 +56,23 @@ private val invertedThemeOptions: ThemeOptions = (js { } as ThemeOptions).also {
     themeOptions.typography?.useNextVariants = true
     // themeOptions.typography?.fontSize = 12
     themeOptions.palette = js {
+        mode = "dark"
         type = "dark"
+
         secondary = js {
-            main = "#1a237e"
-            light = "#534bae"
-            dark = "#000051"
+            main = "#212121"
+            light = "#9E9E9E"
+            dark = "#212121"
         }
         primary = js {
-            main = "#009688"
-            light = "#52c7b8"
-            dark = "#00675b"
+            main = "#FF5722"
+            light = "#FFCCBC"
+            dark = "#E64A19"
         }
         text = js {
-            main = "#FAFAFA"
+            main = "#FFFFFF"
             primary = "#FAFAFA"
-            secondary = "#EEEEEE"
+            secondary = "#757575"
         }
     } as PaletteOptions
 }

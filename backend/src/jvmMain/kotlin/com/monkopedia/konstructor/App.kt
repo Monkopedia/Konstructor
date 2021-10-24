@@ -33,10 +33,15 @@ import io.ktor.http.content.resolveResource
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
 import io.ktor.response.respond
+import io.ktor.response.respondFile
+import io.ktor.response.respondOutputStream
 import io.ktor.routing.get
+import io.ktor.routing.route
 import io.ktor.routing.routing
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.util.getOrFail
+import io.ktor.util.getValue
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
@@ -45,6 +50,7 @@ import kotlinx.coroutines.withContext
 import java.net.ServerSocket
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
+import java.io.File
 
 fun main(args: Array<String>) = App().main(args)
 
@@ -93,8 +99,11 @@ class App : ServiceApp("konstructor") {
                 }
                 routing {
                     serve("/${appName.decapitalize()}", createChannel())
-                    get("/test") {
-                        call.respond("Test response")
+                    get("/model/{target}") {
+                        val target = call.parameters.getOrFail("target")
+                        call.respondOutputStream {
+                            this::class.java.getResourceAsStream("/suzanne.stl").use { it.copyTo(this) }
+                        }
                     }
                     static("/") {
                         resources("web")

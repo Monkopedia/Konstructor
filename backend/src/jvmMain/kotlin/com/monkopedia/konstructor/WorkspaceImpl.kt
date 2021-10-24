@@ -14,7 +14,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
 
     @ExperimentalSerializationApi
     override suspend fun list(u: Unit): List<Konstruction> {
-        return config.dataDir.listFiles().mapNotNull {
+        return workspaceDir.listFiles().mapNotNull {
             if (!it.isDirectory) return@mapNotNull null
             val infoFile = File(it, "info.json")
             if (!infoFile.exists()) return@mapNotNull null
@@ -36,10 +36,6 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         infoFile.outputStream().use { output ->
             config.json.encodeToStream(info, output)
         }
-    }
-
-    override suspend fun get(id: String): KonstructionService {
-        return KonstructionServiceImpl(config, workspaceId, id)
     }
 
     @ExperimentalSerializationApi

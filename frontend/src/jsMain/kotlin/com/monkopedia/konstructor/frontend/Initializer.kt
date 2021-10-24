@@ -16,6 +16,7 @@ import com.monkopedia.ksrpc.KsrpcUri
 import com.monkopedia.ksrpc.connect
 import com.monkopedia.ksrpc.toKsrpcUri
 import io.ktor.client.HttpClient
+import kotlinext.js.jsObject
 import kotlinx.browser.window
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -58,10 +59,30 @@ external interface InitializerState : State {
     var uri: KsrpcUri?
     var konstructor: Konstructor?
     var workspaceList: List<Space>?
+    var isWorking: Boolean?
+    var workManager: WorkManager
 }
 
 class Initializer : RComponent<Props, InitializerState>() {
+
+    init {
+        this.state = jsObject {
+            workManager = WorkManager(this@Initializer::onWorkingChanged)
+        }
+    }
+
+    private fun onWorkingChanged(working: Boolean) {
+        setState {
+            isWorking = working
+        }
+    }
+
     override fun RBuilder.render() {
+        child(WorkDisplay::class) {
+            attrs {
+                isWorking = state.isWorking ?: false
+            }
+        }
         val uri = state.uri
         if (uri == null) {
             loading()
@@ -113,6 +134,7 @@ class Initializer : RComponent<Props, InitializerState>() {
                 this.service = konstructor
                 this.workspaceList = workspaceList
                 this.onWorkspaceListChanged = this@Initializer::onWorkspaceListChanged
+                this.workManager = state.workManager
             }
         }
     }

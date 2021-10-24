@@ -3,6 +3,7 @@ package com.monkopedia.konstructor.common
 import com.monkopedia.ksrpc.KsMethod
 import com.monkopedia.ksrpc.KsService
 import com.monkopedia.ksrpc.RpcService
+import kotlin.jvm.JvmName
 import kotlinx.serialization.Serializable
 
 enum class KonstructionType {
@@ -32,6 +33,9 @@ interface Konstructor : RpcService {
     @KsMethod("/target")
     suspend fun get(id: String): Workspace
 
+    @KsMethod("/konstruction")
+    suspend fun konstruction(id: Konstruction): KonstructionService
+
     @KsMethod("/create")
     suspend fun create(newItem: Space): Space
 
@@ -43,9 +47,6 @@ interface Konstructor : RpcService {
 interface Workspace : RpcService {
     @KsMethod("/list")
     suspend fun list(u: Unit): List<Konstruction>
-
-    @KsMethod("/target")
-    suspend fun get(id: String): KonstructionService
 
     @KsMethod("/create")
     suspend fun create(newItem: Konstruction): Konstruction

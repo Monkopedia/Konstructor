@@ -1,6 +1,7 @@
 package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.CompilationStatus
+import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.TaskMessage
@@ -59,7 +60,7 @@ class KonstructionServiceImpl(
     }
 
     override suspend fun rendered(u: Unit): String? {
-        return null
+        return "/model/suzanne.stl"
     }
 
     override suspend fun render(u: Unit): TaskResult {
