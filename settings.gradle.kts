@@ -27,3 +27,4 @@ pluginManagement {
         }
     }
 }
+include(":lib")

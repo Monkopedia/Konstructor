@@ -14,7 +14,8 @@ enum class CompilationStatus {
 @Serializable
 data class TaskMessage(
     val message: String,
-    val line: Int? = null
+    val line: Int? = null,
+    val char: Int? = null
 )
 
 @Serializable
@@ -30,6 +31,9 @@ interface KonstructionService : RpcService {
 
     @KsMethod("/set_name")
     suspend fun setName(name: String)
+
+    @KsMethod("/info")
+    suspend fun getInfo(u: Unit): KonstructionInfo
 
     @KsMethod("/fetch")
     suspend fun fetch(u: Unit): ByteReadChannel

@@ -3,7 +3,6 @@ package com.monkopedia.konstructor.common
 import com.monkopedia.ksrpc.KsMethod
 import com.monkopedia.ksrpc.KsService
 import com.monkopedia.ksrpc.RpcService
-import kotlin.jvm.JvmName
 import kotlinx.serialization.Serializable
 
 enum class KonstructionType {
@@ -15,8 +14,20 @@ enum class KonstructionType {
 data class Konstruction(
     val name: String,
     val workspaceId: String,
-    val id: String,
-    val type: KonstructionType
+    val id: String
+)
+
+enum class DirtyState {
+    CLEAN,
+    NEEDS_COMPILE,
+    NEEDS_EXEC
+}
+
+@Serializable
+data class KonstructionInfo(
+    val konstruction: Konstruction,
+    val type: KonstructionType,
+    val dirtyState: DirtyState
 )
 
 @Serializable

@@ -18,9 +18,13 @@ kotlin {
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2-native-mt")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.0")
         implementation(project(":protocol"))
+        implementation(project(":lib"))
         implementation("com.github.ajalt:clikt:2.8.0")
         implementation("io.ktor:ktor-server-core:1.6.4")
         implementation("io.ktor:ktor-server-netty:1.6.4")
+    }
+    sourceSets["jvmTest"].dependencies {
+        implementation(kotlin("test-junit"))
     }
 }
 
@@ -41,6 +45,11 @@ val copy = tasks.register<Copy>("copyJsBundleToKtor") {
     from("${browser.buildDir}/distributions")
     into("$buildDir/processedResources/web")
 }
+val lib = rootProject.findProject(":lib")!!
+val copyLib = tasks.register<Copy>("copyLibToKtor") {
+    from("${lib.buildDir}/libs/lib-fat.jar")
+    into("$buildDir/processedResources/")
+}
 afterEvaluate {
     val fatJar = tasks.register("fatJar", type = Jar::class) {
         baseName = "${project.name}-fat"
@@ -57,9 +66,14 @@ afterEvaluate {
         dependsOn(browser.tasks["jsBrowserDistribution"])
         mustRunAfter(browser.tasks["jsBrowserDistribution"])
     }
+    tasks.named("copyLibToKtor") {
+        dependsOn(lib.tasks["fatJar"])
+        mustRunAfter(lib.tasks["fatJar"])
+    }
 
     tasks.named("fatJar") {
         mustRunAfter("copyJsBundleToKtor")
+        mustRunAfter("copyLibToKtor")
     }
 }
 
@@ -72,7 +86,7 @@ sourceSets {
         }
         resources {
             srcDir("$buildDir/processedResources")
-            compiledBy(copy)
+            compiledBy(copy, copyLib)
         }
     }
 }

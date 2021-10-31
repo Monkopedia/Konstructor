@@ -311,8 +311,7 @@ class MenuComponent : RComponent<MenuComponentProps, MenuComponentState>() {
                             Konstruction(
                                 id = "",
                                 name = lastTextInput,
-                                workspaceId = props.currentWorkspace ?: error("Lost workspace"),
-                                type = KonstructionType.OBJ
+                                workspaceId = props.currentWorkspace ?: error("Lost workspace")
                             )
                         ) ?: error("Missing workspace")
                         val updatedKonstructions = props.konstructions?.plus(newKonstruction)

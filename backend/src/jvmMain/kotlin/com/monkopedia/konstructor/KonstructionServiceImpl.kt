@@ -1,62 +1,48 @@
 package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.CompilationStatus
-import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.DirtyState.NEEDS_COMPILE
+import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.KonstructionService
-import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
 import io.ktor.util.cio.toByteReadChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.jvm.javaio.copyTo
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.decodeFromStream
-import kotlinx.serialization.json.encodeToStream
-import java.io.File
 
-@ExperimentalSerializationApi
-class KonstructionServiceImpl(
-    private val config: Config,
-    private val workspaceId: String,
-    private val id: String
-) : KonstructionService {
-    private val workspaceDir = File(config.dataDir, workspaceId)
-    private val infoFile = File(File(workspaceDir, id), "info.json")
-    private val contentFile = File(File(workspaceDir, id), "content")
+class KonstructionServiceImpl(config: Config, workspaceId: String, id: String) : KonstructionService {
+    private val konstructionController = KonstructorManager(config).controllerFor(workspaceId, id)
 
     override suspend fun getName(u: Unit): String {
-        return infoFile.inputStream().use { input ->
-            config.json.decodeFromStream<Space>(input).name
-        }
+        return konstructionController.info.konstruction.name
     }
 
     override suspend fun setName(name: String) {
-        val info = infoFile.inputStream().use { input ->
-            config.json.decodeFromStream<Space>(input)
-        }.copy(name = name)
-        infoFile.outputStream().use { output ->
-            config.json.encodeToStream(info, output)
-        }
+        val info = konstructionController.info
+        konstructionController.info = info.copy(
+            konstruction = info.konstruction.copy(name = name)
+        )
+    }
+
+    override suspend fun getInfo(u: Unit): KonstructionInfo {
+        return konstructionController.info
     }
 
     override suspend fun fetch(u: Unit): ByteReadChannel {
-        if (!contentFile.exists()) {
-            return ByteReadChannel(ByteArray(0))
-        }
-        return contentFile.inputStream().toByteReadChannel()
+        return konstructionController.inputStream().toByteReadChannel()
     }
 
     override suspend fun set(content: ByteReadChannel) {
-        contentFile.outputStream().use { output ->
+        konstructionController.outputStream().use { output ->
             content.copyTo(output)
         }
     }
 
     override suspend fun compile(u: Unit): TaskResult {
-        return TaskResult(
-            CompilationStatus.FAILURE,
-            listOf(TaskMessage("Expected failure", 5))
-        )
+        if (konstructionController.info.dirtyState == NEEDS_COMPILE) {
+            konstructionController.compile()
+        }
+        return konstructionController.lastCompileResult()
     }
 
     override suspend fun rendered(u: Unit): String? {
