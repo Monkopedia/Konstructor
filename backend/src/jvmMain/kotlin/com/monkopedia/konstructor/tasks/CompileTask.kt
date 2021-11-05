@@ -42,9 +42,7 @@ class CompileTask(
     companion object {
         private val errorRegex = Regex("^(.*):([0-9]+):([0-9]+): (.*)$")
         fun parseErrors(stdOut: BufferedReader): List<TaskMessage> {
-            return stdOut.lines().toList().also {
-                println("Lines: $it")
-            }.filter {
+            return stdOut.lines().filter {
                 it.startsWith("error:") || it.startsWith("warning:") || errorRegex.matches(it)
             }.map {
                 if (it.startsWith("error:") || it.startsWith("warning:")) {

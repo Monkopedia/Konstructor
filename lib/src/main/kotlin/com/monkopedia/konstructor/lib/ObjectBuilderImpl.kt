@@ -2,24 +2,24 @@ package com.monkopedia.konstructor.lib
 
 import com.monkopedia.konstructor.lib.TaskState.DONE
 import com.monkopedia.konstructor.lib.TaskState.WORKING
-import kotlinx.coroutines.runBlocking
+import kotlin.system.exitProcess
 
-fun runTasks(args: Array<String>, tasks: List<Task>, service: ObjectService) {
-    runBlocking {
-        var completedCount = 0
-        for (task in tasks) {
-            val (taskInfo, t) = task.executeWithInfo()
-            service.taskComplete(
-                TaskStatus(
-                    taskInfo,
-                    completedCount++,
-                    tasks.size,
-                    if (completedCount == tasks.size) DONE else WORKING,
-                    listOfNotNull(t?.stackTraceToString())
-                )
+suspend fun runTasks(args: Array<String>, tasks: List<Task>, service: ObjectService) {
+    var completedCount = 0
+    for (task in tasks) {
+        val (taskInfo, t) = task.executeWithInfo()
+        service.taskComplete(
+            TaskStatus(
+                taskInfo,
+                completedCount++,
+                tasks.size,
+                if (completedCount == tasks.size) DONE else WORKING,
+                listOfNotNull(t?.stackTraceToString())
             )
-        }
+        )
     }
+    service.close(Unit)
+    exitProcess(0)
 }
 
 private suspend fun Task.executeWithInfo(): Pair<TaskInfo, Throwable?> {

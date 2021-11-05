@@ -33,4 +33,5 @@ dependencies {
     implementation("com.monkopedia:ksrpc:0.4.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2")
+    implementation("io.ktor:ktor-io:1.6.3")
 }

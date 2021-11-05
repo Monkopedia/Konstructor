@@ -7,9 +7,9 @@ import java.io.File
 class Config {
 
     val compilerOpts: String
-        get() = "-cp ${LibsJar.getLibsJar(this).absolutePath}"
-    val runtimeOpts: String
         get() = ""
+    val runtimeOpts: String
+        get() = "-cp ${LibsJar.getLibsJar(this).absolutePath}"
     val json: Json
         get() = Json
     val dataDir: File by lazy {
