@@ -17,47 +17,46 @@ import kotlinx.browser.window
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.w3c.dom.Element
+import react.FC
 import react.Props
-import react.RBuilder
-import react.RComponent
 import react.RefCallback
-import react.State
-import react.setState
-import styled.styledDiv
+import react.dom.html.ReactHTML.div
+import react.useState
 
 external interface GLProps : Props {
     var konstruction: Konstruction?
     var konstructionService: KonstructionService?
 }
 
-external interface GLState : State {
-    var currentKonstruction: Konstruction?
-}
+data class GLState(
+    var currentKonstruction: Konstruction? = null
+)
 
-class GLComponent : RComponent<GLProps, GLState>() {
-    private val callbackRef = RefCallback { v: Element? ->
-        GLWindow.setElement(v)
+val GLComponent = FC<GLProps> { props ->
+    var state by useState(GLState())
+    val callbackRef by useState {
+        RefCallback { v: Element? ->
+            GLWindow.setElement(v)
+        }
     }
 
-    override fun RBuilder.render() {
-        styledDiv {
-            ref = callbackRef
-        }
-        val konstruction = props.konstruction ?: return
-        val konstructionService = props.konstructionService ?: return
-        println("Render GL ${konstruction} ${state.currentKonstruction}")
-        if (state.currentKonstruction != konstruction) {
-            GlobalScope.launch {
-                println("Fetching rendered")
-                val path = konstructionService.rendered(Unit)
-                println("Path: $path")
-                if (path != null) {
-                    GLWindow.loadModel(path)
-                }
-                setState {
-                    currentKonstruction = konstruction
-                }
+    div {
+        ref = callbackRef
+    }
+    val konstruction = props.konstruction ?: return@FC
+    val konstructionService = props.konstructionService ?: return@FC
+    println("Render GL $konstruction ${state.currentKonstruction}")
+    if (state.currentKonstruction != konstruction) {
+        GlobalScope.launch {
+            println("Fetching rendered")
+            val path = konstructionService.rendered(Unit)
+            println("Path: $path")
+            if (path != null) {
+                GLWindow.loadModel(path)
             }
+            state = state.copy(
+                currentKonstruction = konstruction
+            )
         }
     }
 }
@@ -78,7 +77,8 @@ object GLWindow {
         light.position.set(0, 0, -1)
         scene.add(light)
 
-        camera = PerspectiveCamera(75, window.innerWidth.toDouble() / 2 / window.innerHeight, 0.1, 1000)
+        camera =
+            PerspectiveCamera(75, window.innerWidth.toDouble() / 2 / window.innerHeight, 0.1, 1000)
         camera.position.set(0, 5, -5)
 
         renderer = WebGLRenderer(
@@ -145,7 +145,7 @@ object GLWindow {
     }
 }
 
-//class LoaderTest {
+// class LoaderTest {
 //
 //    val models: MutableList<Mesh> = ArrayList()
 //
@@ -155,4 +155,4 @@ object GLWindow {
 //
 //    init {
 //    }
-//}
+// }

@@ -1,6 +1,7 @@
 package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.DirtyState.NEEDS_COMPILE
+import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.tasks.CompileTask
@@ -63,11 +64,11 @@ class KonstructionControllerImpl(
     private val contentFile = File(File(workspaceDir, id), "content.kt")
     private val contentFileLock = SimpleLock()
     private var hasInitialized = false
-    private lateinit var infoImpl: KonstructionInfo
+    private var infoImpl: KonstructionInfo? = null
     override var info: KonstructionInfo
         get() {
             ensureLoaded()
-            return info
+            return infoImpl!!
         }
         set(value) {
             if (infoImpl == value) return
@@ -104,6 +105,9 @@ class KonstructionControllerImpl(
     private fun ensureLoaded() {
         synchronized(this) {
             if (hasInitialized) return
+            infoImpl = infoFile.inputStream().use { output ->
+                config.json.decodeFromStream(output)
+            }
             hasInitialized = true
         }
     }

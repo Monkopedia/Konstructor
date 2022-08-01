@@ -1,7 +1,7 @@
 package com.monkopedia.konstructor.lib
 
-import com.monkopedia.ksrpc.KsMethod
-import com.monkopedia.ksrpc.KsService
+import com.monkopedia.ksrpc.annotation.KsMethod
+import com.monkopedia.ksrpc.annotation.KsService
 import com.monkopedia.ksrpc.RpcService
 import kotlinx.serialization.Serializable
 
@@ -33,5 +33,5 @@ interface ObjectService : RpcService {
     suspend fun taskComplete(status: TaskStatus)
 
     @KsMethod("/close")
-    suspend fun close(u: Unit)
+    suspend fun closeService(u: Unit)
 }

@@ -1,16 +1,14 @@
 package com.monkopedia.konstructor.frontend
 
-import com.ccfraser.muirwik.components.mBackdrop
-import com.ccfraser.muirwik.components.mCircularProgress
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import mui.material.Backdrop
+import mui.material.CircularProgress
+import react.FC
 import react.Props
-import react.RBuilder
-import react.RComponent
-import react.State
 
-class WorkManager(private val onWorkingChanged: (Boolean) -> Unit) {
-
+class WorkManager() {
+    lateinit var onWorkingChanged: (Boolean) -> Unit
     private var jobCount = 0
 
     fun startJob() {
@@ -41,11 +39,9 @@ external interface WorkProps : Props {
     var isWorking: Boolean
 }
 
-class WorkDisplay : RComponent<WorkProps, State>() {
-    override fun RBuilder.render() {
-        mBackdrop(open = props.isWorking) {
-            mCircularProgress {
-            }
-        }
+val WorkDisplay = FC<WorkProps> { props ->
+    Backdrop {
+        open = props.isWorking
+        CircularProgress()
     }
 }

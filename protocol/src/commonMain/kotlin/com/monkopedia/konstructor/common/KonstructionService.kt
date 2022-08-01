@@ -1,28 +1,9 @@
 package com.monkopedia.konstructor.common
 
-import com.monkopedia.ksrpc.KsMethod
-import com.monkopedia.ksrpc.KsService
 import com.monkopedia.ksrpc.RpcService
+import com.monkopedia.ksrpc.annotation.KsMethod
+import com.monkopedia.ksrpc.annotation.KsService
 import io.ktor.utils.io.ByteReadChannel
-import kotlinx.serialization.Serializable
-
-enum class CompilationStatus {
-    SUCCESS,
-    FAILURE
-}
-
-@Serializable
-data class TaskMessage(
-    val message: String,
-    val line: Int? = null,
-    val char: Int? = null
-)
-
-@Serializable
-data class TaskResult(
-    val status: CompilationStatus,
-    val messages: List<TaskMessage> = emptyList()
-)
 
 @KsService
 interface KonstructionService : RpcService {

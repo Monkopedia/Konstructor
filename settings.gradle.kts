@@ -28,3 +28,4 @@ pluginManagement {
     }
 }
 include(":lib")
+includeBuild("KCSG")

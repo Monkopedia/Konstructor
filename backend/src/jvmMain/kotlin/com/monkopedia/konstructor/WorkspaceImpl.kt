@@ -1,7 +1,10 @@
 package com.monkopedia.konstructor
 
+import com.monkopedia.konstructor.common.DirtyState.CLEAN
 import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.KonstructionService
+import com.monkopedia.konstructor.common.KonstructionType.OBJ
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -52,7 +55,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         }
         targetInfo.parentFile.mkdirs()
         targetInfo.outputStream().use { output ->
-            config.json.encodeToStream(newItem, output)
+            config.json.encodeToStream(KonstructionInfo(newItem, OBJ, CLEAN), output)
         }
         return newItem
     }

@@ -30,3 +30,6 @@ hs_err_pid*
 
 # Ignore Gradle build output directory
 build
+
+# Some kotlin/js thing
+kotlin-js-store

@@ -33,7 +33,7 @@ class CompileTaskTest {
             |        classpath("org.jetbrains.kotlin:kotlin-serialization:${'$'}kotlin_version")
             |        ^
             |build.gradle.kts:9:9: error: unresolved reference: classpath
-            |        classpath("com.monkopedia:ksrpc-gradle-plugin:0.4.2")
+            |        classpath("com.monkopedia:ksrpc-gradle-plugin:0.5.5")
             |        ^
             |""".trimMargin()
         assertEquals(

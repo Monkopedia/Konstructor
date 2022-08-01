@@ -15,19 +15,17 @@
  */
 package com.monkopedia.konstructor.frontend
 
-import com.ccfraser.muirwik.components.styles.PaletteOptions
-import com.ccfraser.muirwik.components.styles.ThemeOptions
-import com.ccfraser.muirwik.components.styles.TypographyOptions
-import com.ccfraser.muirwik.components.styles.TypographyStyle
-import com.ccfraser.muirwik.components.styles.createMuiTheme
 import kotlinext.js.js
+import mui.material.styles.PaletteOptions
+import mui.material.styles.ThemeOptions
+import mui.material.styles.createTheme
 
 private val themeOptions: ThemeOptions = (js { } as ThemeOptions).also { themeOptions ->
-    themeOptions.typography = js { } as? TypographyOptions
+    themeOptions.typography = js { }
     themeOptions.typography?.useNextVariants = true
     themeOptions.typography?.button = js {
         textTransform = "none"
-    } as TypographyStyle
+    }
     // themeOptions.typography?.fontSize = 12
     themeOptions.palette = js {
         mode = "light"
@@ -49,10 +47,10 @@ private val themeOptions: ThemeOptions = (js { } as ThemeOptions).also { themeOp
     } as PaletteOptions
 }
 
-val theme = createMuiTheme(themeOptions = themeOptions)
+val theme = createTheme(options = themeOptions)
 
 private val invertedThemeOptions: ThemeOptions = (js { } as ThemeOptions).also { themeOptions ->
-    themeOptions.typography = js { } as? TypographyOptions
+    themeOptions.typography = js { }
     themeOptions.typography?.useNextVariants = true
     // themeOptions.typography?.fontSize = 12
     themeOptions.palette = js {
@@ -61,8 +59,8 @@ private val invertedThemeOptions: ThemeOptions = (js { } as ThemeOptions).also {
 
         secondary = js {
             main = "#212121"
-            light = "#9E9E9E"
-            dark = "#212121"
+            dark = "#9E9E9E"
+            light = "#212121"
         }
         primary = js {
             main = "#FF5722"
@@ -77,4 +75,4 @@ private val invertedThemeOptions: ThemeOptions = (js { } as ThemeOptions).also {
     } as PaletteOptions
 }
 
-val invertedTheme = createMuiTheme(themeOptions = invertedThemeOptions)
+val invertedTheme = createTheme(options = invertedThemeOptions)

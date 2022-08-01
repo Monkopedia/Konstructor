@@ -14,7 +14,6 @@ class KonstructorImpl(private val config: Config) : Konstructor {
 
     @ExperimentalSerializationApi
     override suspend fun list(u: Unit): List<Space> {
-        println("Handling list")
         return config.dataDir.listFiles().mapNotNull {
             if (!it.isDirectory) return@mapNotNull null
             val infoFile = File(it, "info.json")

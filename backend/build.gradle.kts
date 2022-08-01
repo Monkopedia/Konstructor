@@ -1,3 +1,5 @@
+import org.gradle.api.file.DuplicatesStrategy.WARN
+
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
     application
@@ -15,13 +17,15 @@ kotlin {
     sourceSets["jvmMain"].dependencies {
         implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
         implementation("org.jetbrains.kotlin:kotlin-reflect")
-        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2-native-mt")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.0")
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3-native-mt")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
         implementation(project(":protocol"))
         implementation(project(":lib"))
         implementation("com.github.ajalt:clikt:2.8.0")
-        implementation("io.ktor:ktor-server-core:1.6.4")
-        implementation("io.ktor:ktor-server-netty:1.6.4")
+        implementation("io.ktor:ktor-server-core:2.0.2")
+        implementation("io.ktor:ktor-server-cors:2.0.2")
+        implementation("io.ktor:ktor-server-status-pages:2.0.2")
+        implementation("io.ktor:ktor-server-netty:2.0.2")
     }
     sourceSets["jvmTest"].dependencies {
         implementation(kotlin("test-junit"))
@@ -56,6 +60,7 @@ val copyLib = tasks.register<Copy>("copyLibToKtor") {
 }
 afterEvaluate {
     val fatJar = tasks.register("fatJar", type = Jar::class) {
+        duplicatesStrategy = WARN
         baseName = "${project.name}-fat"
         manifest {
             attributes["Implementation-Title"] = "Konstructor Server"

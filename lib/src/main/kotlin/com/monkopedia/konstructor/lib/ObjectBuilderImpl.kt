@@ -18,7 +18,7 @@ suspend fun runTasks(args: Array<String>, tasks: List<Task>, service: ObjectServ
             )
         )
     }
-    service.close(Unit)
+    service.closeService(Unit)
     exitProcess(0)
 }
 

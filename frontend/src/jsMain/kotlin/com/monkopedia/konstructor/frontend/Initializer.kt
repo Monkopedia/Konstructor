@@ -1,219 +1,122 @@
 package com.monkopedia.konstructor.frontend
 
-import com.ccfraser.muirwik.components.MIconColor
-import com.ccfraser.muirwik.components.MTypographyVariant
-import com.ccfraser.muirwik.components.button.MIconButtonSize
-import com.ccfraser.muirwik.components.button.mIconButton
-import com.ccfraser.muirwik.components.form.MFormControlVariant
-import com.ccfraser.muirwik.components.mCircularProgress
-import com.ccfraser.muirwik.components.mTextField
-import com.ccfraser.muirwik.components.mTypography
-import com.ccfraser.muirwik.components.targetInputValue
-import com.ccfraser.muirwik.components.targetValue
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.ksrpc.KsrpcUri
 import com.monkopedia.ksrpc.connect
+import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.toKsrpcUri
+import com.monkopedia.ksrpc.toStub
+import csstype.Auto
+import csstype.px
+import emotion.react.css
 import io.ktor.client.HttpClient
-import kotlinext.js.jsObject
 import kotlinx.browser.window
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import kotlinx.css.Align
-import kotlinx.css.Display
-import kotlinx.css.FlexDirection
-import kotlinx.css.JustifyContent
-import kotlinx.css.LinearDimension
-import kotlinx.css.alignContent
-import kotlinx.css.alignItems
-import kotlinx.css.display
-import kotlinx.css.flexDirection
-import kotlinx.css.height
-import kotlinx.css.justifyContent
-import kotlinx.css.marginLeft
-import kotlinx.css.marginTop
-import kotlinx.css.px
-import kotlinx.css.vh
-import kotlinx.css.vw
-import kotlinx.css.width
+import mui.material.Typography
+import mui.material.styles.TypographyVariant
 import org.w3c.dom.Location
 import org.w3c.dom.url.URLSearchParams
+import react.FC
 import react.Props
-import react.RBuilder
-import react.RComponent
-import react.State
-import react.setState
-import styled.css
-import styled.styledDiv
+import react.dom.html.ReactHTML.div
+import react.useState
 
 private val Location.backendUrl: String
     get() =
         (
             protocol + "//" + hostname + "${
-            port?.toIntOrNull()?.let { ":$it" } ?: ""
+            port.toIntOrNull()?.let { ":$it" } ?: ""
             }" + "/konstructor"
             )
 
-external interface InitializerState : State {
-    var uri: KsrpcUri?
-    var konstructor: Konstructor?
-    var workspaceList: List<Space>?
-    var isWorking: Boolean?
-    var workManager: WorkManager
-}
+data class InitializerState(
+    val workManager: WorkManager,
+    val uri: KsrpcUri? = null,
+    val konstructor: Konstructor? = null,
+    val workspaceList: List<Space>? = null,
+    val isWorking: Boolean = false
+)
 
-class Initializer : RComponent<Props, InitializerState>() {
-
-    init {
-        this.state = jsObject {
-            workManager = WorkManager(this@Initializer::onWorkingChanged)
+val Loading = FC<Props> { _ ->
+    div {
+        css {
+            marginLeft = Auto.auto
+            marginTop = 50.px
         }
-    }
-
-    private fun onWorkingChanged(working: Boolean) {
-        setState {
-            isWorking = working
-        }
-    }
-
-    override fun RBuilder.render() {
-        child(WorkDisplay::class) {
-            attrs {
-                isWorking = state.isWorking ?: false
-            }
-        }
-        val uri = state.uri
-        if (uri == null) {
-            loading()
-            GlobalScope.launch {
-                val params = URLSearchParams(window.location.search.substring(1))
-                val url = params.get("backend") ?: window.location.backendUrl
-                console.log("Using backend from $url")
-                val uri = url.toKsrpcUri()
-                setState {
-                    this.uri = uri
-                }
-            }
-            return
-        }
-        val konstructor = state.konstructor
-        if (konstructor == null) {
-            loading()
-            GlobalScope.launch {
-                val service = Konstructor.createStub(uri.connect { HttpClient() })
-                setState {
-                    this.konstructor = service
-                }
-            }
-            return
-        }
-        val workspaceList = state.workspaceList
-        if (workspaceList == null) {
-            loading()
-            GlobalScope.launch {
-                val list = konstructor.list(Unit)
-                setState {
-                    this.workspaceList = list
-                }
-            }
-            return
-        }
-        if (workspaceList.isEmpty()) {
-            child(CreateFirstWorkspace::class) {
-                attrs {
-                    this.konstructor = konstructor
-                    this.onWorkspaceListChanged = this@Initializer::onWorkspaceListChanged
-                }
-            }
-            return
-        }
-
-        child(MainScreen::class) {
-            attrs {
-                this.service = konstructor
-                this.workspaceList = workspaceList
-                this.onWorkspaceListChanged = this@Initializer::onWorkspaceListChanged
-                this.workManager = state.workManager
-            }
-        }
-    }
-
-    private fun onWorkspaceListChanged(list: List<Space>?) {
-        setState { workspaceList = list }
-    }
-
-    private fun RBuilder.loading() {
-        styledDiv {
-            css {
-                marginLeft = LinearDimension.auto
-                marginTop = LinearDimension("50px")
-            }
-            mTypography("Loading...", MTypographyVariant.h1)
+        Typography {
+            +"Loading..."
+            variant = TypographyVariant.h1
         }
     }
 }
 
-external interface CreateFirstWorkspaceProps : Props {
-    var konstructor: Konstructor
-    var onWorkspaceListChanged: ((List<Space>?) -> Unit)?
-}
 
-external interface CreateFirstWorkspaceState : State {
-    var textValue: String?
-    var creating: Boolean?
-}
+val Initializer = FC<Props> {
+    val mainScreenState = useState(MainScreenState())
+    var state by useState(
+        InitializerState(
+            workManager = WorkManager()
+        )
+    )
 
-class CreateFirstWorkspace : RComponent<CreateFirstWorkspaceProps, CreateFirstWorkspaceState>() {
-    override fun RBuilder.render() {
-        styledDiv {
-            css {
-                display = Display.flex
-                flexDirection = FlexDirection.column
-                justifyContent = JustifyContent.center
-                alignContent = Align.center
-                width = 100.vw
-                height = 100.vh
-            }
-            styledDiv {
-                css {
-                    display = Display.flex
-                    flexDirection = FlexDirection.row
-                    justifyContent = JustifyContent.center
-                    alignContent = Align.center
-                    alignItems = Align.center
-                }
-                if (state.creating == true) {
-                    mCircularProgress(size = 80.px)
-                    return@styledDiv
-                }
-                mTextField(
-                    "First workspace name",
-                    variant = MFormControlVariant.outlined,
-                    onChange = { e ->
-                        val value = e.targetInputValue.toString()
-                        println("Latest test [$value]")
-                        setState { this.textValue = value }
-                    }
-                )
-                mIconButton(
-                    "login",
-                    disabled = state.textValue.isNullOrEmpty().also {
-                        println("Disabling: $it (${state.textValue})")
-                    },
-                    size = MIconButtonSize.medium,
-                    iconColor = MIconColor.primary,
-                    onClick = {
-                        setState { creating = true }
-                        GlobalScope.launch {
-                            val name = state.textValue.toString()
-                            val created = props.konstructor.create(Space("", name))
-                            setState { creating = false }
-                            props.onWorkspaceListChanged?.invoke(listOf(created))
-                        }
-                    }
-                )
-            }
+    fun onWorkingChanged(working: Boolean) {
+        state = state.copy(isWorking = working)
+    }
+    state.workManager.onWorkingChanged = ::onWorkingChanged
+
+    fun onWorkspaceListChanged(list: List<Space>?) {
+        state = state.copy(workspaceList = list)
+    }
+
+    WorkDisplay {
+        isWorking = state.isWorking ?: false
+    }
+    val uri = state.uri
+    if (uri == null) {
+        Loading()
+        GlobalScope.launch {
+            val params = URLSearchParams(window.location.search.substring(1))
+            val url = params.get("backend") ?: window.location.backendUrl
+            console.log("Using backend from $url")
+            val uri = url.toKsrpcUri()
+            state = state.copy(uri = uri)
         }
+        return@FC
+    }
+    val konstructor = state.konstructor
+    if (konstructor == null) {
+        Loading()
+        GlobalScope.launch {
+            val service = uri.connect(ksrpcEnvironment { }) { HttpClient() }.defaultChannel()
+                .toStub<Konstructor>()
+            state = state.copy(konstructor = service)
+        }
+        return@FC
+    }
+    val workspaceList = state.workspaceList
+    if (workspaceList == null) {
+        Loading()
+        GlobalScope.launch {
+            val list = konstructor.list(Unit)
+            state = state.copy(workspaceList = list)
+        }
+        return@FC
+    }
+    if (workspaceList.isEmpty()) {
+        CreateFirstWorkspace {
+            this.konstructor = konstructor
+            this.onWorkspaceListChanged = ::onWorkspaceListChanged
+        }
+        return@FC
+    }
+
+    MainScreen {
+        this.service = konstructor
+        this.workspaceList = workspaceList
+        this.onWorkspaceListChanged = ::onWorkspaceListChanged
+        this.workManager = state.workManager
+        this.mainScreenState = StateContext(mainScreenState)
     }
 }

@@ -1,7 +1,10 @@
 package com.monkopedia.konstructor.lib
 
-import com.monkopedia.ksrpc.SerializedChannel
-import com.monkopedia.ksrpc.asChannel
+import com.monkopedia.ksrpc.channels.Connection
+import com.monkopedia.ksrpc.channels.SerializedChannel
+import com.monkopedia.ksrpc.channels.asConnection
+import com.monkopedia.ksrpc.ksrpcEnvironment
+import com.monkopedia.ksrpc.toStub
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.jvm.javaio.toInputStream
@@ -46,17 +49,17 @@ fun build(args: Array<String>, execMethod: suspend ObjectRegistry.() -> Unit) {
         val input = System.`in`
         val output = System.out
         val channel = (input to output).toChannel()
-        val service = ObjectService.createStub(channel)
+        val service = channel.defaultChannel().toStub<ObjectService>()
         runTasks(args, registry.tasks.toList(), service)
     }
 }
 
-suspend fun Pair<InputStream, OutputStream>.toChannel(): SerializedChannel {
+suspend fun Pair<InputStream, OutputStream>.toChannel(): Connection {
     val (input, output) = this
     val channel = ByteChannel(autoFlush = true)
     val job = coroutineContext[Job]
     thread(start = true) {
         channel.toInputStream(job).copyTo(output)
     }
-    return (input.toByteReadChannel(Dispatchers.IO) to channel).asChannel()
+    return (input.toByteReadChannel(Dispatchers.IO) to channel).asConnection(ksrpcEnvironment {  })
 }

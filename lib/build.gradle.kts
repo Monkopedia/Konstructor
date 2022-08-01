@@ -1,3 +1,5 @@
+import org.gradle.api.file.DuplicatesStrategy.INCLUDE
+
 plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
@@ -16,6 +18,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
     }
 }
 val fatJar = tasks.register("fatJar", type = Jar::class) {
+    duplicatesStrategy = INCLUDE
     baseName = "${project.name}-fat"
     from(
         configurations.runtimeClasspath.get().mapNotNull {
@@ -30,8 +33,8 @@ val fatJar = tasks.register("fatJar", type = Jar::class) {
 }
 
 dependencies {
-    implementation("com.monkopedia:ksrpc:0.4.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2")
-    implementation("io.ktor:ktor-io:1.6.3")
+    implementation("com.monkopedia:ksrpc:0.5.5")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3")
+    implementation("io.ktor:ktor-io:2.0.2")
 }

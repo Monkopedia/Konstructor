@@ -18,6 +18,7 @@ package com.monkopedia.konstructor.frontend
 
 import kotlinx.html.TEXTAREA
 import org.w3c.dom.Element
+import org.w3c.dom.HTMLTextAreaElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.EventTarget
 
@@ -864,7 +865,7 @@ external class CodeMirror : EventTarget {
         /**
          This method provides another way to initialize an editor. It takes a textarea DOM node as first argument and an optional configuration object as second. It will replace the textarea with a CodeMirror instance, and wire up the form of that textarea (if any) to make sure the editor contents are put into the textarea when the form is submitted. The text in the textarea will provide the content for the editor. A CodeMirror instance created this way has three additional methods:
          */
-        fun fromTextArea(textArea: TEXTAREA, config: dynamic? = definedExternally): CodeMirror
+        fun fromTextArea(textArea: HTMLTextAreaElement, config: dynamic? = definedExternally): CodeMirror
 
         /**
          An object containing default values for all options. You can assign to its properties to modify defaults (though this won't affect editors that have already been created).

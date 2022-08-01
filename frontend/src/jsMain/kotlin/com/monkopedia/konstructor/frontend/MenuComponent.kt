@@ -1,42 +1,34 @@
 package com.monkopedia.konstructor.frontend
 
-import com.ccfraser.muirwik.components.MColor
-import com.ccfraser.muirwik.components.button.mButton
-import com.ccfraser.muirwik.components.button.mIconButton
-import com.ccfraser.muirwik.components.dialog.mDialog
-import com.ccfraser.muirwik.components.dialog.mDialogActions
-import com.ccfraser.muirwik.components.dialog.mDialogContent
-import com.ccfraser.muirwik.components.dialog.mDialogTitle
-import com.ccfraser.muirwik.components.form.MFormControlVariant
-import com.ccfraser.muirwik.components.mAppBar
-import com.ccfraser.muirwik.components.mTextField
-import com.ccfraser.muirwik.components.targetInputValue
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionService
-import com.monkopedia.konstructor.common.KonstructionType
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
-import kotlinx.css.Display
-import kotlinx.css.FlexDirection
-import kotlinx.css.JustifyContent
-import kotlinx.css.alignContent
-import kotlinx.css.display
-import kotlinx.css.flexDirection
-import kotlinx.css.justifyContent
-import kotlinx.css.justifyItems
-import kotlinx.css.margin
-import kotlinx.css.px
-import kotlinx.html.DIV
+import csstype.Display
+import csstype.FlexDirection
+import csstype.JustifyContent
+import csstype.important
+import csstype.pct
+import csstype.px
+import emotion.react.css
+import mui.icons.material.Add
+import mui.icons.material.Edit
+import mui.material.AppBar
+import mui.material.Button
+import mui.material.ButtonColor
+import mui.material.Dialog
+import mui.material.DialogActions
+import mui.material.DialogContent
+import mui.material.DialogTitle
+import mui.material.FormControlVariant
+import mui.material.IconButton
+import mui.material.TextField
+import react.FC
 import react.Props
-import react.RBuilder
-import react.RComponent
-import react.State
-import react.dom.RDOMBuilder
-import react.dom.div
-import react.setState
-import styled.css
-import styled.styledDiv
+import react.dom.html.ReactHTML.div
+import react.dom.onChange
+import react.useState
 
 external interface MenuComponentProps : Props {
     var service: Konstructor
@@ -56,281 +48,340 @@ external interface MenuComponentProps : Props {
     var currentKonstructionService: KonstructionService?
 }
 
-external interface MenuComponentState : State {
-    var editWorkspaceDialog: Boolean?
-    var createWorkspaceDialog: Boolean?
-    var editKonstructionDialog: Boolean?
-    var createKonstructionDialog: Boolean?
-    var lastTextInput: String?
+data class MenuComponentState(
+    var editWorkspaceDialog: Boolean? = null,
+    var createWorkspaceDialog: Boolean? = null,
+    var editKonstructionDialog: Boolean? = null,
+    var createKonstructionDialog: Boolean? = null,
+    var lastTextInput: String? = null
+)
+
+val MenuComponent = FC<MenuComponentProps> { props ->
+    var state = useState(MenuComponentState())
+    val context = StateContext(state)
+
+    val currentSpace = props.workspaces?.find { it.id == props.currentWorkspace }
+    val currentKonstruction = props.konstructions?.find { it.id == props.currentKonstruction }
+    AppBar {
+        css {
+            width = important(50.pct)
+        }
+        div {
+            css {
+                display = Display.flex
+                flexDirection = FlexDirection.row
+                justifyContent = JustifyContent.spaceBetween
+                marginTop = 8.px
+                marginBottom = 8.px
+                marginLeft = 16.px
+                marginRight = 16.px
+            }
+            div {
+                WorkspaceSelector {
+                    currentWorkspace = props.currentWorkspace
+                    workspaces = props.workspaces
+                    onWorkspaceSelected = props.onWorkspaceSelected
+                }
+                if (currentSpace != null) {
+                    editWorkspaceButton {
+                        this.menuProps = props
+                        this.editContext = context
+                        this.currentSpace = currentSpace
+                    }
+                }
+                createWorkspaceButton {
+                    this.menuProps = props
+                    this.editContext = context
+                    this.currentSpace = currentSpace
+                }
+            }
+            div {
+                if (currentSpace != null) {
+                    if (props.konstructions?.isNotEmpty() == true) {
+                        KonstructionSelector {
+                            this.currentKonstruction = props.currentKonstruction
+                            this.konstructions = props.konstructions
+                            this.onKonstructionSelected = props.onKonstructionSelected
+                        }
+                    }
+                    if (currentKonstruction != null) {
+                        editKonstructionButton {
+                            this.menuProps = props
+                            this.editContext = context
+                            this.currentSpace = currentSpace
+                        }
+                    }
+                    createKonstructionButton {
+                        this.menuProps = props
+                        this.editContext = context
+                        this.currentSpace = currentSpace
+                    }
+                }
+            }
+        }
+    }
 }
 
-class MenuComponent : RComponent<MenuComponentProps, MenuComponentState>() {
+private fun StateContext<MenuComponentState>.closeAllDialogs() {
+    state = state.copy(
+        editWorkspaceDialog = false,
+        createWorkspaceDialog = false,
+        editKonstructionDialog = false,
+        createKonstructionDialog = false,
+        lastTextInput = null
+    )
+}
 
-    override fun RBuilder.render() {
-        val currentSpace = props.workspaces?.find { it.id == props.currentWorkspace }
-        val currentKonstruction = props.konstructions?.find { it.id == props.currentKonstruction }
-        mAppBar {
-            attrs {
-                this.css = "width: 50% !important"
-            }
-            styledDiv {
-                css {
-                    display = Display.flex
-                    flexDirection = FlexDirection.row
-                    justifyContent = JustifyContent.spaceBetween
-                    this.margin(vertical = 8.px, horizontal = 16.px)
-                }
-                div {
-                    child(WorkspaceSelector::class) {
-                        attrs {
-                            currentWorkspace = props.currentWorkspace
-                            workspaces = props.workspaces
-                            onWorkspaceSelected = props.onWorkspaceSelected
-                        }
-                    }
-                    if (currentSpace != null) {
-                        editWorkspaceButton(currentSpace)
-                    }
-                    createWorkspaceButton()
-                }
-                div {
-                    if (currentSpace != null) {
-                        if (props.konstructions?.isNotEmpty() == true) {
-                            child(KonstructionSelector::class) {
-                                attrs {
-                                    this.currentKonstruction = props.currentKonstruction
-                                    this.konstructions = props.konstructions
-                                    this.onKonstructionSelected = props.onKonstructionSelected
-                                }
-                            }
-                        }
-                        if (currentKonstruction != null) {
-                            editKonstructionButton(currentKonstruction)
-                        }
-                        createKonstructionButton()
-                    }
+external interface SubComponentProps : Props {
+    var editContext: StateContext<MenuComponentState>
+    var menuProps: MenuComponentProps
+    var currentSpace: Space?
+}
+
+val editWorkspaceButton = FC<SubComponentProps> { props ->
+    IconButton {
+        Edit()
+        onClick = {
+            props.editContext.state = props.editContext.state.copy(
+                editWorkspaceDialog = true
+            )
+        }
+    }
+    Dialog {
+        open = props.editContext.state.editWorkspaceDialog ?: false
+        onClose = { _, _ ->
+            props.editContext.closeAllDialogs()
+        }
+        DialogTitle {
+            +"Change workspace name"
+        }
+        DialogContent {
+            TextField {
+                +"New workspace name"
+                defaultValue = props.currentSpace?.name
+                variant = FormControlVariant.outlined
+                onChange = { e ->
+                    props.editContext.state = props.editContext.state.copy(
+                        lastTextInput = e.target.asDynamic().value.toString()
+                    )
                 }
             }
         }
-    }
-
-    private fun RDOMBuilder<DIV>.editWorkspaceButton(currentSpace: Space?) {
-        mIconButton(
-            "edit",
-            onClick = {
-                setState {
-                    state.editWorkspaceDialog = true
+        DialogActions {
+            Button {
+                +"Cancel"
+                color = ButtonColor.secondary
+                onClick = {
+                    props.editContext.closeAllDialogs()
                 }
             }
-        )
-        mDialog(
-            open = state.editWorkspaceDialog ?: false,
-            onClose = { _, _ ->
-                closeAllDialogs()
-            }
-        ) {
-            mDialogTitle("Change workspace name")
-            mDialogContent {
-                mTextField(
-                    "New workspace name",
-                    defaultValue = currentSpace?.name,
-                    variant = MFormControlVariant.outlined,
-                    onChange = { e ->
-                        setState {
-                            lastTextInput = e.targetInputValue
-                        }
-                    }
-                )
-            }
-            mDialogActions {
-                mButton("Cancel", color = MColor.default, onClick = {
-                    closeAllDialogs()
-                })
-                mButton("Create", color = MColor.primary, onClick = {
-                    val lastTextInput = state.lastTextInput
-                    props.workManager.doWork {
-                        if (lastTextInput == null || lastTextInput == currentSpace?.name) {
-                            closeAllDialogs()
+            Button {
+                +"Create"
+                color = ButtonColor.primary
+                onClick = {
+                    val lastTextInput = props.editContext.state.lastTextInput
+                    props.menuProps.workManager.doWork {
+                        if (lastTextInput == null || lastTextInput == props.currentSpace?.name) {
+                            props.editContext.closeAllDialogs()
                             return@doWork
                         }
-                        props.currentWorkspaceService?.setName(lastTextInput)
-                        val updatedWorkspaces = props.workspaces?.map {
-                            if (it.id == props.currentWorkspace) {
+                        props.menuProps.currentWorkspaceService?.setName(lastTextInput)
+                        val updatedWorkspaces = props.menuProps.workspaces?.map {
+                            if (it.id == props.menuProps.currentWorkspace) {
                                 it.copy(name = lastTextInput)
                             } else it
                         }
-                        props.onWorkspacesChanged?.invoke(updatedWorkspaces)
-                        closeAllDialogs()
+                        props.menuProps.onWorkspacesChanged?.invoke(updatedWorkspaces)
+                        props.editContext.closeAllDialogs()
                     }
-                })
+                }
             }
         }
     }
+}
 
-    private fun RDOMBuilder<DIV>.createWorkspaceButton() {
-        mIconButton(
-            "add",
-            onClick = {
-                setState {
-                    state.createWorkspaceDialog = true
+val createWorkspaceButton = FC<SubComponentProps> { props ->
+    IconButton {
+        Add()
+        onClick = {
+            props.editContext.state = props.editContext.state.copy(
+                createWorkspaceDialog = true
+            )
+        }
+    }
+    Dialog {
+        open = props.editContext.state.createWorkspaceDialog ?: false
+        onClose = { _, _ ->
+            props.editContext.closeAllDialogs()
+        }
+        DialogTitle {
+            +"Enter new workspace name"
+        }
+        DialogContent {
+            TextField {
+                +"New workspace name"
+                variant = FormControlVariant.outlined
+                onChange = { e ->
+                    props.editContext.state = props.editContext.state.copy(
+                        lastTextInput = e.target.asDynamic().value.toString()
+                    )
                 }
             }
-        )
-        mDialog(
-            open = state.createWorkspaceDialog ?: false,
-            onClose = { _, _ ->
-                closeAllDialogs()
+        }
+        DialogActions {
+            Button {
+                +"Cancel"
+                color = ButtonColor.secondary
+                onClick = {
+                    props.editContext.closeAllDialogs()
+                }
             }
-        ) {
-            mDialogTitle("Enter new workspace name")
-            mDialogContent {
-                mTextField(
-                    "New workspace name",
-                    variant = MFormControlVariant.outlined,
-                    onChange = { e ->
-                        setState {
-                            lastTextInput = e.targetInputValue
-                        }
-                    }
-                )
-            }
-            mDialogActions {
-                mButton("Cancel", color = MColor.default, onClick = {
-                    closeAllDialogs()
-                })
-                mButton("Set", color = MColor.primary, onClick = {
-                    val lastTextInput = state.lastTextInput
-                    props.workManager.doWork {
+            Button {
+                +"Set"
+                color = ButtonColor.primary
+                onClick = {
+                    val lastTextInput = props.editContext.state.lastTextInput
+                    props.menuProps.workManager.doWork {
                         if (lastTextInput.isNullOrEmpty()) {
                             return@doWork
                         }
-                        val newWorkspace = props.service.create(
+                        val newWorkspace = props.menuProps.service.create(
                             Space(id = "", name = lastTextInput)
                         )
-                        val updatedWorkspaces = props.workspaces?.plus(newWorkspace)
-                        props.onWorkspacesChanged?.invoke(updatedWorkspaces)
-                        props.onWorkspaceSelected?.invoke(newWorkspace.id)
-                        closeAllDialogs()
+                        val updatedWorkspaces = props.menuProps.workspaces?.plus(newWorkspace)
+                        props.menuProps.onWorkspacesChanged?.invoke(updatedWorkspaces)
+                        props.menuProps.onWorkspaceSelected?.invoke(newWorkspace.id)
+                        props.editContext.closeAllDialogs()
                     }
-                })
+                }
             }
         }
     }
+}
 
-    private fun RDOMBuilder<DIV>.editKonstructionButton(currentSpace: Konstruction?) {
-        mIconButton(
-            "edit",
-            onClick = {
-                setState {
-                    state.editKonstructionDialog = true
+val editKonstructionButton = FC<SubComponentProps> { props ->
+    IconButton {
+        Edit()
+        onClick = {
+            props.editContext.state = props.editContext.state.copy(
+                editKonstructionDialog = true
+            )
+        }
+    }
+    Dialog {
+        open = props.editContext.state.editKonstructionDialog ?: false
+        onClose = { _, _ ->
+            props.editContext.closeAllDialogs()
+        }
+        DialogTitle {
+            +"Change konstruction name"
+        }
+        DialogContent {
+            TextField {
+                "New konstruction name"
+                defaultValue = props.currentSpace?.name
+                variant = FormControlVariant.outlined
+                onChange = { e ->
+                    props.editContext.state = props.editContext.state.copy(
+                        lastTextInput = e.target.asDynamic().value.toString()
+                    )
                 }
             }
-        )
-        mDialog(
-            open = state.editKonstructionDialog ?: false,
-            onClose = { _, _ ->
-                closeAllDialogs()
+        }
+        DialogActions {
+            Button {
+                +"Cancel"
+                color = ButtonColor.secondary
+                onClick = {
+                    props.editContext.closeAllDialogs()
+                }
             }
-        ) {
-            mDialogTitle("Change konstruction name")
-            mDialogContent {
-                mTextField(
-                    "New konstruction name",
-                    defaultValue = currentSpace?.name,
-                    variant = MFormControlVariant.outlined,
-                    onChange = { e ->
-                        setState {
-                            lastTextInput = e.targetInputValue
-                        }
-                    }
-                )
-            }
-            mDialogActions {
-                mButton("Cancel", color = MColor.default, onClick = {
-                    closeAllDialogs()
-                })
-                mButton("Create", color = MColor.primary, onClick = {
-                    val lastTextInput = state.lastTextInput
-                    props.workManager.doWork {
-                        if (lastTextInput == null || lastTextInput == currentSpace?.name) {
-                            closeAllDialogs()
+            Button {
+                +"Create"
+                color = ButtonColor.primary
+                onClick = {
+                    val lastTextInput = props.editContext.state.lastTextInput
+                    props.menuProps.workManager.doWork {
+                        if (lastTextInput == null || lastTextInput == props.currentSpace?.name) {
+                            props.editContext.closeAllDialogs()
                             return@doWork
                         }
-                        props.currentKonstructionService?.setName(lastTextInput)
-                        val updatedKonstructions = props.konstructions?.map {
-                            if (it.id == props.currentKonstruction) {
+                        props.menuProps.currentKonstructionService?.setName(lastTextInput)
+                        val updatedKonstructions = props.menuProps.konstructions?.map {
+                            if (it.id == props.menuProps.currentKonstruction) {
                                 it.copy(name = lastTextInput)
                             } else it
                         }
-                        props.onKonstructionsChanged?.invoke(updatedKonstructions)
-                        closeAllDialogs()
+                        props.menuProps.onKonstructionsChanged?.invoke(updatedKonstructions)
+                        props.editContext.closeAllDialogs()
                     }
-                })
+                }
             }
         }
     }
+}
 
-    private fun RDOMBuilder<DIV>.createKonstructionButton() {
-        mIconButton(
-            "add",
-            onClick = {
-                setState {
-                    state.createKonstructionDialog = true
+val createKonstructionButton = FC<SubComponentProps> { props ->
+    IconButton {
+        Add()
+        onClick = {
+            props.editContext.state = props.editContext.state.copy(
+                createKonstructionDialog = true
+            )
+        }
+    }
+    Dialog {
+        open = props.editContext.state.createKonstructionDialog ?: false
+        onClose = { _, _ ->
+            props.editContext.closeAllDialogs()
+        }
+        DialogTitle {
+            +"Enter new konstruction name"
+        }
+        DialogContent {
+            TextField {
+                "New konstruction name"
+                variant = FormControlVariant.outlined
+                onChange = { e ->
+                    props.editContext.state = props.editContext.state.copy(
+                        lastTextInput = e.target.asDynamic().value.toString()
+                    )
                 }
             }
-        )
-        mDialog(
-            open = state.createKonstructionDialog ?: false,
-            onClose = { _, _ ->
-                closeAllDialogs()
+        }
+        DialogActions {
+            Button {
+                +"Cancel"
+                color = ButtonColor.secondary
+                onClick = {
+                    props.editContext.closeAllDialogs()
+                }
             }
-        ) {
-            mDialogTitle("Enter new konstruction name")
-            mDialogContent {
-                mTextField(
-                    "New konstruction name",
-                    variant = MFormControlVariant.outlined,
-                    onChange = { e ->
-                        setState {
-                            lastTextInput = e.targetInputValue
-                        }
-                    }
-                )
-            }
-            mDialogActions {
-                mButton("Cancel", color = MColor.default, onClick = {
-                    closeAllDialogs()
-                })
-                mButton("Set", color = MColor.primary, onClick = {
-                    val lastTextInput = state.lastTextInput
-                    props.workManager.doWork {
+            Button {
+                +"Set"
+                color = ButtonColor.primary
+                onClick = {
+                    val lastTextInput = props.editContext.state.lastTextInput
+                    props.menuProps.workManager.doWork {
                         if (lastTextInput.isNullOrEmpty()) {
                             return@doWork
                         }
-                        val newKonstruction = props.currentWorkspaceService?.create(
+                        val newKonstruction = props.menuProps.currentWorkspaceService?.create(
                             Konstruction(
                                 id = "",
                                 name = lastTextInput,
-                                workspaceId = props.currentWorkspace ?: error("Lost workspace")
+                                workspaceId = props.menuProps.currentWorkspace
+                                    ?: error("Lost workspace")
                             )
                         ) ?: error("Missing workspace")
-                        val updatedKonstructions = props.konstructions?.plus(newKonstruction)
-                        props.onKonstructionsChanged?.invoke(updatedKonstructions)
-                        props.onKonstructionSelected?.invoke(newKonstruction.id)
-                        closeAllDialogs()
+                        val updatedKonstructions =
+                            props.menuProps.konstructions?.plus(newKonstruction)
+                        props.menuProps.onKonstructionsChanged?.invoke(updatedKonstructions)
+                        props.menuProps.onKonstructionSelected?.invoke(newKonstruction.id)
+                        props.editContext.closeAllDialogs()
                     }
-                })
+                }
             }
-        }
-    }
-
-    private fun closeAllDialogs() {
-        setState {
-            editWorkspaceDialog = false
-            createWorkspaceDialog = false
-            editKonstructionDialog = false
-            createKonstructionDialog = false
-            lastTextInput = null
         }
     }
 }

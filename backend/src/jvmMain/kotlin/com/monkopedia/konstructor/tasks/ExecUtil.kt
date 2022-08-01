@@ -1,8 +1,12 @@
 package com.monkopedia.konstructor.tasks
 
 import com.monkopedia.ksrpc.ErrorListener
-import com.monkopedia.ksrpc.SerializedChannel
-import com.monkopedia.ksrpc.serve
+import com.monkopedia.ksrpc.channels.SerializedChannel
+import com.monkopedia.ksrpc.channels.SerializedService
+import com.monkopedia.ksrpc.channels.asConnection
+import com.monkopedia.ksrpc.channels.connect
+import com.monkopedia.ksrpc.channels.serve
+import com.monkopedia.ksrpc.ksrpcEnvironment
 import io.ktor.util.cio.use
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.ByteReadChannel
@@ -46,7 +50,7 @@ object ExecUtil {
         )
     }
 
-    suspend fun executeWithChannel(command: String, channel: SerializedChannel): Int {
+    suspend fun executeWithChannel(command: String, channel: SerializedService): Int {
         val rt = Runtime.getRuntime()
         println("Executing: $command")
         val commands = arrayOf(
@@ -95,7 +99,7 @@ object ExecUtil {
     }
 }
 
-suspend fun SerializedChannel.doServe(
+suspend fun SerializedService.doServe(
     input: InputStream,
     output: OutputStream,
     errorListener: ErrorListener = ErrorListener { }
@@ -108,11 +112,13 @@ suspend fun SerializedChannel.doServe(
                 channel.copyToAndFlush(output)
             }
             try {
-                serve(
-                    input.toByteReadChannel(coroutineContext + threadExecutor),
-                    this,
-                    errorListener = errorListener
-                )
+                val connection = (input.toByteReadChannel(coroutineContext + threadExecutor) to this).asConnection(
+                    ksrpcEnvironment {
+                        this.errorListener = errorListener
+                    })
+                connection.connect {
+                    this@doServe
+                }
             } finally {
                 if (!channel.isClosedForWrite) {
                     channel.close()

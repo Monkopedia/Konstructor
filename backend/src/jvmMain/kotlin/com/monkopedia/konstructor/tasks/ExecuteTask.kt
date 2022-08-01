@@ -7,6 +7,7 @@ import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.lib.ObjectService
 import com.monkopedia.konstructor.lib.TaskState.ERROR
 import com.monkopedia.konstructor.lib.TaskStatus
+import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.serialized
 import java.io.File
 import java.lang.StringBuilder
@@ -31,11 +32,12 @@ class ExecuteTask(
                 status.errors.forEach(errors::append)
             }
 
-            override suspend fun close(u: Unit) {
+            override suspend fun closeService(u: Unit) {
                 completed = true
             }
         }
-        val result = ExecUtil.executeWithChannel(command, taskService.serialized(ObjectService))
+        val result =
+            ExecUtil.executeWithChannel(command, taskService.serialized(ksrpcEnvironment { }))
         return if (completed && isSuccessful && result == 0) {
             TaskResult(
                 SUCCESS,
