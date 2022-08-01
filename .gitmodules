@@ -1,3 +1,6 @@
 [submodule "frontend/three-kt"]
 	path = frontend/three-kt
 	url = https://github.com/markaren/three-kt-wrapper.git
+[submodule "KCSG"]
+	path = KCSG
+	url = https://github.com/Monkopedia/KCSG
