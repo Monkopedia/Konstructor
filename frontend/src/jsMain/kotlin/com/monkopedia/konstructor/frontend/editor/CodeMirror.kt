@@ -14,8 +14,13 @@
  * limitations under the License.
  */
 
-package com.monkopedia.konstructor.frontend
+package com.monkopedia.konstructor.frontend.editor
 
+import com.monkopedia.konstructor.frontend.editor.CodeMirror.Doc
+import com.monkopedia.konstructor.frontend.editor.CodeMirror.Doc.LineHandle
+import com.monkopedia.konstructor.frontend.editor.CodeMirror.Doc.LineWidget
+import com.monkopedia.konstructor.frontend.editor.CodeMirror.Doc.Selection
+import com.monkopedia.konstructor.frontend.editor.CodeMirror.TextMarker
 import kotlinx.html.TEXTAREA
 import org.w3c.dom.Element
 import org.w3c.dom.HTMLTextAreaElement
@@ -256,7 +261,7 @@ external class CodeMirror : EventTarget {
         /**
          Break the link between two documents. After calling this, changes will no longer propagate between the documents, and, if they had a shared history, the history will become separate.
          */
-        fun unlinkDoc(doc: CodeMirror.Doc)
+        fun unlinkDoc(doc: Doc)
 
         /**
          */
@@ -648,7 +653,7 @@ external class CodeMirror : EventTarget {
      Computes the height of the top of a line, in the coordinate system specified by mode (see coordsChar), which defaults to "page". When a line below the bottom of the document is specified, the returned value is the bottom of the last line in the document. By default, the position of the actual text is returned. If `includeWidgets` is true and the line has line widgets, the position above the first line widget is returned.
      */
     fun heightAtLine(
-        line: Doc.LineHandle,
+        line: LineHandle,
         mode: String? = definedExternally,
         includeWidgets: Boolean? = definedExternally
     ): Number
@@ -1372,9 +1377,9 @@ object OnElectricInput : CodeMirrorEvent<(CodeMirror, Int) -> Unit>("electricInp
 
 /** This event is fired before the selection is moved. Its handler may inspect the set of selection ranges, present as an array of {anchor, head} objects in the ranges property of the obj argument, and optionally change them by calling the update method on this object, passing an array of ranges in the same format. The object also contains an origin property holding the origin string passed to the selection-changing method, if any. Handlers for this event have the same restriction as "beforeChange" handlers — they should not do anything to directly update the state of the editor. */
 external interface SelectionChangeEvent {
-    val ranges: Array<CodeMirror.Doc.Selection>?
+    val ranges: Array<Selection>?
     val origin: String?
-    fun update(ranges: Array<CodeMirror.Doc.Selection>)
+    fun update(ranges: Array<Selection>)
 }
 
 object BeforeSelectionChange :
@@ -1384,7 +1389,7 @@ object BeforeSelectionChange :
 object OnViewportChange : CodeMirrorEvent<(CodeMirror, Number, Number) -> Unit>("viewportChange")
 
 /** This is signalled when the editor's document is replaced using the swapDoc method. */
-object OnSwapDoc : CodeMirrorEvent<(CodeMirror, CodeMirror.Doc) -> Unit>("swapDoc")
+object OnSwapDoc : CodeMirrorEvent<(CodeMirror, Doc) -> Unit>("swapDoc")
 
 /** Fires when the editor gutter (the line-number area) is clicked. Will pass the editor instance as first argument, the (zero-based) number of the line that was clicked as second argument, the CSS class of the gutter that was clicked as third argument, and the raw mousedown event object as fourth argument. */
 object OnGutterClick : CodeMirrorEvent<(CodeMirror, Int, String, Event) -> Unit>("gutterClick")
@@ -1416,7 +1421,7 @@ object OnUpdate : CodeMirrorEvent<(CodeMirror) -> Unit>("update")
 
 /** Fired whenever a line is (re-)rendered to the DOM. Fired right after the DOM element is built, before it is added to the document. The handler may mess with the style of the resulting element, or add event handlers, but should not try to change the state of the editor. */
 object OnRenderLine :
-    CodeMirrorEvent<(CodeMirror, CodeMirror.Doc.LineHandle, Element) -> Unit>("renderLine")
+    CodeMirrorEvent<(CodeMirror, LineHandle, Element) -> Unit>("renderLine")
 
 /** Fired when CodeMirror is handling a DOM event of this type. You can preventDefault the event, or give it a truthy codemirrorIgnore property, to signal that CodeMirror should do no further handling. */
 object OnMouseDown : CodeMirrorEvent<(CodeMirror, Event) -> Unit>("mousedown")
@@ -1439,28 +1444,28 @@ object OnDrop : CodeMirrorEvent<(CodeMirror, Event) -> Unit>("drop")
 
 /** Fired whenever a change occurs to the document. changeObj has a similar type as the object passed to the editor's "change" event. */
 object OnDocChange :
-    OtherCodeMirrorEvent<CodeMirror.Doc, (CodeMirror.Doc, ChangeEvent) -> Unit>("change")
+    OtherCodeMirrorEvent<Doc, (Doc, ChangeEvent) -> Unit>("change")
 
 /** See the description of the same event on editor instances. */
 object BeforeDocChange :
-    OtherCodeMirrorEvent<CodeMirror.Doc, (CodeMirror.Doc, CancellableChangeEvent) -> Unit>("beforeChange")
+    OtherCodeMirrorEvent<Doc, (Doc, CancellableChangeEvent) -> Unit>("beforeChange")
 
 /** Fired whenever the cursor or selection in this document changes. */
 object OnDocCursorActivity :
-    OtherCodeMirrorEvent<CodeMirror.Doc, (CodeMirror.Doc) -> Unit>("cursorActivity")
+    OtherCodeMirrorEvent<Doc, (Doc) -> Unit>("cursorActivity")
 
 /** Equivalent to the event by the same name as fired on editor instances. */
 object BeforeDocSelectionChange :
-    OtherCodeMirrorEvent<CodeMirror.Doc, (CodeMirror.Doc, SelectionChangeEvent) -> Unit>("beforeSelectionChange")
+    OtherCodeMirrorEvent<Doc, (Doc, SelectionChangeEvent) -> Unit>("beforeSelectionChange")
 
 /** Line handles (as returned by, for example, getLineHandle) support these events: */
 
 /** Will be fired when the line object is deleted. A line object is associated with the start of the line. Mostly useful when you need to find out when your gutter markers on a given line are removed. */
-object OnLineHandleDelete : OtherCodeMirrorEvent<CodeMirror.Doc.LineHandle, () -> Unit>("delete")
+object OnLineHandleDelete : OtherCodeMirrorEvent<LineHandle, () -> Unit>("delete")
 
 /** Fires when the line's text content is changed in any way (but the line is not deleted outright). The change object is similar to the one passed to change event on the editor object. */
 object OnLineHandleChange :
-    OtherCodeMirrorEvent<CodeMirror.Doc.LineHandle, (CodeMirror.Doc.LineHandle, ChangeEvent) -> Unit>(
+    OtherCodeMirrorEvent<LineHandle, (LineHandle, ChangeEvent) -> Unit>(
         "change"
     )
 
@@ -1468,18 +1473,18 @@ object OnLineHandleChange :
 
 /** Fired when the cursor enters the marked range. From this event handler, the editor state may be inspected but not modified, with the exception that the range on which the event fires may be cleared. */
 object BeforeCursorEnter :
-    OtherCodeMirrorEvent<CodeMirror.TextMarker, () -> Unit>("beforeCursorEnter")
+    OtherCodeMirrorEvent<TextMarker, () -> Unit>("beforeCursorEnter")
 
 /** Fired when the range is cleared, either through cursor movement in combination with clearOnEnter or through a call to its clear() method. Will only be fired once per handle. Note that deleting the range through text editing does not fire this event, because an undo action might bring the range back into existence. from and to give the part of the document that the range spanned when it was cleared. */
-object OnClear : OtherCodeMirrorEvent<CodeMirror.TextMarker, (Location, Location) -> Unit>("clear")
+object OnClear : OtherCodeMirrorEvent<TextMarker, (Location, Location) -> Unit>("clear")
 
 /** Fired when the last part of the marker is removed from the document by editing operations. */
-object OnHide : OtherCodeMirrorEvent<CodeMirror.TextMarker, () -> Unit>("hide")
+object OnHide : OtherCodeMirrorEvent<TextMarker, () -> Unit>("hide")
 
 /** Fired when, after the marker was removed by editing, a undo operation brought the marker back. */
-object OnUnHide : OtherCodeMirrorEvent<CodeMirror.TextMarker, () -> Unit>("unhide")
+object OnUnHide : OtherCodeMirrorEvent<TextMarker, () -> Unit>("unhide")
 
 /** Line widgets (CodeMirror.LineWidget), returned by addLineWidget, fire these events: */
 
 /** Fired whenever the editor re-adds the widget to the DOM. This will happen once right after the widget is added (if it is scrolled into view), and then again whenever it is scrolled out of view and back in again, or when changes to the editor options or the line the widget is on require the widget to be redrawn. */
-object OnRedraw : OtherCodeMirrorEvent<CodeMirror.Doc.LineWidget, () -> Unit>("redraw")
+object OnRedraw : OtherCodeMirrorEvent<LineWidget, () -> Unit>("redraw")

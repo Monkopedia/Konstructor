@@ -22,7 +22,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
             val infoFile = File(it, "info.json")
             if (!infoFile.exists()) return@mapNotNull null
             infoFile.inputStream().use { input ->
-                config.json.decodeFromStream<Konstruction>(input)
+                config.json.decodeFromStream<KonstructionInfo>(input).konstruction
             }
         }
     }

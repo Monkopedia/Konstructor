@@ -2,6 +2,7 @@ package com.monkopedia.konstructor.frontend
 
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.frontend.empty.CreateFirstWorkspace
 import com.monkopedia.ksrpc.KsrpcUri
 import com.monkopedia.ksrpc.connect
 import com.monkopedia.ksrpc.ksrpcEnvironment

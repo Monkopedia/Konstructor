@@ -5,6 +5,8 @@ import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
+import com.monkopedia.konstructor.frontend.editor.KonstructionEditor
+import com.monkopedia.konstructor.frontend.menu.MenuComponent
 import csstype.Display
 import csstype.FlexDirection
 import csstype.pct
@@ -14,7 +16,6 @@ import react.FC
 import react.Props
 import react.State
 import react.dom.html.ReactHTML.div
-import react.useState
 
 external interface MainScreenProps : Props {
     var workManager: WorkManager

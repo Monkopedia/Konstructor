@@ -1,8 +1,9 @@
-package com.monkopedia.konstructor.frontend
+package com.monkopedia.konstructor.frontend.editor
 
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.TaskMessage
+import com.monkopedia.konstructor.frontend.invertedTheme
 import csstype.AlignContent
 import csstype.Color
 import csstype.Display
@@ -13,26 +14,18 @@ import csstype.pct
 import csstype.px
 import emotion.react.css
 import io.ktor.utils.io.ByteReadChannel
-import kotlinext.js.js
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.css.background
 import mui.material.Card
 import mui.material.CircularProgress
 import mui.material.Typography
-import org.w3c.dom.HTMLTextAreaElement
 import react.FC
 import react.Props
-import react.RefCallback
-import react.createRef
 import react.dom.html.ReactHTML.div
-import react.dom.html.ReactHTML.textarea
-import react.useEffect
-import react.useEffectOnce
-import react.useRef
+import react.memo
+import react.useMemo
 import react.useState
-import styled.StyleSheet
-import styled.getClassSelector
 
 external interface KonstructionEditorProps : Props {
     var konstruction: Konstruction?
@@ -93,7 +86,7 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
         }
     }
     if (state.currentKonstruction != null) {
-        CodeMirrorScreen {
+        EditorScreen {
             id = "${state.currentKonstruction?.workspaceId}_${state.currentKonstruction?.id}"
             content = state.currentText
             onSave = ::onSave
@@ -104,40 +97,56 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
     }
 }
 
-external interface CodeMirrorProps : Props {
+external interface EditorScreenProps : Props {
     var content: String?
     var id: String?
     var onSave: ((String?) -> Unit)?
     var messages: List<TaskMessage>?
 }
 
-data class CodeMirrorState(
-    var lastId: String? = null,
-    var lastMirror: CodeMirror? = null,
-    var currentMessage: String? = null
-)
 
-private object MirrorStyles : StyleSheet("mirror", isStatic = true) {
-    val errorLineBackground by css {
-        background = "#ff000033"
+
+val EditorScreen = memo(
+    FC<EditorScreenProps> { props ->
+        var currentMessage by useState<String>()
+        val classes = useMemo(props.messages) {
+            mapOf(
+                errorClass to (props.messages?.mapNotNull { it.line } ?: emptyList())
+            )
+        }
+
+        fun onCursorChange(line: Int) {
+            val message = props.messages?.find {
+                it.line == line
+            }?.message
+            currentMessage = message
+        }
+
+        CodeMirrorScreen {
+            this.onCursorChange = ::onCursorChange
+            this.content = props.content
+            this.onSave = props.onSave
+            this.contentKey = props.id
+            this.customClasses = classes
+        }
+
+        if (currentMessage != null) {
+            MessageComponent {
+                message = currentMessage
+            }
+        }
     }
+) { oldProps, newProps ->
+    oldProps.id == newProps.id && (oldProps.messages ?: emptyList()).equals(newProps.messages)
 }
 
-val CodeMirrorScreen = FC<CodeMirrorProps> { props ->
-    var state by useState(CodeMirrorState())
+external interface MessageProps : Props {
+    var message: String?
+}
 
-    val textAreaRef = useRef<HTMLTextAreaElement>()
-
-    MirrorStyles.errorLineBackground
-    MirrorStyles.inject()
-    textarea {
-        this.defaultValue = props.content.toString()
-        css {
-        }
-        this.ref = textAreaRef
-    }
-    val message = state.currentMessage
-    if (message != null) {
+val MessageComponent = memo(
+    FC<MessageProps> { props ->
+        val message = props.message!!
         Card {
             css {
                 position = Position.absolute
@@ -152,72 +161,6 @@ val CodeMirrorScreen = FC<CodeMirrorProps> { props ->
             }
         }
     }
-
-    fun onSave() {
-        println("Saving ${state.lastMirror?.getDoc()?.getValue()}")
-        props.onSave?.invoke(state.lastMirror?.getDoc()?.getValue())
-    }
-
-    val onSave: () -> Unit = ::onSave
-    CodeMirror.commands.save = onSave
-
-    fun onCursorChange(codeMirror: CodeMirror) {
-        val position = codeMirror.getDoc().getCursor()
-        println("Cursor change ${position.line} ${position.ch}")
-        console.log(position)
-        val message = props.messages?.find {
-            it.line == position.line
-        }?.message
-        if (message != state.currentMessage) {
-            state = state.copy(
-                currentMessage = message
-            )
-        }
-    }
-
-    fun updateMirror(lastMirror: CodeMirror, props: CodeMirrorProps) {
-        // Clear all marks.
-        val errorClass = MirrorStyles.getClassSelector { it::errorLineBackground }.trimStart('.')
-        val doc = lastMirror.getDoc()
-        doc.eachLine {
-            doc.removeLineClass(it, "background", errorClass)
-        }
-        doc.setValue(props.content.toString())
-        for (message in props.messages ?: emptyList()) {
-            val line = message.line ?: continue
-            doc.addLineClass(line, "background", errorClass)
-        }
-        onCursorChange(lastMirror)
-        state = state.copy(
-            lastId = props.id,
-            currentMessage = null
-        )
-    }
-    state.lastMirror?.let { cm ->
-        if (state.lastId != props.id) {
-            updateMirror(cm, props)
-        }
-    }
-
-    useEffect(textAreaRef) {
-        val cm = CodeMirror.fromTextArea(
-            textAreaRef.current!!,
-            js {
-                mode = "text/x-kotlin"
-                keyMap = "vim"
-                lineNumbers = true
-                indentUnit = 4
-                this.theme = "darcula"
-                this.showCorsorWhenSelecting = true
-            }
-        )
-        OnCursorActivity.addListener(cm, ::onCursorChange)
-        updateMirror(cm, props)
-        state = state.copy(
-            lastMirror = cm
-        )
-        cleanup {
-            state.lastMirror?.toTextArea()
-        }
-    }
+) { oldProps, newProps ->
+    oldProps.message == newProps.message
 }

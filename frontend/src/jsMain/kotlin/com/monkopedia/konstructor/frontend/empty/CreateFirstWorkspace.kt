@@ -1,4 +1,4 @@
-package com.monkopedia.konstructor.frontend
+package com.monkopedia.konstructor.frontend.empty
 
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
