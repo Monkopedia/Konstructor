@@ -1,65 +1,97 @@
 package com.monkopedia.konstructor.lib
 
+import com.monkopedia.kcsg.KcsgScript
+import com.monkopedia.ksrpc.KsrpcEnvironment
 import com.monkopedia.ksrpc.channels.Connection
-import com.monkopedia.ksrpc.channels.SerializedChannel
 import com.monkopedia.ksrpc.channels.asConnection
+import com.monkopedia.ksrpc.channels.registerDefault
+import com.monkopedia.ksrpc.channels.registerHost
 import com.monkopedia.ksrpc.ksrpcEnvironment
-import com.monkopedia.ksrpc.toStub
 import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.close
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
-import io.ktor.utils.io.jvm.javaio.toInputStream
+import io.ktor.utils.io.pool.ByteArrayPool
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.io.OutputStream
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
-import kotlin.concurrent.thread
 import kotlin.coroutines.coroutineContext
 
-class ObjectRegistry internal constructor() {
-    val tasks = mutableSetOf<Task>()
-    var isBuilt = false
-
-    fun register(task: Task) {
-        require(!isBuilt) {
-            "Tasks cannot be added once the object has started building"
-        }
-        tasks.add(task)
-    }
-}
-
-interface Task {
-    val name: String
-    val dependencies: List<Task>
-    val isExecuted: Boolean
-
-    suspend fun execute()
-}
-
-fun build(args: Array<String>, execMethod: suspend ObjectRegistry.() -> Unit) {
+fun runKonstruction(args: Array<String>, script: KcsgScript) {
     runBlocking {
-        val registry = ObjectRegistry()
-        registry.execMethod()
-        registry.isBuilt = true
-
         val input = System.`in`
         val output = System.out
         val channel = (input to output).toChannel()
-        val service = channel.defaultChannel().toStub<ObjectService>()
-        runTasks(args, registry.tasks.toList(), service)
+        channel.registerDefault<ScriptService>(ScriptServiceImpl(script))
+        awaitCancellation()
     }
 }
 
-suspend fun Pair<InputStream, OutputStream>.toChannel(): Connection {
-    val (input, output) = this
+suspend fun Pair<InputStream, OutputStream>.toChannel(
+    env: KsrpcEnvironment = ksrpcEnvironment { }
+): Connection {
+    return createConnection(first, second, env)
+}
+
+suspend fun createConnection(
+    input: InputStream,
+    output: OutputStream,
+    env: KsrpcEnvironment = ksrpcEnvironment { }
+): Connection {
     val channel = ByteChannel(autoFlush = true)
-    val job = coroutineContext[Job]
-    thread(start = true) {
-        channel.toInputStream(job).copyTo(output)
+    val threadExecutor = newFixedThreadPoolContext(2, "ServeThreads")
+    CoroutineScope(coroutineContext).launch(threadExecutor) {
+        channel.copyToAndFlush(output)
+        withContext(Dispatchers.IO) {
+            threadExecutor.close()
+        }
     }
-    return (input.toByteReadChannel(Dispatchers.IO) to channel).asConnection(ksrpcEnvironment {  })
+    try {
+        return (input.toByteReadChannel(Dispatchers.IO) to channel)
+            .asConnection(env)
+    } catch (t: Throwable) {
+        t.printStackTrace()
+        throw t
+    }
+}
+
+/**
+ * Copies up to [limit] bytes from [this] byte channel to [out] stream suspending on read channel
+ * and blocking on output
+ *
+ * @return number of bytes copied
+ */
+suspend fun ByteReadChannel.copyToAndFlush(out: OutputStream, limit: Long = Long.MAX_VALUE): Long {
+    require(limit >= 0) { "Limit shouldn't be negative: $limit" }
+
+    val buffer = ByteArrayPool.borrow()
+    try {
+        var copied = 0L
+        val bufferSize = buffer.size.toLong()
+
+        while (copied < limit) {
+            val rc = readAvailable(buffer, 0, minOf(limit - copied, bufferSize).toInt())
+            if (rc == -1 && isClosedForRead) break
+            if (rc > 0) {
+                out.write(buffer, 0, rc)
+                out.flush()
+                copied += rc
+            }
+        }
+        try {
+            out.close()
+        } catch (t: Throwable) {
+        }
+        Throwable().printStackTrace()
+
+        return copied
+    } finally {
+        ByteArrayPool.recycle(buffer)
+    }
 }

@@ -28,4 +28,9 @@ pluginManagement {
     }
 }
 include(":lib")
-includeBuild("KCSG")
+includeBuild("KCSG") {
+    dependencySubstitution {
+        substitute(module("com.monkopedia:kcsg-lib")).using(project(":kcsg-dsl"))
+        substitute(module("com.monkopedia:kcsg")).using(project(":kcsg"))
+    }
+}

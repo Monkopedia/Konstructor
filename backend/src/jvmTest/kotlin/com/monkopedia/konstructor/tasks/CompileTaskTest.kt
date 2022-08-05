@@ -1,5 +1,6 @@
 package com.monkopedia.konstructor.tasks
 
+import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.common.CompilationStatus.SUCCESS
 import com.monkopedia.konstructor.common.TaskMessage
@@ -10,29 +11,30 @@ import kotlinx.coroutines.runBlocking
 class CompileTaskTest {
     @Test
     fun `parse sample kotlinc output`() {
+        val offset = KcsgScript.HEADER.split("\n").size
         val testOutput = """
-            |build.gradle.kts:1:1: error: unresolved reference: buildscript
+            |build.gradle.kts:${1 + offset}:1: error: unresolved reference: buildscript
             |buildscript {
             |^
-            |build.gradle.kts:2:27: error: unresolved reference: extra
+            |build.gradle.kts:${2 + offset}:27: error: unresolved reference: extra
             |    val kotlin_version by extra("1.5.31")
             |                          ^
-            |build.gradle.kts:3:5: error: unresolved reference: repositories
+            |build.gradle.kts:${3 + offset}:5: error: unresolved reference: repositories
             |    repositories {
             |    ^
-            |build.gradle.kts:4:9: error: unresolved reference: mavenCentral
+            |build.gradle.kts:${4 + offset}:9: error: unresolved reference: mavenCentral
             |        mavenCentral()
             |        ^
-            |build.gradle.kts:6:5: error: unresolved reference: dependencies
+            |build.gradle.kts:${6 + offset}:5: error: unresolved reference: dependencies
             |    dependencies {
             |    ^
-            |build.gradle.kts:7:9: error: unresolved reference: classpath
+            |build.gradle.kts:${7 + offset}:9: error: unresolved reference: classpath
             |        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${'$'}kotlin_version")
             |        ^
-            |build.gradle.kts:8:9: error: unresolved reference: classpath
+            |build.gradle.kts:${8 + offset}:9: error: unresolved reference: classpath
             |        classpath("org.jetbrains.kotlin:kotlin-serialization:${'$'}kotlin_version")
             |        ^
-            |build.gradle.kts:9:9: error: unresolved reference: classpath
+            |build.gradle.kts:${9 + offset}:9: error: unresolved reference: classpath
             |        classpath("com.monkopedia:ksrpc-gradle-plugin:0.5.5")
             |        ^
             |""".trimMargin()
@@ -86,10 +88,7 @@ class CompileTaskTest {
     @Test
     fun `test importing library`() {
         val testClass = """
-            import com.monkopedia.konstructor.lib.*
 
-            fun main(args: Array<String>) = build(args) {
-            }
         """.trimIndent()
         val testFile = kotlin.io.path.createTempFile(suffix = ".kt").toFile()
         testFile.writeText(testClass)

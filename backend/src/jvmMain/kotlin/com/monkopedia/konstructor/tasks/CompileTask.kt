@@ -1,5 +1,6 @@
 package com.monkopedia.konstructor.tasks
 
+import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.common.CompilationStatus.FAILURE
 import com.monkopedia.konstructor.common.CompilationStatus.SUCCESS
@@ -41,6 +42,9 @@ class CompileTask(
 
     companion object {
         private val errorRegex = Regex("^(.*):([0-9]+):([0-9]+): (.*)$")
+        private val headerLines = KcsgScript.HEADER.split("\n").size
+        private val footerLines = KcsgScript.FOOTER.split("\n").size
+
         fun parseErrors(stdOut: BufferedReader): List<TaskMessage> {
             return stdOut.lines().filter {
                 it.startsWith("error:") || it.startsWith("warning:") || errorRegex.matches(it)
@@ -50,11 +54,21 @@ class CompileTask(
                 } else {
                     val match = errorRegex.matchEntire(it)
                         ?: error("Confused about how to parse $it")
-                    TaskMessage(
-                        message = match.groupValues[4],
-                        line = match.groupValues[2].toInt(),
-                        char = match.groupValues[3].toInt()
-                    )
+                    val line = match.groupValues[2].toInt()
+                    if (line >= headerLines) {
+                        val char = match.groupValues[3].toInt()
+                        TaskMessage(
+                            message = match.groupValues[4],
+                            line = line - headerLines,
+                            char = char
+                        )
+                    } else {
+                        TaskMessage(
+                            message = "Internal error: ${match.groupValues[4]}",
+                            line = 0,
+                            char = 0
+                        )
+                    }
                 }
             }.toList()
         }

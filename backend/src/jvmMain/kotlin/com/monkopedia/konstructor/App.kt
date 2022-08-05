@@ -112,6 +112,9 @@ class App : ServiceApp("konstructor") {
                 embeddedServer(Netty, h) {
                     install(CORS) {
                         anyHost()
+                        allowHeaders { true }
+                        allowNonSimpleContentTypes = true
+                        allowCredentials = true
                     }
                     install(StatusPages) {
                         status(HttpStatusCode.NotFound) { _ ->

@@ -1,7 +1,7 @@
 package com.monkopedia.konstructor
 
+import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.common.DirtyState.NEEDS_COMPILE
-import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.tasks.CompileTask
@@ -30,6 +30,7 @@ interface KonstructionController {
     suspend fun lastCompileResult(): TaskResult
 }
 
+@Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
 class SimpleLock : Object() {
     var isLocked: Boolean = false
         set(value) {
@@ -50,7 +51,7 @@ class SimpleLock : Object() {
         }
 }
 
-@ExperimentalSerializationApi
+@OptIn(ExperimentalSerializationApi::class)
 class KonstructionControllerImpl(
     private val config: Config,
     private val workspaceId: String,
@@ -61,7 +62,8 @@ class KonstructionControllerImpl(
     private val infoFile = File(File(workspaceDir, id), "info.json")
     private val compileResultFile = File(File(workspaceDir, id), "compile.json")
     private val compileOutput = File(File(workspaceDir, id), "out")
-    private val contentFile = File(File(workspaceDir, id), "content.kt")
+    private val contentFile = File(File(workspaceDir, id), "content.csgs")
+    private val kotlinFile = File(File(workspaceDir, id), "content.kt")
     private val contentFileLock = SimpleLock()
     private var hasInitialized = false
     private var infoImpl: KonstructionInfo? = null
@@ -86,7 +88,12 @@ class KonstructionControllerImpl(
     override suspend fun compile() {
         contentFileLock.isLocked = true
         try {
-            val compileTask = CompileTask(config = config, input = contentFile, output = compileOutput)
+            withContext(Dispatchers.IO) {
+                val inputStream = contentFile.inputStream()
+                copyContentToScript(inputStream, kotlinFile)
+            }
+            val compileTask =
+                CompileTask(config = config, input = kotlinFile, output = compileOutput)
             val result = compileTask.execute()
             compileResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
@@ -95,6 +102,7 @@ class KonstructionControllerImpl(
             contentFileLock.isLocked = false
         }
     }
+
 
     override suspend fun lastCompileResult(): TaskResult = withContext(Dispatchers.IO) {
         compileResultFile.inputStream().use { input ->
@@ -134,6 +142,25 @@ class KonstructionControllerImpl(
                 )
                 contentFileLock.isLocked = false
                 super.close()
+            }
+        }
+    }
+
+    companion object {
+        val KONSTRUCTION_FOOTER = """
+            
+            fun main(args: Array<String>) = com.monkopedia.konstructor.lib.runKonstruction(args, script)            
+        """.trimIndent()
+
+        fun copyContentToScript(inputStream: InputStream, kotlinFile: File) {
+            kotlinFile.outputStream().use { os ->
+                KcsgScript.HEADER.replace(
+                    "com.monkopedia.kcsg.KcsgScript().apply",
+                    "val script = com.monkopedia.kcsg.KcsgScript().apply"
+                ).byteInputStream().copyTo(os)
+                inputStream.use { it.copyTo(os) }
+                KcsgScript.FOOTER.byteInputStream().copyTo(os)
+                KONSTRUCTION_FOOTER.byteInputStream().copyTo(os)
             }
         }
     }

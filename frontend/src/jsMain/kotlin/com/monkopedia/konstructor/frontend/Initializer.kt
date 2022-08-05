@@ -28,7 +28,7 @@ private val Location.backendUrl: String
     get() =
         (
             protocol + "//" + hostname + "${
-            port.toIntOrNull()?.let { ":$it" } ?: ""
+            8080/*port.toIntOrNull()*/?.let { ":$it" } ?: ""
             }" + "/konstructor"
             )
 
