@@ -19,40 +19,36 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.ksrpc.ErrorListener
+import com.monkopedia.ksrpc.KsrpcEnvironment
 import com.monkopedia.ksrpc.ServiceApp
 import com.monkopedia.ksrpc.channels.SerializedService
 import com.monkopedia.ksrpc.channels.asConnection
-import com.monkopedia.ksrpc.channels.connect
 import com.monkopedia.ksrpc.channels.serve
+import com.monkopedia.ksrpc.channels.serveWebsocket
 import com.monkopedia.ksrpc.channels.stdInConnection
 import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.serialized
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.http.content.defaultResource
-import io.ktor.server.http.content.resolveResource
 import io.ktor.server.http.content.resources
 import io.ktor.server.http.content.static
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.cors.routing.CORS
-import io.ktor.server.plugins.statuspages.StatusPages
-import io.ktor.server.response.respond
 import io.ktor.server.response.respondOutputStream
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.util.getOrFail
+import io.ktor.server.websocket.WebSockets
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import java.net.ServerSocket
-import java.util.*
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
@@ -70,15 +66,16 @@ class App : ServiceApp("konstructor") {
         KonstructorImpl(config)
     }
 
+    override val env: KsrpcEnvironment = ksrpcEnvironment {
+        errorListener = ErrorListener { exception ->
+            logger.warn("Exception caught in ksrpc", exception)
+        }
+    }
+
     override fun run() {
         if (!stdOut && port.isEmpty() && http.isEmpty()) {
             println("No output mechanism specified, exiting")
             exitProcess(1)
-        }
-        val environment = ksrpcEnvironment {
-            errorListener = ErrorListener { exception ->
-                logger.warn("Exception caught in ksrpc", exception)
-            }
         }
         for (p in port) {
             thread(start = true) {
@@ -88,48 +85,30 @@ class App : ServiceApp("konstructor") {
                     GlobalScope.launch {
                         val context = newSingleThreadContext("$appName-socket-$p")
                         withContext(context) {
-                            val connection =
-                                (s.getInputStream() to s.getOutputStream()).asConnection(
-                                    environment
-                                )
-                            connection.connect {
-                                createChannel()
-                            }
+                            val connection = (s.getInputStream() to s.getOutputStream())
+                                .asConnection(env)
+                            connection.registerDefault(createChannel())
                         }
                         context.close()
                     }
                 }
             }
         }
-        for (h in http) {
-            runBlocking {
-                val serveCall =
-                    serve(
-                        "/${appName.replaceFirstChar { it.lowercase(Locale.getDefault()) }}",
-                        createChannel(),
-                        environment
-                    )
+        runBlocking {
+            for (h in http) {
+                val routes = serve("/${appName.decapitalize()}", createChannel(), env)
                 embeddedServer(Netty, h) {
                     install(CORS) {
                         anyHost()
-                        allowHeaders { true }
-                        allowNonSimpleContentTypes = true
-                        allowCredentials = true
                     }
-                    install(StatusPages) {
-                        status(HttpStatusCode.NotFound) { _ ->
-                            val content = call.resolveResource("web/index.html", null)
-                            if (content != null) {
-                                call.respond(content)
-                            }
-                        }
-                    }
+                    install(WebSockets)
                     routing {
-                        serveCall()
+                        routes()
+                        serveWebsocket("/${appName.decapitalize()}", createChannel(), env)
                         get("/model/{target}") {
                             val target = call.parameters.getOrFail("target")
                             call.respondOutputStream {
-                                this::class.java.getResourceAsStream("/suzanne.stl")
+                                service.getInputStream(target)
                                     .use { it.copyTo(this) }
                             }
                         }
@@ -140,17 +119,9 @@ class App : ServiceApp("konstructor") {
                     }
                 }.start()
             }
-        }
-        if (stdOut) {
-            runBlocking {
-                val stdInConnection = stdInConnection(environment)
-                stdInConnection.connect {
-                    createChannel()
-                }
+            if (stdOut) {
+                stdInConnection(env).registerDefault(createChannel())
             }
-        }
-        runBlocking {
-            awaitCancellation()
         }
     }
 

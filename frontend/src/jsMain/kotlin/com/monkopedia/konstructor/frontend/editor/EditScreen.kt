@@ -14,6 +14,8 @@ import csstype.pct
 import csstype.px
 import emotion.react.css
 import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.printStack
+import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.css.background
@@ -63,7 +65,7 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
                 isLoading = true,
                 currentKonstruction = props.konstruction
             )
-            val content = props.konstructionService?.fetch(Unit)?.readRemaining()?.readText()
+            val content = props.konstructionService?.fetch()
             state = state.copy(
                 currentKonstruction = props.konstruction,
                 currentText = content,
@@ -78,7 +80,7 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
             state = state.copy(
                 isSaving = true
             )
-            props.konstructionService?.set(ByteReadChannel((content ?: "").encodeToByteArray()))
+            props.konstructionService?.set(content ?: "")
             state = state.copy(
                 isSaving = false,
                 currentText = content

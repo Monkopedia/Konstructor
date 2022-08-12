@@ -3,11 +3,13 @@ buildscript {
     repositories {
         mavenCentral()
         mavenLocal()
+        gradlePluginPortal()
     }
     dependencies {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
         classpath("org.jetbrains.kotlin:kotlin-serialization:$kotlin_version")
         classpath("com.monkopedia:ksrpc-gradle-plugin:0.5.5")
+        classpath("gradle.plugin.com.github.johnrengelman:shadow:7.1.2")
     }
 }
 

@@ -28,14 +28,12 @@ class KonstructionServiceImpl(config: Config, workspaceId: String, id: String) :
         return konstructionController.info
     }
 
-    override suspend fun fetch(u: Unit): ByteReadChannel {
-        return konstructionController.inputStream().toByteReadChannel()
+    override suspend fun fetch(u: Unit): String {
+        return konstructionController.read()
     }
 
-    override suspend fun set(content: ByteReadChannel) {
-        konstructionController.outputStream().use { output ->
-            content.copyTo(output)
-        }
+    override suspend fun set(content: String) {
+        konstructionController.write(content)
     }
 
     override suspend fun compile(u: Unit): TaskResult {

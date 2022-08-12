@@ -45,12 +45,9 @@ val GLComponent = FC<GLProps> { props ->
     }
     val konstruction = props.konstruction ?: return@FC
     val konstructionService = props.konstructionService ?: return@FC
-    println("Render GL $konstruction ${state.currentKonstruction}")
     if (state.currentKonstruction != konstruction) {
         GlobalScope.launch {
-            println("Fetching rendered")
-            val path = konstructionService.rendered(Unit)
-            println("Path: $path")
+            val path = konstructionService.rendered()
             if (path != null) {
                 GLWindow.loadModel(path)
             }

@@ -4,6 +4,7 @@ plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
     id("com.monkopedia.ksrpc.plugin")
+    id("com.github.johnrengelman.shadow")
 }
 
 repositories {
@@ -16,20 +17,6 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
         freeCompilerArgs += "-Xskip-prerelease-check"
         freeCompilerArgs += "-Xno-param-assertions"
     }
-}
-val fatJar = tasks.register("fatJar", type = Jar::class) {
-    duplicatesStrategy = INCLUDE
-    baseName = "${project.name}-fat"
-    from(
-        configurations.runtimeClasspath.get().mapNotNull {
-            when {
-                it.absolutePath.contains("kotlin-stdlib") || it.absolutePath.contains("kotlin-reflect") -> null
-                it.isDirectory -> it
-                else -> zipTree(it)
-            }
-        }
-    )
-    with(tasks["jar"] as CopySpec)
 }
 
 dependencies {

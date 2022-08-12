@@ -61,7 +61,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
     }
 
     private suspend fun generateId(): String {
-        val usedIds = list(Unit).map { it.id }
+        val usedIds = list().map { it.id }
         var id = 0
         while (usedIds.contains(id.toString())) {
             id++

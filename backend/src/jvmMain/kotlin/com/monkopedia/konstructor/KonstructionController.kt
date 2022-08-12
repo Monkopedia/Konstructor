@@ -1,10 +1,12 @@
+@file:OptIn(DelicateCoroutinesApi::class)
+
 package com.monkopedia.konstructor
 
 import com.monkopedia.kcsg.KcsgScript
-import com.monkopedia.konstructor.common.DirtyState.NEEDS_COMPILE
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.tasks.CompileTask
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -13,19 +15,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
-import java.io.ByteArrayInputStream
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.InputStream
-import java.io.OutputStream
 import kotlin.coroutines.CoroutineContext
 
 interface KonstructionController {
     var info: KonstructionInfo
 
-    fun inputStream(): InputStream
-    fun outputStream(): OutputStream
+    fun read(): String
+    fun write(content: String)
     suspend fun compile()
     suspend fun lastCompileResult(): TaskResult
 }
@@ -103,7 +101,6 @@ class KonstructionControllerImpl(
         }
     }
 
-
     override suspend fun lastCompileResult(): TaskResult = withContext(Dispatchers.IO) {
         compileResultFile.inputStream().use { input ->
             config.json.decodeFromStream(input)
@@ -120,30 +117,21 @@ class KonstructionControllerImpl(
         }
     }
 
-    override fun inputStream(): InputStream {
+    override fun read(): String {
         if (!contentFile.exists()) {
-            return ByteArrayInputStream(byteArrayOf())
+            return ""
         }
         contentFileLock.isLocked = true
-        return object : FileInputStream(contentFile) {
-            override fun close() {
-                contentFileLock.isLocked = false
-                super.close()
-            }
+        return contentFile.readText().also {
+            contentFileLock.isLocked = false
         }
     }
 
-    override fun outputStream(): OutputStream {
+    override fun write(content: String) {
         contentFileLock.isLocked = true
-        return object : FileOutputStream(contentFile) {
-            override fun close() {
-                info = info.copy(
-                    dirtyState = NEEDS_COMPILE
-                )
-                contentFileLock.isLocked = false
-                super.close()
-            }
-        }
+        contentFile.writeText(content)
+
+        contentFileLock.isLocked = false
     }
 
     companion object {

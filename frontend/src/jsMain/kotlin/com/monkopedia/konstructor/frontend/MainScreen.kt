@@ -51,7 +51,7 @@ val MainScreen = FC<MainScreenProps> { props ->
                     state.konstructionList?.find { it.id == id }
                         ?: error("Can't find $id")
                 )
-//            state.currentKonstruction?.close()
+            state.currentKonstruction?.close()
             state = state.copy(
                 currentId = id,
                 currentKonstruction = konstruction
@@ -63,14 +63,14 @@ val MainScreen = FC<MainScreenProps> { props ->
         props.workManager.doWork {
             val id = id
             val workspace = props.service.get(id)
-//            state.currentWorkspace?.close()
+            state.currentWorkspace?.close()
             state = state.copy(
                 currentWorkspaceId = id,
                 currentWorkspace = workspace,
                 currentId = null,
                 konstructionList = null
             )
-            val konstructionList = workspace.list(Unit)
+            val konstructionList = workspace.list()
             state = state.copy(
                 currentWorkspaceId = id,
                 currentWorkspace = workspace,

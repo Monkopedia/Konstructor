@@ -9,6 +9,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 import java.io.File
+import java.io.InputStream
 
 class KonstructorImpl(private val config: Config) : Konstructor {
 
@@ -49,7 +50,7 @@ class KonstructorImpl(private val config: Config) : Konstructor {
     }
 
     private suspend fun generateId(): String {
-        val usedIds = list(Unit).map { it.id }
+        val usedIds = list().map { it.id }
         var id = 0
         while (usedIds.contains(id.toString())) {
             id++
@@ -63,6 +64,10 @@ class KonstructorImpl(private val config: Config) : Konstructor {
             throw IllegalArgumentException("Can't find workspace $item")
         }
         targetInfo.parentFile.deleteRecursively()
+    }
+
+    fun getInputStream(target: String): InputStream {
+        return "".byteInputStream()
     }
 
     private val Space.infoFile: File

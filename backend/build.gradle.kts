@@ -4,6 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform")
     application
     id("com.monkopedia.ksrpc.plugin")
+    id("com.github.johnrengelman.shadow")
 }
 
 repositories {
@@ -24,6 +25,7 @@ kotlin {
         implementation("com.github.ajalt:clikt:2.8.0")
         implementation("io.ktor:ktor-server-core:2.0.2")
         implementation("io.ktor:ktor-server-cors:2.0.2")
+        implementation("io.ktor:ktor-server-websockets:2.0.2")
         implementation("io.ktor:ktor-server-status-pages:2.0.2")
         implementation("io.ktor:ktor-server-netty:2.0.2")
     }
@@ -55,32 +57,28 @@ val copy = tasks.register<Copy>("copyJsBundleToKtor") {
 }
 val lib = rootProject.findProject(":lib")!!
 val copyLib = tasks.register<Copy>("copyLibToKtor") {
-    from("${lib.buildDir}/libs/lib-fat.jar")
+    from("${lib.buildDir}/libs/lib-all.jar")
     into("$buildDir/processedResources/")
 }
 afterEvaluate {
-    val fatJar = tasks.register("fatJar", type = Jar::class) {
-        duplicatesStrategy = WARN
-        baseName = "${project.name}-fat"
-        manifest {
-            attributes["Implementation-Title"] = "Konstructor Server"
-            attributes["Implementation-Version"] = "1.0"
-            attributes["Main-Class"] = application.mainClassName
-        }
-        from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
-        with(tasks["jar"] as CopySpec)
-    }
 
     tasks.named("copyJsBundleToKtor") {
         dependsOn(browser.tasks["jsBrowserDistribution"])
         mustRunAfter(browser.tasks["jsBrowserDistribution"])
     }
     tasks.named("copyLibToKtor") {
-        dependsOn(lib.tasks["fatJar"])
-        mustRunAfter(lib.tasks["fatJar"])
+        dependsOn(lib.tasks["shadowJar"])
+        mustRunAfter(lib.tasks["shadowJar"])
     }
 
-    tasks.named("fatJar") {
+    tasks.named("shadowJar") {
+        mustRunAfter("copyJsBundleToKtor")
+        mustRunAfter("copyLibToKtor")
+    }
+
+    tasks.named("jvmProcessResources") {
+        dependsOn("copyJsBundleToKtor")
+        dependsOn("copyLibToKtor")
         mustRunAfter("copyJsBundleToKtor")
         mustRunAfter("copyLibToKtor")
     }

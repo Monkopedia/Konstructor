@@ -15,12 +15,10 @@ import react.dom.render
 
 fun main() {
     println("Starting main")
-    kotlinext.js.require("codemirror/lib/codemirror.css")
-    kotlinext.js.require("codemirror/theme/darcula.css")
-    kotlinext.js.require("codemirror/mode/clike/clike.js")
-    kotlinext.js.require("codemirror/keymap/vim.js")
-    kotlinext.js.require("codemirror/addon/dialog/dialog.js")
-    kotlinext.js.require("codemirror/addon/dialog/dialog.css")
+//    kotlinext.js.require("codemirror/lib/codemirror.css")
+//    kotlinext.js.require("codemirror/theme/darcula.css")
+//    kotlinext.js.require("codemirror/mode/clike/clike.js")
+//    kotlinext.js.require("codemirror/dist/index.js")
     val root = createRoot(document.getElementById("root")!!)
     root.render(
         Fragment.create {

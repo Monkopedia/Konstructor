@@ -7,7 +7,7 @@ import com.monkopedia.ksrpc.annotation.KsService
 @KsService
 interface Konstructor : RpcService {
     @KsMethod("/list")
-    suspend fun list(u: Unit): List<Space>
+    suspend fun list(u: Unit = Unit): List<Space>
 
     @KsMethod("/target")
     suspend fun get(id: String): Workspace
@@ -25,7 +25,7 @@ interface Konstructor : RpcService {
 @KsService
 interface Workspace : RpcService {
     @KsMethod("/list")
-    suspend fun list(u: Unit): List<Konstruction>
+    suspend fun list(u: Unit = Unit): List<Konstruction>
 
     @KsMethod("/create")
     suspend fun create(newItem: Konstruction): Konstruction
@@ -34,7 +34,7 @@ interface Workspace : RpcService {
     suspend fun delete(item: Konstruction)
 
     @KsMethod("/name")
-    suspend fun getName(u: Unit): String
+    suspend fun getName(u: Unit = Unit): String
 
     @KsMethod("/set_name")
     suspend fun setName(name: String)

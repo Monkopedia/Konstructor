@@ -12,6 +12,7 @@ import csstype.Auto
 import csstype.px
 import emotion.react.css
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
 import kotlinx.browser.window
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -27,8 +28,8 @@ import react.useState
 private val Location.backendUrl: String
     get() =
         (
-            protocol + "//" + hostname + "${
-            8080/*port.toIntOrNull()*/?.let { ":$it" } ?: ""
+            "ws://" + hostname + "${
+            port.toIntOrNull()?.let { ":$it" } ?: ""
             }" + "/konstructor"
             )
 
@@ -52,7 +53,6 @@ val Loading = FC<Props> { _ ->
         }
     }
 }
-
 
 val Initializer = FC<Props> {
     val mainScreenState = useState(MainScreenState())
@@ -90,7 +90,11 @@ val Initializer = FC<Props> {
     if (konstructor == null) {
         Loading()
         GlobalScope.launch {
-            val service = uri.connect(ksrpcEnvironment { }) { HttpClient() }.defaultChannel()
+            val service = uri.connect(ksrpcEnvironment { }) {
+                HttpClient {
+                    install(WebSockets)
+                }
+            }.defaultChannel()
                 .toStub<Konstructor>()
             state = state.copy(konstructor = service)
         }
@@ -100,7 +104,7 @@ val Initializer = FC<Props> {
     if (workspaceList == null) {
         Loading()
         GlobalScope.launch {
-            val list = konstructor.list(Unit)
+            val list = konstructor.list()
             state = state.copy(workspaceList = list)
         }
         return@FC
