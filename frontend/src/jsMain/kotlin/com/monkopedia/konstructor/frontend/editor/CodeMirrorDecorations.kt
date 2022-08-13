@@ -5,7 +5,6 @@ package com.monkopedia.konstructor.frontend.editor
 import com.monkopedia.konstructor.frontend.utils.buildExt
 import dukat.codemirror.state.Range
 import dukat.codemirror.state.RangeFilter
-import dukat.codemirror.state.RangeSet
 import dukat.codemirror.state.StateEffect
 import dukat.codemirror.state.StateEffectType
 import dukat.codemirror.state.StateField
