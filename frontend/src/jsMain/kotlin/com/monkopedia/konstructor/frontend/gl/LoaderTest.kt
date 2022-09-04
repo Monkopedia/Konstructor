@@ -1,7 +1,8 @@
-package com.monkopedia.konstructor.frontend
+package com.monkopedia.konstructor.frontend.gl
 
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionService
+import com.monkopedia.konstructor.frontend.utils.useEffect
 import info.laht.threekt.cameras.PerspectiveCamera
 import info.laht.threekt.external.controls.OrbitControls
 import info.laht.threekt.external.libs.Stats
@@ -25,7 +26,7 @@ import react.useState
 
 external interface GLProps : Props {
     var konstruction: Konstruction?
-    var konstructionService: KonstructionService?
+    var konstructionPath: String?
 }
 
 data class GLState(
@@ -33,7 +34,6 @@ data class GLState(
 )
 
 val GLComponent = FC<GLProps> { props ->
-    var state by useState(GLState())
     val callbackRef by useState {
         RefCallback { v: Element? ->
             GLWindow.setElement(v)
@@ -43,17 +43,11 @@ val GLComponent = FC<GLProps> { props ->
     div {
         ref = callbackRef
     }
-    val konstruction = props.konstruction ?: return@FC
-    val konstructionService = props.konstructionService ?: return@FC
-    if (state.currentKonstruction != konstruction) {
-        GlobalScope.launch {
-            val path = konstructionService.rendered()
-            if (path != null) {
-                GLWindow.loadModel(path)
-            }
-            state = state.copy(
-                currentKonstruction = konstruction
-            )
+    useEffect(props.konstructionPath ?: "") {
+        val path = props.konstructionPath
+        println("Loading path $path")
+        if (path != null) {
+            GLWindow.loadModel(path)
         }
     }
 }

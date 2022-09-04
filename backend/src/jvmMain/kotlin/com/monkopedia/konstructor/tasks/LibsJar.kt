@@ -13,12 +13,12 @@ object LibsJar {
     }
 
     private fun createLibsFile(config: Config): File {
-        return File(config.dataDir, "lib.jar").also {
-            if (!it.parentFile.exists()) {
-                it.parentFile.mkdirs()
+        return File(config.dataDir, "lib.jar").also { libFile ->
+            if (!libFile.parentFile.exists()) {
+                libFile.parentFile.mkdirs()
             }
-            it.outputStream().use { output ->
-                this::class.java.getResourceAsStream("/lib-fat.jar").use {
+            libFile.outputStream().use { output ->
+                this::class.java.getResourceAsStream("/lib-all.jar").use {
                     it.copyTo(output)
                 }
             }

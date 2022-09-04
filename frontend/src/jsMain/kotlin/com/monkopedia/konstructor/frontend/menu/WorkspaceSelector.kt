@@ -1,6 +1,5 @@
 package com.monkopedia.konstructor.frontend.menu
 
-import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.Space
 import csstype.px
 import emotion.react.css
@@ -10,7 +9,6 @@ import mui.material.Select
 import mui.material.Size.small
 import react.FC
 import react.Props
-import react.State
 
 external interface WorkspaceSelectorProps : Props {
     var currentWorkspace: String?

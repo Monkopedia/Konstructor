@@ -61,8 +61,11 @@ class ScriptServiceImpl(private val script: KcsgScript) : ScriptService {
     }
 
     override suspend fun closeService(u: Unit) {
-        job.cancel()
-        exitProcess(0)
+        try {
+            job.cancel()
+        } finally {
+            exitProcess(0)
+        }
     }
 }
 

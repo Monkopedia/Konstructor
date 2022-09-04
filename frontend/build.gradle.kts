@@ -56,6 +56,7 @@ kotlin {
         }
     }
     sourceSets["jsMain"].dependencies {
+        implementation("io.insert-koin:koin-core:3.1.2")
         implementation("org.jetbrains.kotlin:kotlin-stdlib-js:1.7.0")
         compileOnly("io.ktor:ktor-client-core:2.0.2")
         compileOnly("io.ktor:ktor-client-js:2.0.2")

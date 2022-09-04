@@ -15,9 +15,9 @@ import kotlinx.coroutines.CompletableDeferred
 import java.io.File
 
 class ExecuteTask(
-    private val pkg: String,
     private val fileName: String,
     private val outputDir: File,
+    private val renderOutputDir: File = outputDir,
     private val config: Config
 ) : Task {
     override suspend fun execute(): TaskResult {
@@ -30,7 +30,7 @@ class ExecuteTask(
             val service = connection.defaultChannel().toStub<ScriptService>()
             service.initialize(
                 ScriptConfiguration(
-                    outputDirectory = outputDir.absolutePath,
+                    outputDirectory = renderOutputDir.absolutePath,
                     eagerExport = true
                 )
             )

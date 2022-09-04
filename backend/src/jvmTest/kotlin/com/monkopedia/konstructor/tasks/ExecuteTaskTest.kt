@@ -50,7 +50,7 @@ class ExecuteTaskTest {
         }
         assertEquals(SUCCESS, result.status)
         return runBlocking {
-            ExecuteTask("", "ConvertKt", outputDirectory, Config()).execute()
+            ExecuteTask("ConvertKt", outputDirectory, config = Config()).execute()
         }
     }
 }

@@ -6,6 +6,7 @@ import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.tasks.CompileTask
+import com.monkopedia.konstructor.tasks.ExecuteTask
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -26,6 +27,9 @@ interface KonstructionController {
     fun write(content: String)
     suspend fun compile()
     suspend fun lastCompileResult(): TaskResult
+    suspend fun render()
+    suspend fun lastRenderResult(): TaskResult
+    suspend fun firstRenderFile(): File?
 }
 
 @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
@@ -60,6 +64,8 @@ class KonstructionControllerImpl(
     private val infoFile = File(File(workspaceDir, id), "info.json")
     private val compileResultFile = File(File(workspaceDir, id), "compile.json")
     private val compileOutput = File(File(workspaceDir, id), "out")
+    private val renderResultFile = File(File(workspaceDir, id), "result.json")
+    private val renderOutput = File(File(workspaceDir, id), "renders")
     private val contentFile = File(File(workspaceDir, id), "content.csgs")
     private val kotlinFile = File(File(workspaceDir, id), "content.kt")
     private val contentFileLock = SimpleLock()
@@ -75,8 +81,13 @@ class KonstructionControllerImpl(
             // Optimistically set now, to have the info available immediately.
             infoImpl = value
             GlobalScope.launch(saveContext) {
-                infoFile.outputStream().use { output ->
-                    config.json.encodeToStream(value, output)
+                contentFileLock.isLocked = true
+                try {
+                    infoFile.outputStream().use { output ->
+                        config.json.encodeToStream(value, output)
+                    }
+                } finally {
+                    contentFileLock.isLocked = false
                 }
                 // Always set one more time after write to settle out any race conditions.
                 infoImpl = value
@@ -99,6 +110,39 @@ class KonstructionControllerImpl(
         } finally {
             contentFileLock.isLocked = false
         }
+    }
+
+    override suspend fun render() {
+        contentFileLock.isLocked = true
+        try {
+            renderOutput.deleteRecursively()
+            renderOutput.mkdirs()
+            val executeTask =
+                ExecuteTask(
+                    config = config,
+                    outputDir = compileOutput,
+                    renderOutputDir = renderOutput,
+                    fileName = "ContentKt"
+                )
+            val result = executeTask.execute()
+            renderResultFile.outputStream().use { output ->
+                config.json.encodeToStream(result, output)
+            }
+        } finally {
+            contentFileLock.isLocked = false
+        }
+    }
+
+    override suspend fun lastRenderResult(): TaskResult = withContext(Dispatchers.IO) {
+        renderResultFile.inputStream().use { input ->
+            config.json.decodeFromStream(input)
+        }
+    }
+
+    override suspend fun firstRenderFile(): File? = withContext(Dispatchers.IO) {
+        if (renderOutput.exists() && renderOutput.isDirectory) {
+            renderOutput.listFiles()?.firstOrNull()
+        } else null
     }
 
     override suspend fun lastCompileResult(): TaskResult = withContext(Dispatchers.IO) {

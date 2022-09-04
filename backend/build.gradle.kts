@@ -28,6 +28,7 @@ kotlin {
         implementation("io.ktor:ktor-server-websockets:2.0.2")
         implementation("io.ktor:ktor-server-status-pages:2.0.2")
         implementation("io.ktor:ktor-server-netty:2.0.2")
+        implementation("io.ktor:ktor-websocket-serialization:2.0.2")
     }
     sourceSets["jvmTest"].dependencies {
         implementation(kotlin("test-junit"))

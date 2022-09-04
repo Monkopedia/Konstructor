@@ -1,9 +1,11 @@
 package com.monkopedia.konstructor.frontend.editor
 
-import com.monkopedia.konstructor.common.Konstruction
-import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.frontend.invertedTheme
+import com.monkopedia.konstructor.frontend.model.KonstructionModel
+import com.monkopedia.konstructor.frontend.model.KonstructionModel.State
+import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.LOADING
+import com.monkopedia.konstructor.frontend.utils.useCollected
 import csstype.AlignContent
 import csstype.Color
 import csstype.Display
@@ -13,12 +15,6 @@ import csstype.integer
 import csstype.pct
 import csstype.px
 import emotion.react.css
-import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.printStack
-import io.ktor.utils.io.readAvailable
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.css.background
 import mui.material.Card
 import mui.material.CircularProgress
 import mui.material.Typography
@@ -26,20 +22,15 @@ import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.memo
+import react.useCallback
 import react.useMemo
 import react.useState
 
 external interface KonstructionEditorProps : Props {
-    var konstruction: Konstruction?
-    var konstructionService: KonstructionService?
+    var konstructionModel: KonstructionModel
+    var workspaceId: String
+    var konstructionId: String
 }
-
-data class KonstructionEditorState(
-    var isSaving: Boolean? = null,
-    var isLoading: Boolean? = null,
-    var currentText: String? = null,
-    var currentKonstruction: Konstruction? = null
-)
 
 val LoadingUi = FC<KonstructionEditorProps> {
     div {
@@ -54,48 +45,19 @@ val LoadingUi = FC<KonstructionEditorProps> {
 }
 
 val KonstructionEditor = FC<KonstructionEditorProps> { props ->
-    var state by useState(KonstructionEditorState())
-    if (state.isLoading == true) {
+    val state = props.konstructionModel.state.useCollected(LOADING)
+    val messages = props.konstructionModel.messages.useCollected(emptyList())
+    val currentText = props.konstructionModel.currentText.useCollected()
+    if (state == LOADING || currentText == null) {
         LoadingUi()
         return@FC
     }
-    if (state.currentKonstruction != props.konstruction) {
-        GlobalScope.launch {
-            state = state.copy(
-                isLoading = true,
-                currentKonstruction = props.konstruction
-            )
-            val content = props.konstructionService?.fetch()
-            state = state.copy(
-                currentKonstruction = props.konstruction,
-                currentText = content,
-                isLoading = false
-            )
-        }
-        LoadingUi()
-        return@FC
-    }
-    fun onSave(content: String?) {
-        GlobalScope.launch {
-            state = state.copy(
-                isSaving = true
-            )
-            props.konstructionService?.set(content ?: "")
-            state = state.copy(
-                isSaving = false,
-                currentText = content
-            )
-        }
-    }
-    if (state.currentKonstruction != null) {
-        EditorScreen {
-            id = "${state.currentKonstruction?.workspaceId}_${state.currentKonstruction?.id}"
-            content = state.currentText
-            onSave = ::onSave
-            messages = listOf(
-                TaskMessage("Hello there", 1)
-            )
-        }
+    EditorScreen {
+        id = "${props.workspaceId}_${props.konstructionId}"
+        content = currentText
+        onSave = props.konstructionModel.onSave
+        this.messages = messages
+        this.state = state
     }
 }
 
@@ -103,29 +65,28 @@ external interface EditorScreenProps : Props {
     var content: String?
     var id: String?
     var onSave: ((String?) -> Unit)?
-    var messages: List<TaskMessage>?
+    var messages: List<TaskMessage>
+    var state: State
 }
-
-
 
 val EditorScreen = memo(
     FC<EditorScreenProps> { props ->
         var currentMessage by useState<String>()
         val classes = useMemo(props.messages) {
             mapOf(
-                errorClass to (props.messages?.mapNotNull { it.line } ?: emptyList())
+                errorClass to (props.messages.mapNotNull { it.line } ?: emptyList())
             )
         }
 
-        fun onCursorChange(line: Int) {
-            val message = props.messages?.find {
+        val onCursorChange = useCallback(props.messages) { line: Int ->
+            val message = props.messages.find {
                 it.line == line
             }?.message
             currentMessage = message
         }
 
         CodeMirrorScreen {
-            this.onCursorChange = ::onCursorChange
+            this.onCursorChange = onCursorChange
             this.content = props.content
             this.onSave = props.onSave
             this.contentKey = props.id
@@ -135,15 +96,17 @@ val EditorScreen = memo(
         if (currentMessage != null) {
             MessageComponent {
                 message = currentMessage
+                this.state = props.state
             }
         }
     }
 ) { oldProps, newProps ->
-    oldProps.id == newProps.id && (oldProps.messages ?: emptyList()).equals(newProps.messages)
+    oldProps.id == newProps.id && oldProps.messages == newProps.messages
 }
 
 external interface MessageProps : Props {
     var message: String?
+    var state: State
 }
 
 val MessageComponent = memo(

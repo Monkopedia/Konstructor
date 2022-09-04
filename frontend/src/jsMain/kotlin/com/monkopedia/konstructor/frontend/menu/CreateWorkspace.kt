@@ -1,6 +1,7 @@
 package com.monkopedia.konstructor.frontend.menu
 
 import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.frontend.WorkManager
 import mui.icons.material.Add
 import mui.material.Button
 import mui.material.ButtonColor.primary
@@ -13,21 +14,29 @@ import mui.material.FormControlVariant.outlined
 import mui.material.IconButton
 import mui.material.TextField
 import react.FC
+import react.Props
 import react.dom.onChange
+import react.useRef
+import react.useState
 
-val createWorkspaceButton = FC<SubComponentProps> { props ->
+external interface CreateWorkspaceProps : Props {
+    var workManager: WorkManager
+    var onCreateWorkspace: suspend (Space) -> Unit
+}
+
+val createWorkspaceButton = FC<CreateWorkspaceProps> { props ->
+    var dialogOpen by useState(false)
+    val lastText = useRef<String>()
     IconButton {
         Add()
         onClick = {
-            props.editContext.state = props.editContext.state.copy(
-                createWorkspaceDialog = true
-            )
+            dialogOpen = true
         }
     }
     Dialog {
-        open = props.editContext.state.createWorkspaceDialog ?: false
+        open = dialogOpen
         onClose = { _, _ ->
-            props.editContext.closeAllDialogs()
+            dialogOpen = false
         }
         DialogTitle {
             +"Enter new workspace name"
@@ -37,9 +46,7 @@ val createWorkspaceButton = FC<SubComponentProps> { props ->
                 +"New workspace name"
                 variant = outlined
                 onChange = { e ->
-                    props.editContext.state = props.editContext.state.copy(
-                        lastTextInput = e.target.asDynamic().value.toString()
-                    )
+                    lastText.current = e.target.asDynamic().value.toString()
                 }
             }
         }
@@ -48,25 +55,22 @@ val createWorkspaceButton = FC<SubComponentProps> { props ->
                 +"Cancel"
                 color = secondary
                 onClick = {
-                    props.editContext.closeAllDialogs()
+                    dialogOpen = false
                 }
             }
             Button {
                 +"Set"
                 color = primary
                 onClick = {
-                    val lastTextInput = props.editContext.state.lastTextInput
-                    props.menuProps.workManager.doWork {
+                    val lastTextInput = lastText.current
+                    props.workManager.doWork {
                         if (lastTextInput.isNullOrEmpty()) {
                             return@doWork
                         }
-                        val newWorkspace = props.menuProps.service.create(
+                        props.onCreateWorkspace(
                             Space(id = "", name = lastTextInput)
                         )
-                        val updatedWorkspaces = props.menuProps.workspaces?.plus(newWorkspace)
-                        props.menuProps.onWorkspacesChanged?.invoke(updatedWorkspaces)
-                        props.menuProps.onWorkspaceSelected?.invoke(newWorkspace.id)
-                        props.editContext.closeAllDialogs()
+                        dialogOpen = false
                     }
                 }
             }

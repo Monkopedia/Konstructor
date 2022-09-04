@@ -27,6 +27,7 @@ import react.useRef
 import react.useState
 import styled.StyleSheet
 import styled.getClassSelector
+import kotlin.math.max
 
 private object MirrorStyles : StyleSheet("mirror", isStatic = true) {
     val errorLineBackground by css {
@@ -61,7 +62,6 @@ val CodeMirrorScreen = memo(
         val textAreaRef = useRef<HTMLDivElement>()
         val saveRef = useRef<(String) -> Unit>()
         var codeMirror by useState<EditorView>()
-        var state by useState<EditorState>()
 
         val currentLineCallback = useRef(props.onCursorChange)
 
@@ -78,22 +78,21 @@ val CodeMirrorScreen = memo(
         currentLineCallback.current = props.onCursorChange
         saveRef.current = props.onSave
 
-        useEffect(props.customClasses, props.contentKey, codeMirror, state) {
+        useEffect(props.customClasses, props.contentKey, codeMirror) {
             val lastMirror = codeMirror ?: return@useEffect
             val customClasses = props.customClasses ?: emptyMap()
             // Clear all marks.
-            val doc = state?.doc ?: return@useEffect
+            val doc = lastMirror.state.doc
 //            doc.eachLine { line ->
 //                customClasses.keys.forEach {
 //                    doc.removeLineClass(line, "background", it)
 //                }
 //            }
-            println("Expected content ${props.content}")
             lastMirror.dispatch(buildExt<TransactionSpec> {
                 effects = filterMarks.of { _, _, _ -> false }
                 changes = buildExt<`T$5`> {
                     from = 0
-                    to = state?.doc?.length
+                    to = doc.length
                     this.insert = (props.content!!)
                 }
             })
@@ -104,7 +103,7 @@ val CodeMirrorScreen = memo(
                     doc.line(it + 1).let { lineInfo ->
                         Decoration.mark(buildExt {
                             this.`class` = key
-                        }).range(lineInfo.from, lineInfo.to)
+                        }).range(lineInfo.from, max(lineInfo.to.toInt(), lineInfo.from.toInt() + 1))
                     }
                 }
             }
@@ -126,7 +125,6 @@ val CodeMirrorScreen = memo(
             }
 
             val textArea = textAreaRef.current!!
-            println("Attach ${textArea.hashCode()}")
             val editorState = EditorState.create(
                 buildExt {
                     this.doc = props.content
@@ -159,17 +157,13 @@ val CodeMirrorScreen = memo(
 //                }
 //            )
             fun onSave(cm: CodeMirror) {
-                saveRef.current?.invoke(cm.getValue().also {
-                    println("Saving [$it]")
-                })
+                saveRef.current?.invoke(cm.getValue())
             }
             val vimCompatApi = CodeMirror(cm)
             CodeMirror.commands.asDynamic().save = ::onSave
 //            OnCursorActivity.addListener(cm, ::onCursorChange)
             codeMirror = cm
-            state = editorState
             cleanup {
-                println("Cleanup ${textArea.hashCode()}")
 //                cm.toTextArea()
             }
         }

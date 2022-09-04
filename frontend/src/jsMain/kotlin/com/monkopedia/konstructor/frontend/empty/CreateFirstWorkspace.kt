@@ -1,7 +1,7 @@
 package com.monkopedia.konstructor.frontend.empty
 
-import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.frontend.koin.RootScope
 import csstype.AlignContent
 import csstype.AlignItems
 import csstype.Display
@@ -21,24 +21,15 @@ import mui.material.Size.medium
 import mui.material.TextField
 import react.FC
 import react.Props
-import react.State
 import react.dom.html.ReactHTML.div
 import react.dom.onChange
 import react.useState
 
-
-external interface CreateFirstWorkspaceProps : Props {
-    var konstructor: Konstructor
-    var onWorkspaceListChanged: ((List<Space>?) -> Unit)?
-}
-
-data class CreateFirstWorkspaceState(
-    val textValue: String? = null,
-    val creating: Boolean? = null
-): State
+external interface CreateFirstWorkspaceProps : Props
 
 val CreateFirstWorkspace = FC<CreateFirstWorkspaceProps> { props ->
-    var state by useState(CreateFirstWorkspaceState())
+    var textValue by useState<String>()
+    var creating by useState(false)
     div {
         css {
             display = Display.flex
@@ -56,7 +47,7 @@ val CreateFirstWorkspace = FC<CreateFirstWorkspaceProps> { props ->
                 alignContent = AlignContent.center
                 alignItems = AlignItems.center
             }
-            if (state.creating == true) {
+            if (creating) {
                 CircularProgress {
                     size = 80.px
                 }
@@ -67,23 +58,22 @@ val CreateFirstWorkspace = FC<CreateFirstWorkspaceProps> { props ->
                 variant = FormControlVariant.outlined
                 onChange = { e ->
                     val value = e.target.asDynamic().value
-                    state = state.copy(textValue = value)
+                    textValue = value
                 }
             }
             IconButton {
                 Login()
-                disabled = state.textValue.isNullOrEmpty().also {
-                    println("Disabling: $it (${state.textValue})")
+                disabled = textValue.isNullOrEmpty().also {
+                    println("Disabling: $it ($textValue)")
                 }
                 size = medium
                 color = primary
                 onClick = {
-                    state = state.copy(creating = true)
+                    creating = true
                     GlobalScope.launch {
-                        val name = state.textValue.toString()
-                        val created = props.konstructor.create(Space("", name))
-                        state = state.copy(creating = false)
-                        props.onWorkspaceListChanged?.invoke(listOf(created))
+                        val name = textValue.toString()
+                        RootScope.spaceListModel.createWorkspace(Space("", name))
+                        creating = false
                     }
                 }
             }

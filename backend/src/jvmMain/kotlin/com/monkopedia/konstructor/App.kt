@@ -105,8 +105,8 @@ class App : ServiceApp("konstructor") {
                     routing {
                         routes()
                         serveWebsocket("/${appName.decapitalize()}", createChannel(), env)
-                        get("/model/{target}") {
-                            val target = call.parameters.getOrFail("target")
+                        get("/model/{target...}") {
+                            val target = call.parameters.getAll("target")!!.joinToString("/")
                             call.respondOutputStream {
                                 service.getInputStream(target)
                                     .use { it.copyTo(this) }

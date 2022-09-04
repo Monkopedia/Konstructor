@@ -1,6 +1,9 @@
 package com.monkopedia.konstructor.frontend.menu
 
 import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.frontend.WorkManager
+import com.monkopedia.konstructor.frontend.model.WorkspaceModel
 import mui.icons.material.Add
 import mui.material.Button
 import mui.material.ButtonColor.primary
@@ -13,21 +16,30 @@ import mui.material.FormControlVariant.outlined
 import mui.material.IconButton
 import mui.material.TextField
 import react.FC
+import react.Props
 import react.dom.onChange
+import react.useRef
+import react.useState
 
-val createKonstructionButton = FC<SubComponentProps> { props ->
+external interface CreateKonstructionProps : Props {
+    var workManager: WorkManager
+    var workspaceModel: WorkspaceModel
+    var onCreateWorkspace: suspend (Konstruction) -> Unit
+}
+
+val createKonstructionButton = FC<CreateKonstructionProps> { props ->
+    var dialogOpen by useState(false)
+    val lastText = useRef<String>()
     IconButton {
         Add()
         onClick = {
-            props.editContext.state = props.editContext.state.copy(
-                createKonstructionDialog = true
-            )
+            dialogOpen = true
         }
     }
     Dialog {
-        open = props.editContext.state.createKonstructionDialog ?: false
+        open = dialogOpen
         onClose = { _, _ ->
-            props.editContext.closeAllDialogs()
+            dialogOpen = false
         }
         DialogTitle {
             +"Enter new konstruction name"
@@ -37,9 +49,7 @@ val createKonstructionButton = FC<SubComponentProps> { props ->
                 "New konstruction name"
                 variant = outlined
                 onChange = { e ->
-                    props.editContext.state = props.editContext.state.copy(
-                        lastTextInput = e.target.asDynamic().value.toString()
-                    )
+                    lastText.current = e.target.asDynamic().value.toString()
                 }
             }
         }
@@ -48,31 +58,26 @@ val createKonstructionButton = FC<SubComponentProps> { props ->
                 +"Cancel"
                 color = secondary
                 onClick = {
-                    props.editContext.closeAllDialogs()
+                    dialogOpen = false
                 }
             }
             Button {
                 +"Set"
                 color = primary
                 onClick = {
-                    val lastTextInput = props.editContext.state.lastTextInput
-                    props.menuProps.workManager.doWork {
+                    val lastTextInput = lastText.current
+                    props.workManager.doWork {
                         if (lastTextInput.isNullOrEmpty()) {
                             return@doWork
                         }
-                        val newKonstruction = props.menuProps.currentWorkspaceService?.create(
+                        props.onCreateWorkspace(
                             Konstruction(
                                 id = "",
                                 name = lastTextInput,
-                                workspaceId = props.menuProps.currentWorkspace
-                                    ?: error("Lost workspace")
+                                workspaceId = props.workspaceModel.workspaceId
                             )
-                        ) ?: error("Missing workspace")
-                        val updatedKonstructions =
-                            props.menuProps.konstructions?.plus(newKonstruction)
-                        props.menuProps.onKonstructionsChanged?.invoke(updatedKonstructions)
-                        props.menuProps.onKonstructionSelected?.invoke(newKonstruction.id)
-                        props.editContext.closeAllDialogs()
+                        )
+                        dialogOpen = false
                     }
                 }
             }

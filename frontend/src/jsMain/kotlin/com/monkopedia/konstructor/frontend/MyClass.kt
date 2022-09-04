@@ -1,5 +1,6 @@
 package com.monkopedia.konstructor.frontend
 
+import com.monkopedia.konstructor.frontend.koin.RootScope
 import kotlinx.browser.document
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.awaitCancellation
@@ -14,6 +15,8 @@ import react.dom.client.createRoot
 import react.dom.render
 
 fun main() {
+    println("Starting koin")
+    RootScope.init()
     println("Starting main")
 //    kotlinext.js.require("codemirror/lib/codemirror.css")
 //    kotlinext.js.require("codemirror/theme/darcula.css")

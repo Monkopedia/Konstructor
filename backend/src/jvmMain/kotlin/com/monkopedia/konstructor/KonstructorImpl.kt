@@ -67,7 +67,7 @@ class KonstructorImpl(private val config: Config) : Konstructor {
     }
 
     fun getInputStream(target: String): InputStream {
-        return "".byteInputStream()
+        return File(config.dataDir, target).inputStream()
     }
 
     private val Space.infoFile: File
