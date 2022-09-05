@@ -15,11 +15,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
@@ -37,11 +37,15 @@ class KonstructionModel(
         workspaceModel.availableKonstructions.map { konstructions ->
             konstructions.find { it.id == konstructionId }
         }.shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
-    val konstructionService: Flow<KonstructionService?> = combine(
+    private val konstructionService: Flow<KonstructionService?> = combine(
         serviceHolder.service,
         konstruction
     ) { service, konstruction ->
         konstruction?.let { service.konstruction(it) }
+    }.onEach { service ->
+        coroutineScope.launch {
+            doCompile(service ?: return@launch)
+        }
     }.tryReconnects()
         .shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
     private val reloadTextFlow = MutableSharedFlow<Unit>()
