@@ -1,5 +1,6 @@
 package com.monkopedia.konstructor.frontend.editor
 
+import com.monkopedia.konstructor.common.MessageImportance.ERROR
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.frontend.invertedTheme
 import com.monkopedia.konstructor.frontend.model.KonstructionModel
@@ -74,7 +75,10 @@ val EditorScreen = memo(
         var currentMessage by useState<String>()
         val classes = useMemo(props.messages) {
             mapOf(
-                errorClass to (props.messages.mapNotNull { it.line } ?: emptyList())
+                errorClass to props.messages.filter { it.importance == ERROR }
+                    .mapNotNull { it.line },
+                warningClass to props.messages.filter { it.importance != ERROR }
+                    .mapNotNull { it.line }
             )
         }
 

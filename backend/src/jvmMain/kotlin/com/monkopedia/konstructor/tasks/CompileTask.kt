@@ -4,6 +4,9 @@ import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.common.CompilationStatus.FAILURE
 import com.monkopedia.konstructor.common.CompilationStatus.SUCCESS
+import com.monkopedia.konstructor.common.MessageImportance.ERROR
+import com.monkopedia.konstructor.common.MessageImportance.INFO
+import com.monkopedia.konstructor.common.MessageImportance.WARNING
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.tasks.ExecUtil.executeAndWait
@@ -49,22 +52,30 @@ class CompileTask(
             return stdOut.lines().filter {
                 it.startsWith("error:") || it.startsWith("warning:") || errorRegex.matches(it)
             }.map {
-                if (it.startsWith("error:") || it.startsWith("warning:")) {
-                    TaskMessage(it)
+                if (it.startsWith("error:")) {
+                    TaskMessage(it, importance = ERROR)
+                } else if (it.startsWith("warning:")) {
+                    TaskMessage(it, importance = WARNING)
                 } else {
                     val match = errorRegex.matchEntire(it)
                         ?: error("Confused about how to parse $it")
                     val line = match.groupValues[2].toInt()
+                    val message = match.groupValues[4]
                     if (line >= headerLines) {
                         val char = match.groupValues[3].toInt()
                         TaskMessage(
-                            message = match.groupValues[4],
+                            message = message,
                             line = line - headerLines,
-                            char = char
+                            char = char,
+                            importance = when {
+                                message.startsWith("warning") -> WARNING
+                                message.startsWith("info") -> INFO
+                                else -> ERROR
+                            }
                         )
                     } else {
                         TaskMessage(
-                            message = "Internal error: ${match.groupValues[4]}",
+                            message = "Internal error: $message",
                             line = 0,
                             char = 0
                         )

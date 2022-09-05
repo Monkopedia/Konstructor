@@ -6,12 +6,11 @@ import dukat.codemirror.basicSetup
 import dukat.codemirror.language.StreamLanguage
 import dukat.codemirror.legacymodes.kotlin
 import dukat.codemirror.state.EditorState
+import dukat.codemirror.state.`T$5`
 import dukat.codemirror.state.Text
 import dukat.codemirror.state.TransactionSpec
-import dukat.codemirror.state.`T$5`
 import dukat.codemirror.view.Decoration
 import dukat.codemirror.view.EditorView
-import dukat.codemirror.view.MouseSelectionStyle
 import dukat.codemirror.view.ViewUpdate
 import dukat.codemirror.view.scrollPastEnd
 import dukat.codemirror.vim.CodeMirror
@@ -31,7 +30,10 @@ import kotlin.math.max
 
 private object MirrorStyles : StyleSheet("mirror", isStatic = true) {
     val errorLineBackground by css {
-        background = "#ff000033"
+        background = "#FF000033"
+    }
+    val warningLineBackground by css {
+        background = "#FFB81C33"
     }
 }
 
@@ -43,20 +45,11 @@ external interface CodeMirrorProps : Props {
     var customClasses: Map<String, List<Int>>?
 }
 
-//fun CodeMirror.cursorLine(): Int {
-//    val position = getDoc().getCursor()
-//    val line = position.line
-//    return line
-//}
-
 val errorClass by lazy { MirrorStyles.getClassSelector { it::errorLineBackground }.trimStart('.') }
+val warningClass by lazy { MirrorStyles.getClassSelector { it::warningLineBackground }.trimStart('.') }
 
 val CodeMirrorScreen = memo(
     FC<CodeMirrorProps> { props ->
-//        ReactCodeMirror {
-//            this.value = props.content
-//            this.theme = "light"
-//        }
         MirrorStyles.errorLineBackground
         MirrorStyles.inject()
         val textAreaRef = useRef<HTMLDivElement>()
@@ -68,13 +61,6 @@ val CodeMirrorScreen = memo(
         div {
             this.ref = textAreaRef
         }
-//        ReactHTML.textarea {
-//            println("Default value ${props.content}")
-//            this.defaultValue = props.content.toString()
-//            css {
-//            }
-//            this.ref = textAreaRef
-//        }
         currentLineCallback.current = props.onCursorChange
         saveRef.current = props.onSave
 
@@ -83,39 +69,34 @@ val CodeMirrorScreen = memo(
             val customClasses = props.customClasses ?: emptyMap()
             // Clear all marks.
             val doc = lastMirror.state.doc
-//            doc.eachLine { line ->
-//                customClasses.keys.forEach {
-//                    doc.removeLineClass(line, "background", it)
-//                }
-//            }
-            lastMirror.dispatch(buildExt<TransactionSpec> {
-                effects = filterMarks.of { _, _, _ -> false }
-                changes = buildExt<`T$5`> {
-                    from = 0
-                    to = doc.length
-                    this.insert = (props.content!!)
+            lastMirror.dispatch(
+                buildExt<TransactionSpec> {
+                    effects = filterMarks.of { _, _, _ -> false }
+                    changes = buildExt<`T$5`> {
+                        from = 0
+                        to = doc.length
+                        this.insert = (props.content!!)
+                    }
                 }
-            })
+            )
             val marks = customClasses.entries.flatMap { (key, lines) ->
                 lines.filter {
                     (it + 1) <= doc.lines.toInt()
                 }.map {
                     doc.line(it + 1).let { lineInfo ->
-                        Decoration.mark(buildExt {
-                            this.`class` = key
-                        }).range(lineInfo.from, max(lineInfo.to.toInt(), lineInfo.from.toInt() + 1))
+                        Decoration.mark(
+                            buildExt {
+                                this.`class` = key
+                            }
+                        ).range(lineInfo.from, max(lineInfo.to.toInt(), lineInfo.from.toInt() + 1))
                     }
                 }
             }
-            lastMirror.dispatch(buildExt<TransactionSpec> {
-                effects = addMarks.of(marks.toTypedArray())
-            })
-//            for ((cls, lines) in customClasses) {
-//                for (line in lines) {
-//                    doc.addLineClass(line, "background", cls)
-//                }
-//            }
-//            currentLineCallback.current?.invoke(lastMirror.cursorLine())
+            lastMirror.dispatch(
+                buildExt<TransactionSpec> {
+                    effects = addMarks.of(marks.toTypedArray())
+                }
+            )
         }
         useEffect(textAreaRef) {
             fun onCursorChange(viewUpdate: ViewUpdate) {
@@ -140,31 +121,22 @@ val CodeMirrorScreen = memo(
                     )
                 }
             )
-            val cm = EditorView(buildExt {
-                this.state = editorState
-                this.parent = textArea
-            })
+            val cm = EditorView(
+                buildExt {
+                    this.state = editorState
+                    this.parent = textArea
+                }
+            )
 
-            //            val cm = CodeMirror.fromTextArea(
-//                textArea,
-//                kotlinext.js.js {
-//                    mode = "text/x-kotlin"
-//                    keyMap = "vim"
-//                    lineNumbers = true
-//                    indentUnit = 4
-//                    this.theme = "darcula"
-//                    this.showCorsorWhenSelecting = true
-//                }
-//            )
             fun onSave(cm: CodeMirror) {
                 saveRef.current?.invoke(cm.getValue())
             }
-            val vimCompatApi = CodeMirror(cm)
+            CodeMirror(cm)
             CodeMirror.commands.asDynamic().save = ::onSave
-//            OnCursorActivity.addListener(cm, ::onCursorChange)
             codeMirror = cm
             cleanup {
-//                cm.toTextArea()
+                // TODO: Any cleanup?
+                cm.destroy()
             }
         }
     }
