@@ -52,7 +52,9 @@ val Initializer = FC<Props> {
     }
 
     if (workspaceList.isEmpty()) {
-        CreateFirstWorkspace()
+        CreateFirstWorkspace {
+            this.workManager = state.workManager
+        }
     } else {
         MainScreen {
             this.workManager = state.workManager

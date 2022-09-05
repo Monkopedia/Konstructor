@@ -1,11 +1,12 @@
 package com.monkopedia.konstructor.frontend.model
 
-import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.frontend.model.ServiceHolder.Companion.tryReconnects
 import com.monkopedia.konstructor.frontend.utils.MutablePersistentFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -18,21 +19,24 @@ class WorkspaceModel(
     private val coroutineScope: CoroutineScope
 ) {
 
-    private val relistKonstructions = MutableSharedFlow<Unit>()
     private val mutableSelectedKonstruction =
         MutablePersistentFlow.optionalString("selected.konstruction")
     private val service = serviceHolder.service.map {
+        println("Getting service for $workspaceId")
         it.get(workspaceId)
-    }.shareIn(coroutineScope, SharingStarted.Eagerly, replay = 1)
+    }.tryReconnects()
+        .shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
 
     val availableKonstructions =
         combine(service, relistKonstructions.onStart { emit(Unit) }) { service, _ ->
+            println("Getting konstructions for $workspaceId")
             service.list()
-        }.shareIn(coroutineScope, SharingStarted.Eagerly, replay = 1)
+        }.tryReconnects()
+            .shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
 
     fun refreshKonstructions() {
         coroutineScope.launch {
-            relistKonstructions.emit(Unit)
+            refreshAllKonstructions()
         }
     }
 
@@ -41,19 +45,12 @@ class WorkspaceModel(
     fun setSelectedKonstruction(konstructionId: String) {
         mutableSelectedKonstruction.set(konstructionId)
     }
-    val onSelectedKonstruction: ((String) -> Unit) = this::setSelectedKonstruction
 
-    val currentKonstruction: Flow<Konstruction?> =
-        combine(availableKonstructions, selectedKonstruction) { konstructions, selected ->
-            konstructions.find { it.id == selected }
-        }.shareIn(coroutineScope, SharingStarted.Eagerly, replay = 1)
-    val onNameUpdated: suspend (String) -> Unit = this::setName
+    companion object {
+        private val relistKonstructions = MutableSharedFlow<Unit>()
 
-    suspend fun setName(value: String) {
-    }
-    val onCreateKonstruction: suspend (Konstruction) -> Unit = this::createKonstruction
-
-    suspend fun createKonstruction(konstruction: Konstruction) {
-
+        suspend fun refreshAllKonstructions() {
+            relistKonstructions.emit(Unit)
+        }
     }
 }

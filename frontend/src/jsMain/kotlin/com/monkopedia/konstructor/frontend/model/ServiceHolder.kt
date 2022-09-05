@@ -1,6 +1,7 @@
 package com.monkopedia.konstructor.frontend.model
 
 import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.ksrpc.ErrorListener
 import com.monkopedia.ksrpc.connect
 import com.monkopedia.ksrpc.ksrpcEnvironment
@@ -11,12 +12,13 @@ import io.ktor.client.plugins.websocket.WebSockets
 import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.SharingStarted.Companion
+import kotlinx.coroutines.flow.collectIndexed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.flow.shareIn
 
 class ServiceHolder(scope: CoroutineScope) {
@@ -42,13 +44,18 @@ class ServiceHolder(scope: CoroutineScope) {
             append("/konstructor")
         }.toKsrpcUri()
     }
+    val errorHandler: FlowCollector<*>.(Throwable) -> Unit = { throwable ->
+        println("Error occurred: ${throwable.stackTraceToString()}")
+        console.log(throwable)
+        retryConnection()
+    }
 
     private val retryConnectCount = MutableStateFlow(0)
     private val errorListener = MutableStateFlow(
         ErrorListener {
             println("Error occurred: ${it.stackTraceToString()}")
             console.log(it)
-            retryConnectCount.value = retryConnectCount.value + 1
+            retryConnection()
         }
     )
 
@@ -65,15 +72,34 @@ class ServiceHolder(scope: CoroutineScope) {
             HttpClient {
                 install(WebSockets)
             }
-        }.defaultChannel().toStub<Konstructor>()
+        }.defaultChannel().toStub<Konstructor>().also {
+            println("Connected to $uri")
+        }
     }.shareIn(scope, SharingStarted.Lazily, replay = 1)
 
-    fun retryConnection() {
+    private fun retryConnection() {
         val value = retryConnectCount.value
-        if (value == 10) {
+        if (value < 10) {
             retryConnectCount.value = value + 1
         } else {
             error("Too many retries")
+        }
+    }
+
+    suspend fun retryConnect(): Boolean {
+        return try {
+            service.collectIndexed { index, _ ->
+                if (index == 0) {
+                    retryConnection()
+                } else if (index == 1) {
+                    // Expected, means good to go for retry.
+                    throw NoSuchElementException()
+                }
+            }
+            false
+        } catch (t: NoSuchElementException) {
+            // Expected
+            true
         }
     }
 
@@ -91,5 +117,11 @@ class ServiceHolder(scope: CoroutineScope) {
 
     fun setUseWs(useWs: Boolean) {
         mutableUseWs.value = useWs
+    }
+
+    companion object {
+        fun <T> Flow<T>.tryReconnects(retries: Long = 3): Flow<T> {
+            return retry(retries) { RootScope.serviceHolder.retryConnect() }
+        }
     }
 }

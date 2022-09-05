@@ -1,10 +1,9 @@
 package com.monkopedia.konstructor.frontend.menu
 
 import com.monkopedia.konstructor.common.Konstruction
-import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.frontend.WorkManager
 import com.monkopedia.konstructor.frontend.model.WorkspaceModel
-import mui.icons.material.Add
+import com.monkopedia.konstructor.frontend.utils.useCollected
 import mui.material.Button
 import mui.material.ButtonColor.primary
 import mui.material.ButtonColor.secondary
@@ -13,33 +12,19 @@ import mui.material.DialogActions
 import mui.material.DialogContent
 import mui.material.DialogTitle
 import mui.material.FormControlVariant.outlined
-import mui.material.IconButton
 import mui.material.TextField
 import react.FC
 import react.Props
 import react.dom.onChange
 import react.useRef
-import react.useState
 
-external interface CreateKonstructionProps : Props {
-    var workManager: WorkManager
-    var workspaceModel: WorkspaceModel
-    var onCreateWorkspace: suspend (Konstruction) -> Unit
-}
-
-val createKonstructionButton = FC<CreateKonstructionProps> { props ->
-    var dialogOpen by useState(false)
+val createKonstructionDialog = FC<DialogMenusProps> { props ->
+    val dialogOpen = props.dialogModel.createKonstructionOpen.useCollected(false)
     val lastText = useRef<String>()
-    IconButton {
-        Add()
-        onClick = {
-            dialogOpen = true
-        }
-    }
     Dialog {
         open = dialogOpen
         onClose = { _, _ ->
-            dialogOpen = false
+            props.dialogModel.cancel()
         }
         DialogTitle {
             +"Enter new konstruction name"
@@ -58,7 +43,7 @@ val createKonstructionButton = FC<CreateKonstructionProps> { props ->
                 +"Cancel"
                 color = secondary
                 onClick = {
-                    dialogOpen = false
+                    props.dialogModel.cancel()
                 }
             }
             Button {
@@ -66,19 +51,7 @@ val createKonstructionButton = FC<CreateKonstructionProps> { props ->
                 color = primary
                 onClick = {
                     val lastTextInput = lastText.current
-                    props.workManager.doWork {
-                        if (lastTextInput.isNullOrEmpty()) {
-                            return@doWork
-                        }
-                        props.onCreateWorkspace(
-                            Konstruction(
-                                id = "",
-                                name = lastTextInput,
-                                workspaceId = props.workspaceModel.workspaceId
-                            )
-                        )
-                        dialogOpen = false
-                    }
+                    props.dialogModel.createKonstruction(lastTextInput)
                 }
             }
         }

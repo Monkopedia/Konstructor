@@ -1,4 +1,4 @@
-import org.gradle.api.file.DuplicatesStrategy.WARN
+
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
@@ -52,8 +52,13 @@ application {
 
 val browser = rootProject.findProject(":frontend")!!
 
+val debugFrontend = true
 val copy = tasks.register<Copy>("copyJsBundleToKtor") {
-    from("${browser.buildDir}/distributions")
+    if (debugFrontend) {
+        from("${browser.buildDir}/developmentExecutable")
+    } else {
+        from("${browser.buildDir}/distributions")
+    }
     into("$buildDir/processedResources/web")
 }
 val lib = rootProject.findProject(":lib")!!
@@ -64,8 +69,13 @@ val copyLib = tasks.register<Copy>("copyLibToKtor") {
 afterEvaluate {
 
     tasks.named("copyJsBundleToKtor") {
-        dependsOn(browser.tasks["jsBrowserDistribution"])
-        mustRunAfter(browser.tasks["jsBrowserDistribution"])
+        if (debugFrontend) {
+            dependsOn(browser.tasks["jsBrowserDevelopmentWebpack"])
+            mustRunAfter(browser.tasks["jsBrowserDevelopmentWebpack"])
+        } else {
+            dependsOn(browser.tasks["jsBrowserDistribution"])
+            mustRunAfter(browser.tasks["jsBrowserDistribution"])
+        }
     }
     tasks.named("copyLibToKtor") {
         dependsOn(lib.tasks["shadowJar"])

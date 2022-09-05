@@ -1,7 +1,6 @@
 package com.monkopedia.konstructor.frontend.menu
 
-import com.monkopedia.konstructor.frontend.WorkManager
-import mui.icons.material.Edit
+import com.monkopedia.konstructor.frontend.utils.useCollected
 import mui.material.Button
 import mui.material.ButtonColor.primary
 import mui.material.ButtonColor.secondary
@@ -10,33 +9,19 @@ import mui.material.DialogActions
 import mui.material.DialogContent
 import mui.material.DialogTitle
 import mui.material.FormControlVariant.outlined
-import mui.material.IconButton
 import mui.material.TextField
 import react.FC
-import react.Props
 import react.dom.onChange
 import react.useRef
-import react.useState
 
-external interface EditWorkspaceProps : Props {
-    var workManager: WorkManager
-    var currentName: String
-    var onUpdateName: suspend (String) -> Unit
-}
-
-val editWorkspaceButton = FC<EditWorkspaceProps> { props ->
-    var dialogOpen by useState(false)
+val editWorkspaceDialog = FC<DialogMenusProps> { props ->
+    val dialogOpen = props.dialogModel.editWorkspaceOpen.useCollected(false)
+    val currentName = props.dialogModel.currentName.useCollected()
     val lastText = useRef<String>()
-    IconButton {
-        Edit()
-        onClick = {
-            dialogOpen = true
-        }
-    }
     Dialog {
         open = dialogOpen
         onClose = { _, _ ->
-            dialogOpen = false
+            props.dialogModel.cancel()
         }
         DialogTitle {
             +"Change workspace name"
@@ -44,7 +29,7 @@ val editWorkspaceButton = FC<EditWorkspaceProps> { props ->
         DialogContent {
             TextField {
                 +"New workspace name"
-                defaultValue = props.currentName
+                defaultValue = currentName
                 variant = outlined
                 onChange = { e ->
                     lastText.current = e.target.asDynamic().value.toString()
@@ -56,22 +41,15 @@ val editWorkspaceButton = FC<EditWorkspaceProps> { props ->
                 +"Cancel"
                 color = secondary
                 onClick = {
-                    dialogOpen = false
+                    props.dialogModel.cancel()
                 }
             }
             Button {
-                +"Create"
+                +"Save"
                 color = primary
                 onClick = {
                     val lastTextInput = lastText.current
-                    props.workManager.doWork {
-                        if (lastTextInput == null || lastTextInput == props.currentName) {
-                            dialogOpen = false
-                            return@doWork
-                        }
-                        props.onUpdateName(lastTextInput)
-                        dialogOpen = false
-                    }
+                    props.dialogModel.updateWorkspaceName(lastTextInput)
                 }
             }
         }

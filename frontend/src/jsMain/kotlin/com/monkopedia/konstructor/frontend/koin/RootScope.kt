@@ -1,6 +1,9 @@
 package com.monkopedia.konstructor.frontend.koin
 
+import com.monkopedia.konstructor.frontend.WorkManager
+import com.monkopedia.konstructor.frontend.model.NavigationDialogModel
 import com.monkopedia.konstructor.frontend.model.ServiceHolder
+import com.monkopedia.konstructor.frontend.model.SettingsModel
 import com.monkopedia.konstructor.frontend.model.SpaceListModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -24,8 +27,14 @@ object RootScope : KoinComponent {
         single {
             ScopeTracker(get(), get())
         }
+        single {
+            SettingsModel(get())
+        }
         factory { (workspaceId: String) ->
             WorkspaceScope(workspaceId)
+        }
+        factory { (workManager: WorkManager) ->
+            NavigationDialogModel(get(), workManager)
         }
 
         scope<WorkspaceScope> {
@@ -44,8 +53,9 @@ object RootScope : KoinComponent {
     }
 
     val scopeTracker by inject<ScopeTracker>()
-    val serviceHolder by inject<ServiceHolder>()
+    val settingsModel by inject<SettingsModel>()
     val spaceListModel by inject<SpaceListModel>()
+    val serviceHolder by inject<ServiceHolder>()
 
     fun init() {
         startKoin {

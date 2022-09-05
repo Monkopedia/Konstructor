@@ -1,7 +1,10 @@
 package com.monkopedia.konstructor.frontend.empty
 
 import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.frontend.WorkManager
 import com.monkopedia.konstructor.frontend.koin.RootScope
+import com.monkopedia.konstructor.frontend.model.NavigationDialogModel
+import com.monkopedia.konstructor.frontend.utils.useCloseable
 import csstype.AlignContent
 import csstype.AlignItems
 import csstype.Display
@@ -19,17 +22,23 @@ import mui.material.IconButton
 import mui.material.IconButtonColor.primary
 import mui.material.Size.medium
 import mui.material.TextField
+import org.koin.core.component.get
+import org.koin.core.parameter.parametersOf
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.dom.onChange
 import react.useState
 
-external interface CreateFirstWorkspaceProps : Props
+external interface CreateFirstWorkspaceProps : Props {
+    var workManager: WorkManager
+}
 
 val CreateFirstWorkspace = FC<CreateFirstWorkspaceProps> { props ->
     var textValue by useState<String>()
     var creating by useState(false)
+    val navDialogModel =
+        RootScope.useCloseable { get<NavigationDialogModel> { parametersOf(props.workManager) } }
     div {
         css {
             display = Display.flex
@@ -72,7 +81,7 @@ val CreateFirstWorkspace = FC<CreateFirstWorkspaceProps> { props ->
                     creating = true
                     GlobalScope.launch {
                         val name = textValue.toString()
-                        RootScope.spaceListModel.createWorkspace(Space("", name))
+                        navDialogModel.createWorkspace(name)
                         creating = false
                     }
                 }

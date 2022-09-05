@@ -63,7 +63,6 @@ object GLWindow {
     val models: MutableList<Mesh> = ArrayList()
 
     init {
-
         val light = DirectionalLight(color = 0xffffff, intensity = 0.5)
         light.position.set(0, 0, -1)
         scene.add(light)
@@ -118,6 +117,7 @@ object GLWindow {
         lastElement?.removeChild(stats.dom)
         element?.appendChild(renderer.domElement)
         element?.appendChild(stats.dom)
+        stats.dom.asDynamic().style.left = null
         lastElement = element
     }
 
