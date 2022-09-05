@@ -7,19 +7,19 @@ import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.GL_S
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.NAVIGATION
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.SETTINGS
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import csstype.Position
-import csstype.Position.Companion
 import csstype.Position.Companion.relative
 import csstype.important
 import csstype.number
 import csstype.pct
 import emotion.react.css
+import mui.icons.material.ArrowBack
 import mui.icons.material.Menu
 import mui.icons.material.Settings
 import mui.material.AppBar
 import mui.material.IconButton
 import mui.material.IconButtonColor.inherit
 import mui.material.IconButtonEdge.end
+import mui.material.IconButtonEdge.start
 import mui.material.Size.large
 import mui.material.Toolbar
 import mui.material.Typography
@@ -39,10 +39,7 @@ external interface MenuComponentProps : Props {
 val MenuComponent = FC<MenuComponentProps> { props ->
     val mode = RootScope.settingsModel.codePaneMode.useCollected(EDITOR)
     val spaceListModel = RootScope.spaceListModel
-    val currentId = spaceListModel.selectedSpaceId.useCollected()
     val currentSpace = spaceListModel.selectedSpace.useCollected()
-    val spaces = spaceListModel.availableWorkspaces.useCollected()
-    val workspaceScope = RootScope.scopeTracker.workspace.useCollected()
     val currentKonstruction = RootScope.scopeTracker.currentKonstruction.useCollected()
 
     AppBar {
@@ -53,6 +50,18 @@ val MenuComponent = FC<MenuComponentProps> { props ->
         Toolbar {
             css {
                 width = important(100.pct)
+            }
+            if (mode != EDITOR) {
+                IconButton {
+                    this.size = large
+                    this.edge = start
+                    this.color = inherit
+                    this.ariaLabel = "back"
+                    this.onClick = {
+                        RootScope.settingsModel.setCodePaneMode(EDITOR)
+                    }
+                    ArrowBack()
+                }
             }
 
             Typography {
