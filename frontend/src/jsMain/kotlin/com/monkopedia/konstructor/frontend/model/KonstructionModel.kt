@@ -65,6 +65,8 @@ class KonstructionModel(
     val messages: Flow<List<TaskMessage>> = mutableMessages
     private val mutableRendered = MutableStateFlow<String?>(null)
     val rendered: Flow<String?> = mutableRendered
+    private val mutableReload = MutableStateFlow(0)
+    val reload: Flow<Int> = mutableReload
 
     fun save(content: String?) {
         mutableState.value = SAVING
@@ -105,6 +107,7 @@ class KonstructionModel(
         mutableMessages.value = mutableMessages.value + renderResult.messages
         if (renderResult.status == SUCCESS) {
             mutableRendered.value = service.rendered()
+            mutableReload.value += 1
         } else {
             println("Render failed")
         }

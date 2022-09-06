@@ -5,6 +5,8 @@ import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.frontend.invertedTheme
 import com.monkopedia.konstructor.frontend.model.KonstructionModel
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State
+import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.COMPILING
+import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.EXECUTING
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.LOADING
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import csstype.AlignContent
@@ -97,7 +99,7 @@ val EditorScreen = memo(
             this.customClasses = classes
         }
 
-        if (currentMessage != null) {
+        if (currentMessage != null || props.state == COMPILING || props.state == EXECUTING) {
             MessageComponent {
                 message = currentMessage
                 this.state = props.state
@@ -105,7 +107,9 @@ val EditorScreen = memo(
         }
     }
 ) { oldProps, newProps ->
-    oldProps.id == newProps.id && oldProps.messages == newProps.messages
+    oldProps.id == newProps.id &&
+        oldProps.messages == newProps.messages &&
+        oldProps.state == newProps.state
 }
 
 external interface MessageProps : Props {
@@ -115,7 +119,11 @@ external interface MessageProps : Props {
 
 val MessageComponent = memo(
     FC<MessageProps> { props ->
-        val message = props.message!!
+        val message = when (props.state) {
+            COMPILING -> "Compiling..."
+            EXECUTING -> "Executing..."
+            else -> props.message!!
+        }
         Card {
             css {
                 position = Position.absolute

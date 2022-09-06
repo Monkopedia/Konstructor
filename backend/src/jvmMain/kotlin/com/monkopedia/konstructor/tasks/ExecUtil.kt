@@ -33,7 +33,9 @@ object ExecUtil {
             BufferedReader(InputStreamReader(proc.inputStream)),
             BufferedReader(InputStreamReader(proc.errorStream)),
             proc.waitFor()
-        )
+        ).also {
+            println("Done executing: $command (${it.returnCode})")
+        }
     }
 
     suspend fun executeWithChannel(
@@ -91,6 +93,7 @@ object ExecUtil {
                 proc.inputStream.close()
             }
         }
+        println("Done executing: $command ($returnCode)")
         return returnCode
     }
 }

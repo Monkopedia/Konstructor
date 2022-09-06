@@ -2,6 +2,10 @@ package com.monkopedia.konstructor.frontend.utils
 
 import kotlinx.browser.localStorage
 import kotlinx.browser.sessionStorage
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.StringFormat
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 import org.w3c.dom.get
 import org.w3c.dom.set
 import kotlin.reflect.KProperty
@@ -75,8 +79,51 @@ sealed class Storage<T>(val key: String, val storage: WebStorage) {
         fun optionalInt(
             persistKey: String,
             useSession: Boolean = false
-        ): Storage<Int?> = IntStorage(null, persistKey, if (useSession) sessionStorage else localStorage)
+        ): Storage<Int?> =
+            IntStorage(null, persistKey, if (useSession) sessionStorage else localStorage)
+
+        inline fun <reified T> serialized(
+            persistKey: String,
+            default: T,
+            useSession: Boolean = false,
+            stringFormat: StringFormat = Json
+        ): Storage<T> =
+            SerializedStorage(
+                default,
+                stringFormat,
+                serializer(),
+                persistKey,
+                if (useSession) sessionStorage else localStorage
+            )
+
+        inline fun <reified T> optionalSerialized(
+            persistKey: String,
+            useSession: Boolean = false,
+            stringFormat: StringFormat = Json
+        ): Storage<T?> =
+            SerializedStorage(
+                null,
+                stringFormat,
+                serializer(),
+                persistKey,
+                if (useSession) sessionStorage else localStorage
+            )
     }
+}
+
+class SerializedStorage<T>(
+    private val default: T,
+    private val stringFormat: StringFormat,
+    private val serialization: KSerializer<T>,
+    key: String,
+    storage: WebStorage
+) : Storage<T>(key, storage) {
+    @Suppress("UNCHECKED_CAST")
+    override fun parse(value: String?): T =
+        (value?.let { stringFormat.decodeFromString(serialization, it) } ?: default)
+
+    override fun stringify(value: T): String? =
+        value?.let { stringFormat.encodeToString(serialization, it) }
 }
 
 class StringStorage<T : String?>(private val default: T, key: String, storage: WebStorage) :

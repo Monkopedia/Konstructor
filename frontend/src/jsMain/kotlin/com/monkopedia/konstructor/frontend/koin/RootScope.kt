@@ -1,6 +1,7 @@
 package com.monkopedia.konstructor.frontend.koin
 
 import com.monkopedia.konstructor.frontend.WorkManager
+import com.monkopedia.konstructor.frontend.model.GlControlsModel
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel
 import com.monkopedia.konstructor.frontend.model.ServiceHolder
 import com.monkopedia.konstructor.frontend.model.SettingsModel
@@ -29,6 +30,9 @@ object RootScope : KoinComponent {
         }
         single {
             SettingsModel(get())
+        }
+        single {
+            GlControlsModel(get())
         }
         factory { (workspaceId: String) ->
             WorkspaceScope(workspaceId)

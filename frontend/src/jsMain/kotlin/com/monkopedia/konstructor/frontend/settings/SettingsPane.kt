@@ -9,6 +9,7 @@ import csstype.FlexDirection
 import csstype.pct
 import csstype.px
 import emotion.react.css
+import mui.material.Divider
 import org.w3c.dom.HTMLDivElement
 import react.FC
 import react.Props
@@ -42,7 +43,7 @@ val SettingsPane = FC<Props> {
             this.value = showLeft
             this.onValueChanged = setShowLeft
         }
-        div { dividerStyle() }
+        Divider()
         SwitchRow {
             css {
                 width = 100.pct
@@ -56,12 +57,3 @@ val SettingsPane = FC<Props> {
     }
 }
 
-private fun HTMLAttributes<HTMLDivElement>.dividerStyle() {
-    css {
-        width = 100.pct
-        height = 1.px
-        background = Color(theme.palette.background.paper)
-        marginLeft = 16.px
-        marginRight = 16.px
-    }
-}

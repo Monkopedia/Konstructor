@@ -15,9 +15,11 @@ val GLScreen = FC<GLScreenProps> { props ->
     val model = props.konstructionScope.get<KonstructionModel>()
     val konstruction = model.konstruction.useCollected()
     val konstructionPath = model.rendered.useCollected()
+    val reload = model.reload.useCollected(0)
     GLComponent {
         this.konstruction = konstruction
         this.konstructionPath = konstructionPath
+        this.reload = reload
     }
 }
 

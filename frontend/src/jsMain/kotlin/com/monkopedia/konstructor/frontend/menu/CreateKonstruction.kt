@@ -31,7 +31,7 @@ val createKonstructionDialog = FC<DialogMenusProps> { props ->
         }
         DialogContent {
             TextField {
-                "New konstruction name"
+                +"New konstruction name"
                 variant = outlined
                 onChange = { e ->
                     lastText.current = e.target.asDynamic().value.toString()

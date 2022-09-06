@@ -1,13 +1,16 @@
 package com.monkopedia.konstructor.frontend.gl
 
 import com.monkopedia.konstructor.common.Konstruction
-import com.monkopedia.konstructor.common.KonstructionService
+import com.monkopedia.konstructor.frontend.koin.RootScope
+import com.monkopedia.konstructor.frontend.model.GlControlsModel
 import com.monkopedia.konstructor.frontend.utils.useEffect
 import info.laht.threekt.cameras.PerspectiveCamera
 import info.laht.threekt.external.controls.OrbitControls
 import info.laht.threekt.external.libs.Stats
 import info.laht.threekt.external.loaders.STLLoader
+import info.laht.threekt.lights.AmbientLight
 import info.laht.threekt.lights.DirectionalLight
+import info.laht.threekt.lights.Light
 import info.laht.threekt.materials.MeshPhongMaterial
 import info.laht.threekt.math.ColorConstants
 import info.laht.threekt.objects.Mesh
@@ -15,8 +18,8 @@ import info.laht.threekt.renderers.WebGLRenderer
 import info.laht.threekt.renderers.WebGLRendererParams
 import info.laht.threekt.scenes.Scene
 import kotlinx.browser.window
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import org.koin.core.component.get
 import org.w3c.dom.Element
 import react.FC
 import react.Props
@@ -27,6 +30,7 @@ import react.useState
 external interface GLProps : Props {
     var konstruction: Konstruction?
     var konstructionPath: String?
+    var reload: Int
 }
 
 data class GLState(
@@ -43,12 +47,27 @@ val GLComponent = FC<GLProps> { props ->
     div {
         ref = callbackRef
     }
-    useEffect(props.konstructionPath ?: "") {
+    useEffect(props.konstructionPath ?: "", props.reload) {
         val path = props.konstructionPath
         println("Loading path $path")
         if (path != null) {
             GLWindow.loadModel(path)
         }
+    }
+    useEffect {
+        val model = RootScope.get<GlControlsModel>()
+        combine(model.ambientLight, model.lights, ::Pair)
+            .collect { (ambient, lights) ->
+                var lights = lights.map {
+                    DirectionalLight(0xffffff, it.intensity).apply {
+                        position.set(it.x, it.y, it.z)
+                    } as Light
+                }
+                if (ambient != 0.0) {
+                    lights = lights + AmbientLight(0xffffff, ambient)
+                }
+                GLWindow.setLighting(lights)
+            }
     }
 }
 
@@ -61,11 +80,13 @@ object GLWindow {
     private val controls: OrbitControls
     val scene: Scene = Scene()
     val models: MutableList<Mesh> = ArrayList()
+    val currentLights = mutableListOf<Light>()
 
     init {
         val light = DirectionalLight(color = 0xffffff, intensity = 0.5)
-        light.position.set(0, 0, -1)
+        light.position.set(1, 1, -1)
         scene.add(light)
+        currentLights.add(light)
 
         camera =
             PerspectiveCamera(75, window.innerWidth.toDouble() / 2 / window.innerHeight, 0.1, 1000)
@@ -121,29 +142,22 @@ object GLWindow {
         lastElement = element
     }
 
+    fun setLighting(lights: List<Light>) {
+        for (light in currentLights) {
+            scene.remove(light)
+        }
+        currentLights.clear()
+        currentLights.addAll(lights)
+        for (light in currentLights) {
+            scene.add(light)
+        }
+    }
+
     fun animate() {
         window.requestAnimationFrame {
-//            val dt = clock.getDelta()
-//            models.forEach {
-//                it.rotation.apply {
-//                    y += speed * dt
-//                }
-//            }
             animate()
         }
         renderer.render(scene, camera)
         stats.update()
     }
 }
-
-// class LoaderTest {
-//
-//    val models: MutableList<Mesh> = ArrayList()
-//
-//    @JsName("speed")
-//    var speed: Double = 1.0
-//    val clock: Clock = Clock(autoStart = true)
-//
-//    init {
-//    }
-// }
