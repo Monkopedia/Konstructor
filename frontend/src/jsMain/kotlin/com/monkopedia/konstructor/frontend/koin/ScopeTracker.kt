@@ -4,6 +4,7 @@ import com.monkopedia.konstructor.frontend.model.KonstructionModel
 import com.monkopedia.konstructor.frontend.model.SpaceListModel
 import com.monkopedia.konstructor.frontend.model.WorkspaceModel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -47,10 +48,15 @@ class ScopeTracker(
         scope.launch {
             targetKonstruction.collectLatest { (parentScope, konstructionId) ->
                 println("Current konstruction scope ${parentScope?.get<WorkspaceModel>()?.workspaceId} $konstructionId")
-                mutableKonstruction.value?.closeScope()
+                val lastScope = mutableKonstruction.value
                 mutableKonstruction.value = if (parentScope != null && konstructionId != null) {
                     KonstructionScope(parentScope, konstructionId)
                 } else null
+                launch {
+                    // Grace period to avoid react issues.
+                    delay(100)
+                    lastScope?.closeScope()
+                }
             }
         }
     }
