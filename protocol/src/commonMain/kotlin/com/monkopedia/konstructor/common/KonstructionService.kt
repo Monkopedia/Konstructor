@@ -3,7 +3,6 @@ package com.monkopedia.konstructor.common
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
-import io.ktor.utils.io.ByteReadChannel
 
 @KsService
 interface KonstructionService : RpcService {
@@ -22,12 +21,51 @@ interface KonstructionService : RpcService {
     @KsMethod("/set")
     suspend fun set(content: String)
 
+    @KsMethod("/register")
+    suspend fun register(listener: KonstructionListener): String
+
+    @KsMethod("/unregister")
+    suspend fun unregister(key: String): Boolean
+
+    @KsMethod("/konstructed")
+    suspend fun konstructed(target: String): String?
+
     @KsMethod("/compile")
     suspend fun compile(u: Unit = Unit): TaskResult
 
-    @KsMethod("/rendered")
-    suspend fun rendered(u: Unit = Unit): String?
+    @KsMethod("/request_compile")
+    suspend fun requestCompile(u: Unit = Unit)
 
-    @KsMethod("/render")
-    suspend fun render(u: Unit = Unit): TaskResult
+    @KsMethod("/konstruct")
+    suspend fun konstruct(target: String): TaskResult
+
+    @KsMethod("/request_konstruct")
+    suspend fun requestKonstruct(target: String)
+
+    @KsMethod("/request_konstructs")
+    suspend fun requestKonstructs(targets: List<String>)
+}
+
+@KsService
+interface KonstructionListener : RpcService {
+    @KsMethod("/callbacks")
+    suspend fun requestedCallbacks(u: Unit = Unit): List<KonstructionCallbacks>
+
+    @KsMethod("/info_update")
+    suspend fun onInfoChanged(info: KonstructionInfo)
+
+    @KsMethod("/state_update")
+    suspend fun onDirtyStateChanged(state: DirtyState)
+
+    @KsMethod("/target_update")
+    suspend fun onTargetChanged(target: KonstructionTarget)
+
+    @KsMethod("/render_change")
+    suspend fun onRenderChanged(render: KonstructionRender)
+
+    @KsMethod("/content_change")
+    suspend fun onContentChange(u: Unit = Unit)
+
+    @KsMethod("/task_complete")
+    suspend fun onTaskComplete(taskResult: TaskResult)
 }

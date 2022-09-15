@@ -2,7 +2,7 @@ package com.monkopedia.konstructor.tasks
 
 import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.Config
-import com.monkopedia.konstructor.common.CompilationStatus.SUCCESS
+import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.common.TaskMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals

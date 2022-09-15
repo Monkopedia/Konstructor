@@ -1,8 +1,8 @@
 package com.monkopedia.konstructor.tasks
 
 import com.monkopedia.konstructor.Config
-import com.monkopedia.konstructor.common.CompilationStatus.FAILURE
-import com.monkopedia.konstructor.common.CompilationStatus.SUCCESS
+import com.monkopedia.konstructor.common.TaskStatus.FAILURE
+import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.lib.BuildListener
 import com.monkopedia.konstructor.lib.ScriptConfiguration
@@ -18,14 +18,17 @@ class ExecuteTask(
     private val fileName: String,
     private val outputDir: File,
     private val renderOutputDir: File = outputDir,
-    private val config: Config
-) : Task {
-    override suspend fun execute(): TaskResult {
+    private val config: Config,
+    private val extraTargets: List<String>
+) {
+    suspend fun execute(): Pair<TaskResult, List<String>> {
         val opts = config.runtimeOpts
         val command = "kotlin $opts -cp ${outputDir.absolutePath} $fileName"
         var completed = false
         val errors = StringBuilder()
         var isSuccessful = true
+        var allTargets = emptyList<String>()
+        var builtTargets = emptyList<String>()
         val result = ExecUtil.executeWithChannel(command) { connection ->
             val service = connection.defaultChannel().toStub<ScriptService>()
             service.initialize(
@@ -35,8 +38,11 @@ class ExecuteTask(
                 )
             )
             val exports = service.listTargets(onlyExports = true)
-            for (export in exports) {
-                val exportService = service.buildTarget(export.name)
+            allTargets = service.listTargets(onlyExports = false).map { it.name }
+            val validExtraTargets = extraTargets.filter { it in allTargets }
+            builtTargets = (exports.map { it.name } + validExtraTargets).distinct()
+            for (export in builtTargets) {
+                val exportService = service.buildTarget(export)
                 val completion = CompletableDeferred<Unit>()
                 exportService.registerListener(object : BuildListener {
                     override suspend fun onStatusUpdated(scriptTargetInfo: ScriptTargetInfo) {
@@ -67,14 +73,16 @@ class ExecuteTask(
         }
         return if (completed && isSuccessful && result == 0) {
             TaskResult(
+                builtTargets,
                 SUCCESS,
                 CompileTask.parseErrors(errors.toString().byteInputStream().bufferedReader())
-            )
+            ) to allTargets
         } else {
             TaskResult(
+                builtTargets,
                 FAILURE,
                 CompileTask.parseErrors(errors.toString().byteInputStream().bufferedReader())
-            )
+            ) to allTargets
         }
     }
 }

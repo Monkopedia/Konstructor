@@ -18,6 +18,7 @@ class SettingsModel(private val scope: CoroutineScope) {
         EDITOR,
         NAVIGATION,
         GL_SETTINGS,
+        RULE,
         SETTINGS
     }
 

@@ -1,9 +1,21 @@
 package com.monkopedia.konstructor.frontend.model
 
-import com.monkopedia.konstructor.common.CompilationStatus.SUCCESS
+import com.monkopedia.konstructor.common.DirtyState
+import com.monkopedia.konstructor.common.DirtyState.CLEAN
+import com.monkopedia.konstructor.common.DirtyState.NEEDS_COMPILE
+import com.monkopedia.konstructor.common.DirtyState.NEEDS_EXEC
 import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.KonstructionCallbacks
+import com.monkopedia.konstructor.common.KonstructionCallbacks.CONTENT_CHANGE
+import com.monkopedia.konstructor.common.KonstructionCallbacks.INFO_CHANGE
+import com.monkopedia.konstructor.common.KonstructionCallbacks.RENDER_CHANGE
+import com.monkopedia.konstructor.common.KonstructionInfo
+import com.monkopedia.konstructor.common.KonstructionListener
+import com.monkopedia.konstructor.common.KonstructionRender
 import com.monkopedia.konstructor.common.KonstructionService
+import com.monkopedia.konstructor.common.KonstructionTarget
 import com.monkopedia.konstructor.common.TaskMessage
+import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.COMPILING
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.DEFAULT
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.EXECUTING
@@ -11,19 +23,27 @@ import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.LOADING
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.SAVING
 import com.monkopedia.konstructor.frontend.model.ServiceHolder.Companion.tryReconnects
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class KonstructionModel(
     private val serviceHolder: ServiceHolder,
     private val workspaceModel: WorkspaceModel,
@@ -42,10 +62,6 @@ class KonstructionModel(
         konstruction
     ) { service, konstruction ->
         konstruction?.let { service.konstruction(it) }
-    }.onEach { service ->
-        coroutineScope.launch {
-            doCompile(service ?: return@launch)
-        }
     }.tryReconnects()
         .shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
     private val reloadTextFlow = MutableSharedFlow<Unit>()
@@ -56,17 +72,77 @@ class KonstructionModel(
         reloadTextFlow.onStart { emit(Unit) }
     ) { konstructionService, _ ->
         konstructionService?.fetch().also {
-            mutableState.value = DEFAULT
+            if (mutableState.value == LOADING) {
+                mutableState.value = DEFAULT
+            }
         }
     }.shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
+
+    private val mutableInfo = MutableStateFlow<KonstructionInfo?>(null)
+    val info: Flow<KonstructionInfo> = mutableInfo.filterNotNull()
+
     val onSave: ((String?) -> Unit) = this::save
     val state: Flow<State> = mutableState
+
     private val mutableMessages = MutableStateFlow(emptyList<TaskMessage>())
     val messages: Flow<List<TaskMessage>> = mutableMessages
-    private val mutableRendered = MutableStateFlow<String?>(null)
-    val rendered: Flow<String?> = mutableRendered
+
+    private val mutableRendered = MutableStateFlow<Map<String, String>>(emptyMap())
+    val rendered: Flow<Map<String, String>> = mutableRendered
+
     private val mutableReload = MutableStateFlow(0)
     val reload: Flow<Int> = mutableReload
+
+    private val mutableWatchingTargets = MutableStateFlow<List<String>>(emptyList())
+    val watchingTargets: Flow<List<String>> = mutableWatchingTargets
+
+    init {
+        coroutineScope.launch {
+            konstructionService.flatMapLatest {
+                it?.listener() ?: emptyFlow()
+            }.collect()
+        }
+        coroutineScope.launch {
+            konstructionService.filterNotNull().collect { service ->
+                mutableInfo.value = service.getInfo()
+            }
+        }
+        coroutineScope.launch {
+            combine(konstructionService.filterNotNull(), watchingTargets, info, ::Triple)
+                .collect { (service, watchingTargets, info) ->
+                    if (info.dirtyState == NEEDS_COMPILE) {
+                        mutableState.value = COMPILING
+                        service.requestCompile()
+                    }
+                    val targets = info.targets.associateBy { it.name }
+                    val unrenderedTargets = watchingTargets.filter {
+                        targets[it]?.state == NEEDS_EXEC
+                    }
+
+                    if (unrenderedTargets.isNotEmpty() || info.dirtyState == NEEDS_EXEC) {
+                        mutableState.value = EXECUTING
+                        service.requestKonstructs(unrenderedTargets)
+                    } else if (info.dirtyState == CLEAN) {
+                        mutableState.value = DEFAULT
+                    }
+                    mutableRendered.value = mutableRendered.value.filterKeys {
+                        it in targets.keys
+                    }
+                    watchingTargets.filter {
+                        targets[it]?.state == CLEAN
+                    }.forEach { target ->
+                        val konstructed = service.konstructed(target) ?: return@forEach
+                        mutableRendered.value = mutableRendered.value.toMutableMap().apply {
+                            this[target] = konstructed
+                        }
+                    }
+                }
+        }
+    }
+
+    fun setTargets(targets: List<String>) {
+        mutableWatchingTargets.value = targets
+    }
 
     fun save(content: String?) {
         mutableState.value = SAVING
@@ -81,37 +157,6 @@ class KonstructionModel(
         content: String?
     ) {
         service.set(content ?: "")
-        coroutineScope.launch {
-            reloadTextFlow.emit(Unit)
-        }
-        doCompile(service)
-    }
-
-    private suspend fun doCompile(service: KonstructionService) {
-        mutableState.value = COMPILING
-
-        val result = service.compile()
-        mutableMessages.value = result.messages
-
-        if (result.status == SUCCESS) {
-            doRender(service)
-        } else {
-            mutableState.value = DEFAULT
-            println("Failed compile")
-        }
-    }
-
-    private suspend fun doRender(service: KonstructionService) {
-        mutableState.value = EXECUTING
-        val renderResult = service.render()
-        mutableMessages.value = mutableMessages.value + renderResult.messages
-        if (renderResult.status == SUCCESS) {
-            mutableRendered.value = service.rendered()
-            mutableReload.value += 1
-        } else {
-            println("Render failed")
-        }
-        mutableState.value = DEFAULT
     }
 
     enum class State {
@@ -120,5 +165,61 @@ class KonstructionModel(
         SAVING,
         COMPILING,
         EXECUTING
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun KonstructionService.listener(): Flow<Unit> {
+        return callbackFlow {
+            val listener = object : KonstructionListener {
+                override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> =
+                    listOf(
+                        CONTENT_CHANGE,
+                        INFO_CHANGE,
+                        RENDER_CHANGE
+                    )
+
+                override suspend fun onInfoChanged(info: KonstructionInfo) {
+                    mutableInfo.value = info
+                }
+
+                override suspend fun onDirtyStateChanged(state: DirtyState) {
+                }
+
+                override suspend fun onTargetChanged(target: KonstructionTarget) {
+                }
+
+                override suspend fun onRenderChanged(render: KonstructionRender) {
+                    val renderPath = render.renderPath
+                    mutableRendered.value = mutableRendered.value.toMutableMap().apply {
+                        if (renderPath != null) {
+                            this[render.name] = renderPath
+                        } else {
+                            this.remove(render.name)
+                        }
+                    }
+                }
+
+                override suspend fun onContentChange(u: Unit) {
+                    mutableMessages.value = emptyList()
+                    coroutineScope.launch {
+                        reloadTextFlow.emit(Unit)
+                    }
+                }
+
+                override suspend fun onTaskComplete(taskResult: TaskResult) {
+                    mutableMessages.value += taskResult.messages
+                }
+            }
+            val key = register(listener)
+            send(Unit)
+            awaitClose {
+                GlobalScope.launch {
+                    try {
+                        unregister(key)
+                    } catch (t: Throwable) {
+                    }
+                }
+            }
+        }
     }
 }

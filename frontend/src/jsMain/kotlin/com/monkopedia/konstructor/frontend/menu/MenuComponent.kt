@@ -5,6 +5,7 @@ import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.EDITOR
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.GL_SETTINGS
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.NAVIGATION
+import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.RULE
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.SETTINGS
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import csstype.Position.Companion.relative
@@ -13,7 +14,8 @@ import csstype.number
 import csstype.pct
 import emotion.react.css
 import mui.icons.material.ArrowBack
-import mui.icons.material.Menu
+import mui.icons.material.LightMode
+import mui.icons.material.Rule
 import mui.icons.material.Settings
 import mui.material.AppBar
 import mui.material.IconButton
@@ -25,12 +27,10 @@ import mui.material.Toolbar
 import mui.material.Typography
 import mui.material.styles.TypographyVariant
 import mui.system.sx
-import org.koin.core.component.get
 import react.FC
 import react.Props
 import react.dom.aria.ariaLabel
 import react.dom.html.ReactHTML.div
-import react.dom.html.ReactHTML.h6
 
 external interface MenuComponentProps : Props {
     var workManager: WorkManager
@@ -71,6 +71,7 @@ val MenuComponent = FC<MenuComponentProps> { props ->
                     this.flexGrow = number(1.0)
                 }
                 when (mode) {
+                    RULE,
                     EDITOR -> {
                         this.onClick = {
                             RootScope.settingsModel.setCodePaneMode(NAVIGATION)
@@ -109,7 +110,21 @@ val MenuComponent = FC<MenuComponentProps> { props ->
                 this.size = large
                 this.edge = end
                 this.color = inherit
-                this.ariaLabel = "menu"
+                this.ariaLabel = "selection"
+                this.onClick = {
+                    if (mode != RULE) {
+                        RootScope.settingsModel.setCodePaneMode(RULE)
+                    } else {
+                        RootScope.settingsModel.setCodePaneMode(EDITOR)
+                    }
+                }
+                Rule()
+            }
+            IconButton {
+                this.size = large
+                this.edge = end
+                this.color = inherit
+                this.ariaLabel = "lighting"
                 this.onClick = {
                     if (mode != GL_SETTINGS) {
                         RootScope.settingsModel.setCodePaneMode(GL_SETTINGS)
@@ -117,7 +132,7 @@ val MenuComponent = FC<MenuComponentProps> { props ->
                         RootScope.settingsModel.setCodePaneMode(EDITOR)
                     }
                 }
-                Menu()
+                LightMode()
             }
             IconButton {
                 this.size = large

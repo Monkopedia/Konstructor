@@ -2,8 +2,8 @@ package com.monkopedia.konstructor.tasks
 
 import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.Config
-import com.monkopedia.konstructor.common.CompilationStatus.FAILURE
-import com.monkopedia.konstructor.common.CompilationStatus.SUCCESS
+import com.monkopedia.konstructor.common.TaskStatus.FAILURE
+import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.common.MessageImportance.ERROR
 import com.monkopedia.konstructor.common.MessageImportance.INFO
 import com.monkopedia.konstructor.common.MessageImportance.WARNING
@@ -12,7 +12,6 @@ import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.tasks.ExecUtil.executeAndWait
 import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
 import kotlin.streams.toList
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runInterruptible
@@ -21,8 +20,8 @@ class CompileTask(
     private val config: Config,
     private val input: File,
     private val output: File
-) : Task {
-    override suspend fun execute(): TaskResult = newSingleThreadContext(
+){
+    suspend fun execute(): TaskResult = newSingleThreadContext(
         "Compile-${input.absolutePath}"
     ).use { executeThread ->
         runInterruptible(executeThread) {
@@ -31,11 +30,13 @@ class CompileTask(
             val (stdOut, stdError, result) = executeAndWait(command)
             if (result == 0) {
                 TaskResult(
+                    emptyList(),
                     SUCCESS,
                     parseErrors(stdOut) + parseErrors(stdError)
                 )
             } else {
                 TaskResult(
+                    emptyList(),
                     FAILURE,
                     parseErrors(stdOut) + parseErrors(stdError)
                 )

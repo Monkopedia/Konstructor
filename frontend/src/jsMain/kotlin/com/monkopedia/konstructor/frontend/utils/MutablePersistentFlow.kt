@@ -1,12 +1,9 @@
 package com.monkopedia.konstructor.frontend.utils
 
-import kotlinx.browser.localStorage
-import kotlinx.browser.sessionStorage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.StringFormat
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.serializer
 
 class MutablePersistentFlow<T> private constructor(
     private val mutableFlow: MutableStateFlow<T>,
@@ -17,6 +14,8 @@ class MutablePersistentFlow<T> private constructor(
         MutableStateFlow(storage.get()),
         storage
     )
+
+    fun get(): T = mutableFlow.value
 
     fun set(value: T) {
         storage.set(value)

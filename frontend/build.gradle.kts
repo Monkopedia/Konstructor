@@ -83,6 +83,8 @@ kotlin {
         implementation(npm("@codemirror/language", "6.2.1"))
         implementation(npm("@codemirror/commands", "6.0.1"))
         implementation(npm("@replit/codemirror-vim", "6.0.2"))
+        implementation(npm("material-ui-color-picker", "3.5.1"))
+        implementation(npm("@material-ui/core", "4.12.4"))
         implementation(npm("css-loader", "3.5.2"))
         implementation(npm("style-loader", "1.1.3"))
         implementation(npm("bootstrap", "^4.4.1"))

@@ -25,11 +25,12 @@ import react.FC
 import react.Props
 import react.RefCallback
 import react.dom.html.ReactHTML.div
+import react.router.LocationContext
 import react.useState
 
 external interface GLProps : Props {
     var konstruction: Konstruction?
-    var konstructionPath: String?
+    var konstructionPath: Map<String, Pair<String, String>>?
     var reload: Int
 }
 
@@ -47,11 +48,12 @@ val GLComponent = FC<GLProps> { props ->
     div {
         ref = callbackRef
     }
-    useEffect(props.konstructionPath ?: "", props.reload) {
+    LocationContext
+    useEffect(props.konstructionPath ?: emptyMap<String, Pair<String, String>>(), props.reload) {
         val path = props.konstructionPath
         println("Loading path $path")
         if (path != null) {
-            GLWindow.loadModel(path)
+            GLWindow.loadModels(path)
         }
     }
     useEffect {
@@ -111,24 +113,22 @@ object GLWindow {
         animate()
     }
 
-    fun loadModel(location: String) {
+    fun loadModels(locations: Map<String, Pair<String, String>>) {
         for (model in models) {
             scene.remove(model)
         }
         models.clear()
-        STLLoader().apply {
-            load(location, {
-                Mesh(
-                    it,
-                    MeshPhongMaterial().apply {
-                        color.set(0xff5533)
-                        specular.set(0x111111)
-                        shininess = 200.0
-                    }
-                ).also {
-                    models.add(it)
-                    scene.add(it)
+
+        for ((location, colorStr) in locations.values) {
+            STLLoader().load(location, {
+                val material = MeshPhongMaterial().apply {
+                    color.set(colorStr.trimStart('#').toInt(16))
+                    specular.set(0x111111)
+                    shininess = 200.0
                 }
+                val model = Mesh(it, material)
+                models.add(model)
+                scene.add(model)
             })
         }
     }

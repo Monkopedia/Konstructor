@@ -8,9 +8,11 @@ import com.monkopedia.konstructor.frontend.menu.MenuComponent
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.EDITOR
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.GL_SETTINGS
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.NAVIGATION
+import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.RULE
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.SETTINGS
 import com.monkopedia.konstructor.frontend.settings.GlSettingsPane
 import com.monkopedia.konstructor.frontend.settings.NavigationPane
+import com.monkopedia.konstructor.frontend.settings.SelectModelsPane
 import com.monkopedia.konstructor.frontend.settings.SettingsPane
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import csstype.Display
@@ -113,6 +115,11 @@ val MainScreenCodePane = FC<MainScreenPaneProps> { props ->
                     workspaceId = konstructionModel.workspaceId
                     konstructionId = konstructionModel.konstructionId
                 }
+            }
+        }
+        RULE -> {
+            SelectModelsPane {
+                this.workManager = props.workManager
             }
         }
         NAVIGATION -> {

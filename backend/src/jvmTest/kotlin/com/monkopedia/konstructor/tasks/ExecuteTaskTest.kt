@@ -2,8 +2,8 @@ package com.monkopedia.konstructor.tasks
 
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.KonstructionControllerImpl.Companion.copyContentToScript
-import com.monkopedia.konstructor.common.CompilationStatus.FAILURE
-import com.monkopedia.konstructor.common.CompilationStatus.SUCCESS
+import com.monkopedia.konstructor.common.TaskStatus.FAILURE
+import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.common.TaskResult
 import kotlinx.coroutines.runBlocking
 import java.io.File

@@ -27,9 +27,9 @@ interface KonstructionController {
     fun write(content: String)
     suspend fun compile()
     suspend fun lastCompileResult(): TaskResult
-    suspend fun render()
+    suspend fun render(targets: List<String>): List<String>
     suspend fun lastRenderResult(): TaskResult
-    suspend fun firstRenderFile(): File?
+    suspend fun renderFile(target: String): File?
 }
 
 @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
@@ -112,7 +112,7 @@ class KonstructionControllerImpl(
         }
     }
 
-    override suspend fun render() {
+    override suspend fun render(targets: List<String>): List<String> {
         contentFileLock.isLocked = true
         try {
             renderOutput.deleteRecursively()
@@ -122,12 +122,14 @@ class KonstructionControllerImpl(
                     config = config,
                     outputDir = compileOutput,
                     renderOutputDir = renderOutput,
-                    fileName = "ContentKt"
+                    fileName = "ContentKt",
+                    extraTargets = targets
                 )
-            val result = executeTask.execute()
+            val (result, targets) = executeTask.execute()
             renderResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
             }
+            return targets
         } finally {
             contentFileLock.isLocked = false
         }
@@ -139,10 +141,15 @@ class KonstructionControllerImpl(
         }
     }
 
-    override suspend fun firstRenderFile(): File? = withContext(Dispatchers.IO) {
-        if (renderOutput.exists() && renderOutput.isDirectory) {
-            renderOutput.listFiles()?.firstOrNull()
-        } else null
+    override suspend fun renderFile(target: String): File? {
+        if (!renderOutput.exists() || !renderOutput.isDirectory) {
+            return null
+        }
+        val target = File(renderOutput, "$target.stl")
+        if (!target.exists()) {
+            return null
+        }
+        return target
     }
 
     override suspend fun lastCompileResult(): TaskResult = withContext(Dispatchers.IO) {

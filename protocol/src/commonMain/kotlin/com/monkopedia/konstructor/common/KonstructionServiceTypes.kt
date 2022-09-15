@@ -3,8 +3,7 @@ package com.monkopedia.konstructor.common
 import com.monkopedia.konstructor.common.MessageImportance.ERROR
 import kotlinx.serialization.Serializable
 
-
-enum class CompilationStatus {
+enum class TaskStatus {
     SUCCESS,
     FAILURE
 }
@@ -20,11 +19,12 @@ data class TaskMessage(
     val message: String,
     val line: Int? = null,
     val char: Int? = null,
-    val importance: MessageImportance = ERROR,
+    val importance: MessageImportance = ERROR
 )
 
 @Serializable
 data class TaskResult(
-    val status: CompilationStatus,
+    val taskArguments: List<String> = emptyList(),
+    val status: TaskStatus,
     val messages: List<TaskMessage> = emptyList()
 )

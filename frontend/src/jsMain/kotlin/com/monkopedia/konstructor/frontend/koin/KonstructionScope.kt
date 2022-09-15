@@ -1,15 +1,18 @@
 package com.monkopedia.konstructor.frontend.koin
 
 import com.monkopedia.konstructor.frontend.model.KonstructionModel
+import com.monkopedia.konstructor.frontend.model.RenderModel
 import org.koin.core.qualifier.named
 import org.koin.core.scope.Scope
 import org.koin.dsl.ScopeDSL
 
-class KonstructionScope(private val workspaceScope: WorkspaceScope, val konstructionId: String) : CoroutineKoinScope() {
+class KonstructionScope(private val workspaceScope: WorkspaceScope, val konstructionId: String) :
+    CoroutineKoinScope() {
 
     override fun onScopeCreated(scope: Scope) {
         scope.linkTo(workspaceScope.scope)
     }
+
     companion object {
         val konstructionId = named("konstruction.id")
 
@@ -22,6 +25,9 @@ class KonstructionScope(private val workspaceScope: WorkspaceScope, val konstruc
             }
             scoped {
                 KonstructionModel(get(), get(), get(konstructionId), get())
+            }
+            scoped {
+                RenderModel(get(), get())
             }
         }
     }

@@ -55,7 +55,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         }
         targetInfo.parentFile.mkdirs()
         targetInfo.outputStream().use { output ->
-            config.json.encodeToStream(KonstructionInfo(newItem, OBJ, CLEAN), output)
+            config.json.encodeToStream(KonstructionInfo(newItem, OBJ, CLEAN, emptyList()), output)
         }
         return newItem
     }
