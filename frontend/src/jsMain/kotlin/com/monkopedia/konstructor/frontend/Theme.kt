@@ -15,64 +15,74 @@
  */
 package com.monkopedia.konstructor.frontend
 
+import com.monkopedia.konstructor.frontend.utils.buildExt
+import csstype.Color
 import kotlinext.js.js
+import mui.material.PaletteMode.dark
+import mui.material.PaletteMode.light
+import mui.material.styles.PaletteColor
 import mui.material.styles.PaletteOptions
 import mui.material.styles.ThemeOptions
+import mui.material.styles.TypeText
 import mui.material.styles.createTheme
 
-private val themeOptions: ThemeOptions = (js { } as ThemeOptions).also { themeOptions ->
-    themeOptions.typography = js { }
-    themeOptions.typography?.useNextVariants = true
-    themeOptions.typography?.button = js {
-        textTransform = "none"
+private val themeOptions: ThemeOptions = buildExt {
+    typography = buildExt {
+        useNextVariants = true
+        button = js {
+            textTransform = "none"
+        }
     }
     // themeOptions.typography?.fontSize = 12
-    themeOptions.palette = js {
-        mode = "light"
-        secondary = js {
-            main = "#212121"
-            light = "#9E9E9E"
-            dark = "#212121"
+    palette = buildExt<PaletteOptions> {
+        mode = light
+        secondary = buildExt<PaletteColor> {
+            main = Color("#212121")
+            light = Color("#9E9E9E")
+            dark = Color("#212121")
         }
-        primary = js {
-            main = "#FF5722"
-            light = "#FFCCBC"
-            dark = "#E64A19"
+        primary = buildExt<PaletteColor> {
+            main = Color("#FF5722")
+            light = Color("#FFCCBC")
+            dark = Color("#E64A19")
         }
-        text = js {
-            main = "#FFFFFF"
-            primary = "#FAFAFA"
-            secondary = "#757575"
+        text = buildExt<TypeText> {
+            primary = Color("#FFFFFF")
+            secondary = Color("#FAFAFA")
+            disabled = Color("#757575")
         }
-    } as PaletteOptions
+    }
 }
 
 val theme = createTheme(options = themeOptions)
 
-private val invertedThemeOptions: ThemeOptions = (js { } as ThemeOptions).also { themeOptions ->
-    themeOptions.typography = js { }
-    themeOptions.typography?.useNextVariants = true
+private val invertedThemeOptions: ThemeOptions = buildExt {
+    typography = buildExt {
+        useNextVariants = true
+    }
     // themeOptions.typography?.fontSize = 12
-    themeOptions.palette = js {
-        mode = "dark"
-        type = "dark"
+    palette = buildExt<PaletteOptions> {
+        mode = dark
+//        type = "dark"
 
-        secondary = js {
-            main = "#212121"
-            dark = "#9E9E9E"
-            light = "#212121"
+        secondary = buildExt<PaletteColor> {
+            main = Color("#EEEEEE")
+            dark = Color("#cccccc")
+            light = Color("#ffffff")
+            contrastText = Color("#000000")
         }
-        primary = js {
-            main = "#FF5722"
-            light = "#FFCCBC"
-            dark = "#E64A19"
+        primary = buildExt<PaletteColor> {
+            main = Color("#FF5722")
+            light = Color("#FFCCBC")
+            dark = Color("#E64A19")
+            contrastText = Color("#212121")
         }
-        text = js {
-            main = "#FFFFFF"
-            primary = "#FAFAFA"
-            secondary = "#757575"
+        text = buildExt<TypeText> {
+            primary = Color("#FFFFFF")
+            secondary = Color("#FAFAFA")
+            disabled = Color("#757575")
         }
-    } as PaletteOptions
+    }
 }
 
 val invertedTheme = createTheme(options = invertedThemeOptions)

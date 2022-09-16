@@ -44,16 +44,6 @@ val SettingsPane = FC<Props> {
             this.onValueChanged = setShowLeft
         }
         Divider()
-        SwitchRow {
-            css {
-                width = 100.pct
-            }
-            this.label = "Show code on left"
-            this.value = false
-            this.onValueChanged = {
-                println("onValueChanged $it")
-            }
-        }
     }
 }
 

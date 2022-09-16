@@ -2,6 +2,7 @@ package com.monkopedia.konstructor.frontend.menu
 
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import mui.material.Button
+import mui.material.ButtonColor.error
 import mui.material.ButtonColor.primary
 import mui.material.ButtonColor.secondary
 import mui.material.Dialog
@@ -37,6 +38,13 @@ val editKonstructionDialog = FC<DialogMenusProps> { props ->
             }
         }
         DialogActions {
+            Button {
+                +"Delete"
+                color = error
+                onClick = {
+                    props.dialogModel.delete()
+                }
+            }
             Button {
                 +"Cancel"
                 color = secondary

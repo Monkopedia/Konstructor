@@ -38,6 +38,13 @@ val editWorkspaceDialog = FC<DialogMenusProps> { props ->
         }
         DialogActions {
             Button {
+                +"Delete"
+                color = secondary
+                onClick = {
+                    props.dialogModel.delete()
+                }
+            }
+            Button {
                 +"Cancel"
                 color = secondary
                 onClick = {

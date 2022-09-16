@@ -139,4 +139,36 @@ class NavigationDialogModel(
             RootScope.spaceListModel.refreshWorkspaces()
         }
     }
+
+    fun delete() {
+        when (mutableDialog.value.dialog) {
+            EDIT_WORKSPACE -> {
+
+                val dialogInfo = mutableDialog.value
+                val targetWorkspace = dialogInfo.targetWorkspace ?: return
+                cancel()
+                workManager.doWork {
+                    val service = RootScope.serviceHolder.service.first()
+                    service.delete(Space(targetWorkspace, ""))
+                    RootScope.spaceListModel.refreshWorkspaces()
+                }
+            }
+            EDIT_KONSTRUCTION -> {
+                val dialogInfo = mutableDialog.value
+                val targetWorkspace = dialogInfo.targetWorkspace ?: return
+                val targetKonstruction = dialogInfo.targetKonstruction ?: return
+                cancel()
+                workManager.doWork {
+                    val service = RootScope.serviceHolder.service.first()
+                    service.get(targetWorkspace).use { ks ->
+                        ks.delete(Konstruction("", targetWorkspace, targetKonstruction))
+                    }
+                    WorkspaceModel.refreshAllKonstructions()
+                }
+            }
+            else -> {
+                error("Unsupported dialog type")
+            }
+        }
+    }
 }
