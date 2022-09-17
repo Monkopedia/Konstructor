@@ -56,7 +56,6 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
         return@FC
     }
     EditorScreen {
-        id = "${props.workspaceId}_${props.konstructionId}"
         content = currentText
         onSave = props.konstructionModel.onSave
         this.messages = messages
@@ -66,7 +65,6 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
 
 external interface EditorScreenProps : Props {
     var content: String?
-    var id: String?
     var onSave: ((String?) -> Unit)?
     var messages: List<TaskMessage>
     var state: State
@@ -95,7 +93,6 @@ val EditorScreen = memo(
             this.onCursorChange = onCursorChange
             this.content = props.content
             this.onSave = props.onSave
-            this.contentKey = props.id
             this.customClasses = classes
         }
 
@@ -107,7 +104,7 @@ val EditorScreen = memo(
         }
     }
 ) { oldProps, newProps ->
-    oldProps.id == newProps.id &&
+    oldProps.content === newProps.content &&
         oldProps.messages == newProps.messages &&
         oldProps.state == newProps.state
 }

@@ -39,14 +39,15 @@ private object MirrorStyles : StyleSheet("mirror", isStatic = true) {
 
 external interface CodeMirrorProps : Props {
     var content: String?
-    var contentKey: String?
     var onCursorChange: ((Int) -> Unit)?
     var onSave: ((String) -> Unit)?
     var customClasses: Map<String, List<Int>>?
 }
 
 val errorClass by lazy { MirrorStyles.getClassSelector { it::errorLineBackground }.trimStart('.') }
-val warningClass by lazy { MirrorStyles.getClassSelector { it::warningLineBackground }.trimStart('.') }
+val warningClass by lazy {
+    MirrorStyles.getClassSelector { it::warningLineBackground }.trimStart('.')
+}
 
 val CodeMirrorScreen = memo(
     FC<CodeMirrorProps> { props ->
@@ -64,7 +65,7 @@ val CodeMirrorScreen = memo(
         currentLineCallback.current = props.onCursorChange
         saveRef.current = props.onSave
 
-        useEffect(props.customClasses, props.contentKey, codeMirror) {
+        useEffect(props.customClasses, props.content, codeMirror) {
             val lastMirror = codeMirror ?: return@useEffect
             val customClasses = props.customClasses ?: emptyMap()
             // Clear all marks.
@@ -141,7 +142,7 @@ val CodeMirrorScreen = memo(
         }
     }
 ) { oldProps, newProps ->
-    oldProps.contentKey == newProps.contentKey && (
+    oldProps.content === newProps.content && (
         oldProps.customClasses?.equals(newProps.customClasses)
             ?: true
         )

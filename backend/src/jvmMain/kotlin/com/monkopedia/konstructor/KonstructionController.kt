@@ -179,6 +179,7 @@ class KonstructionControllerImpl(
     }
 
     override fun write(content: String) {
+        println("Write ${content.length} to $info")
         contentFileLock.isLocked = true
         contentFile.writeText(content)
 

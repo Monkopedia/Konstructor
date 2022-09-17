@@ -17,6 +17,7 @@ import com.monkopedia.konstructor.common.KonstructionRender
 import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.KonstructionTarget
 import com.monkopedia.konstructor.common.TaskResult
+import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.ksrpc.channels.randomUuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,10 +90,13 @@ class KonstructionServiceImpl(private val config: Config, workspaceId: String, i
         if (info.dirtyState == NEEDS_COMPILE) {
             konstructionController.compile()
             var changedTargets = mutableListOf<KonstructionTarget>()
+            val newState =
+                if (konstructionController.lastCompileResult().status == SUCCESS) NEEDS_EXEC
+                else CLEAN
             val newInfo = info.copy(
-                dirtyState = NEEDS_EXEC,
+                dirtyState = newState,
                 targets = info.targets.map {
-                    if (it.state == NEEDS_COMPILE) it.copy(state = NEEDS_EXEC)
+                    if (it.state == NEEDS_COMPILE) it.copy(state = newState)
                         .also(changedTargets::add)
                     else it
                 }
@@ -221,7 +225,11 @@ class ListenerHandler(
         konstruction.unregister(key)
     }
 
-    fun onInfoChanged(info: KonstructionInfo, changedTargets: List<KonstructionTarget>, dirtyChanged: Boolean = true) {
+    fun onInfoChanged(
+        info: KonstructionInfo,
+        changedTargets: List<KonstructionTarget>,
+        dirtyChanged: Boolean = true
+    ) {
         if (dirtyChanged) {
             onDirtyStateChanged(info.dirtyState)
         }

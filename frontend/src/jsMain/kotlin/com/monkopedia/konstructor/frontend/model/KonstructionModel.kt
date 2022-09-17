@@ -9,6 +9,7 @@ import com.monkopedia.konstructor.common.KonstructionCallbacks
 import com.monkopedia.konstructor.common.KonstructionCallbacks.CONTENT_CHANGE
 import com.monkopedia.konstructor.common.KonstructionCallbacks.INFO_CHANGE
 import com.monkopedia.konstructor.common.KonstructionCallbacks.RENDER_CHANGE
+import com.monkopedia.konstructor.common.KonstructionCallbacks.TASK_COMPLETE
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.KonstructionListener
 import com.monkopedia.konstructor.common.KonstructionRender
@@ -105,6 +106,8 @@ class KonstructionModel(
         coroutineScope.launch {
             konstructionService.filterNotNull().collect { service ->
                 mutableInfo.value = service.getInfo()
+                service.requestCompile()
+                service.requestKonstructs(emptyList())
             }
         }
         coroutineScope.launch {
@@ -175,20 +178,21 @@ class KonstructionModel(
                     listOf(
                         CONTENT_CHANGE,
                         INFO_CHANGE,
-                        RENDER_CHANGE
+                        RENDER_CHANGE,
+                        TASK_COMPLETE
                     )
 
                 override suspend fun onInfoChanged(info: KonstructionInfo) {
+                    println("onInfoChanged $info")
                     mutableInfo.value = info
                 }
 
-                override suspend fun onDirtyStateChanged(state: DirtyState) {
-                }
+                override suspend fun onDirtyStateChanged(state: DirtyState) = Unit
 
-                override suspend fun onTargetChanged(target: KonstructionTarget) {
-                }
+                override suspend fun onTargetChanged(target: KonstructionTarget) = Unit
 
                 override suspend fun onRenderChanged(render: KonstructionRender) {
+                    println("onRenderChanged $render")
                     val renderPath = render.renderPath
                     mutableRendered.value = mutableRendered.value.toMutableMap().apply {
                         if (renderPath != null) {
@@ -197,9 +201,11 @@ class KonstructionModel(
                             this.remove(render.name)
                         }
                     }
+                    mutableReload.value += 1
                 }
 
                 override suspend fun onContentChange(u: Unit) {
+                    println("onContentChange")
                     mutableMessages.value = emptyList()
                     coroutineScope.launch {
                         reloadTextFlow.emit(Unit)
@@ -207,6 +213,7 @@ class KonstructionModel(
                 }
 
                 override suspend fun onTaskComplete(taskResult: TaskResult) {
+                    println("onTaskComplete $taskResult")
                     mutableMessages.value += taskResult.messages
                 }
             }
