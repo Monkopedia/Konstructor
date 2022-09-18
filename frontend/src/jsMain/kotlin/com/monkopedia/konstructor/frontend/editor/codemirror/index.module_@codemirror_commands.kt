@@ -32,6 +32,7 @@ import dukat.codemirror.state.StateEffect
 import dukat.codemirror.state.StateField
 import dukat.codemirror.state.Transaction
 import dukat.codemirror.view.Command
+import dukat.codemirror.view.FacetMethod
 import dukat.codemirror.view.KeyBinding
 
 external interface `T$0` {
@@ -66,7 +67,6 @@ external var toggleBlockCommentByLine: StateCommand
 
 external var isolateHistory: AnnotationType<String /* "after" | "before" | "full" */>
 
-typealias FacetMethod = (tr: Transaction) -> Array<StateEffect<Any>>
 external var invertedEffects: Facet<FacetMethod, Array<FacetMethod>>
 
 external interface HistoryConfig {

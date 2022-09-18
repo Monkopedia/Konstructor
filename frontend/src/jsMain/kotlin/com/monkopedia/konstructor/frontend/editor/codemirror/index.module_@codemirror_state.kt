@@ -24,6 +24,9 @@
 
 package dukat.codemirror.state
 
+import dukat.codemirror.view.LanguageDataFacet
+import dukat.codemirror.view.TransactionExtenderFacet
+import dukat.codemirror.view.TransactionFilterFacet
 import kotlin.js.Json
 
 open external class Line {
@@ -391,11 +394,6 @@ external interface `T$4` {
     @nativeSetter
     operator fun set(key: String, value: String)
 }
-typealias LanguageDataFacet = (
-    state: EditorState,
-    pos: Number,
-    side: dynamic /* 0 | 1 | "-1" */
-) -> Array<Json>
 
 open external class EditorState {
     open val doc: Text
@@ -450,9 +448,6 @@ open external class EditorState {
         var transactionExtender: Facet<TransactionExtenderFacet, Array<TransactionExtenderFacet>>
     }
 }
-typealias TransactionFilterFacet = (tr: Transaction) -> dynamic
-/*Pick<TransactionSpec, String /* "effects" | "annotations" */>?*/
-typealias TransactionExtenderFacet = (tr: Transaction) -> dynamic
 
 external interface `T$7` {
     var state: EditorState

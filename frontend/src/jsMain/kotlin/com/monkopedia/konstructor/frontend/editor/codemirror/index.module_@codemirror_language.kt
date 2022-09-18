@@ -36,6 +36,8 @@ import dukat.codemirror.view.Command
 import dukat.codemirror.view.Decoration
 import dukat.codemirror.view.DecorationSet
 import dukat.codemirror.view.EditorView
+import dukat.codemirror.view.FoldServiceFacet
+import dukat.codemirror.view.IndentServiceFacet
 import dukat.codemirror.view.KeyBinding
 import dukat.codemirror.view.ViewUpdate
 import dukat.lezer.common.NodeProp
@@ -198,7 +200,6 @@ open external class LanguageDescription {
     }
 }
 
-typealias IndentServiceFacet = (context: IndentContext, pos: Number) -> Number?
 external var indentService: Facet<IndentServiceFacet, Array<IndentServiceFacet>>
 
 external var indentUnit: Facet<String, String>
@@ -287,7 +288,6 @@ external fun continuedIndent(
 /* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
 external fun indentOnInput(): dynamic
 
-typealias FoldServiceFacet = (state: EditorState, lineStart: Number, lineEnd: Number) -> `T$0`?
 external var foldService: Facet<FoldServiceFacet, Array<FoldServiceFacet>>
 
 external var foldNodeProp: NodeProp<(node: SyntaxNode, state: EditorState) -> `T$0`?>

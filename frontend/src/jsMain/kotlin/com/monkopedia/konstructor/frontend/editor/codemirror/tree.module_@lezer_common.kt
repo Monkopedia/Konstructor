@@ -24,6 +24,7 @@
 
 package dukat.lezer.common
 
+import dukat.codemirror.view.MakeTree
 import org.khronos.webgl.Uint16Array
 
 external interface `T$30`<T> {
@@ -129,11 +130,6 @@ external interface `T$34` {
         set(value) = definedExternally
 }
 
-typealias MakeTree = (
-    children: Array<dynamic /* Tree | TreeBuffer */>,
-    positions: Array<Number>,
-    length: Number
-) -> Tree
 external interface `T$35` {
     var makeTree: MakeTree?
         get() = definedExternally

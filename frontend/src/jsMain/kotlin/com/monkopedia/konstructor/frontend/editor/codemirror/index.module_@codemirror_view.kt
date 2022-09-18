@@ -316,17 +316,6 @@ external interface `T$11` {
         set(value) = definedExternally
 }
 
-typealias InputHandlerFacet = (view: EditorView, from: Number, to: Number, text: String) -> Boolean
-typealias DragMovesSelectionFacet = (event: MouseEvent) -> Boolean
-typealias ClickAddsSelectionRangeFacet = (event: MouseEvent) -> Boolean
-typealias CASRFA = Array<ClickAddsSelectionRangeFacet>
-typealias ClickAddsSelection = Facet<ClickAddsSelectionRangeFacet, CASRFA>
-typealias DecorationsFacet = dynamic /* DecorationSet | (view: EditorView) -> DecorationSet */
-typealias AtomicRangesFacet = (view: EditorView) -> RangeSet<out RangeValue<*>>
-typealias ScrollMarginsFacet = (view: EditorView) -> RectPartial?
-typealias ContentAttributesFacet = dynamic /* Attrs | (view: EditorView) -> Attrs? */
-typealias EditorAttributesFacet = dynamic /* Attrs | (view: EditorView) -> Attrs? */
-
 open external class EditorView(config: EditorViewConfig = definedExternally) {
     val state: EditorState
     open var _dispatch: Any
