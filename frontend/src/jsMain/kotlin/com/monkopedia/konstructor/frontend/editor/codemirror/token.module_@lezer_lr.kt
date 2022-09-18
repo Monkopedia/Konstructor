@@ -1,23 +1,29 @@
-@file:Suppress("INTERFACE_WITH_SUPERCLASS", "OVERRIDING_FINAL_MEMBER", "RETURN_TYPE_MISMATCH_ON_OVERRIDE", "CONFLICTING_OVERLOADS")
+/*
+ * Copyright 2022 Jason Monk
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@file:Suppress(
+    "INTERFACE_WITH_SUPERCLASS",
+    "OVERRIDING_FINAL_MEMBER",
+    "RETURN_TYPE_MISMATCH_ON_OVERRIDE",
+    "CONFLICTING_OVERLOADS"
+)
 @file:JsModule("@lezer/lr")
 @file:JsNonModule
 package dukat.lezer.lr
 
-import kotlin.js.*
-import org.khronos.webgl.*
-import org.w3c.dom.*
-import org.w3c.dom.events.*
-import org.w3c.dom.parsing.*
-import org.w3c.dom.svg.*
-import org.w3c.dom.url.*
-import org.w3c.fetch.*
-import org.w3c.files.*
-import org.w3c.notifications.*
-import org.w3c.performance.*
-import org.w3c.workers.*
-import org.w3c.xhr.*
-
-external open class CachedToken {
+open external class CachedToken {
     open var start: Number
     open var value: Number
     open var end: Number
@@ -27,7 +33,7 @@ external open class CachedToken {
     open var context: Number
 }
 
-external open class InputStream {
+open external class InputStream {
     open var chunk2: Any
     open var chunk2Pos: Any
     open var next: Number
@@ -56,4 +62,7 @@ external interface ExternalOptions {
         set(value) = definedExternally
 }
 
-external open class ExternalTokenizer(token: (input: InputStream, stack: Stack) -> Unit, options: ExternalOptions = definedExternally)
+open external class ExternalTokenizer(
+    token: (input: InputStream, stack: Stack) -> Unit,
+    options: ExternalOptions = definedExternally
+)

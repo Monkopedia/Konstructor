@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Jason Monk
+ * Copyright 2022 Jason Monk
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,8 @@ kotlin {
 //            useCommonJs()
             webpackTask {
                 output.libraryTarget =
-                    org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackOutput.Target.COMMONJS
+                    org.jetbrains.kotlin.gradle.targets.js.webpack
+                        .KotlinWebpackOutput.Target.COMMONJS
             }
             dceTask {
                 keep += "kotlin.defineModule"

@@ -1,3 +1,18 @@
+/*
+ * Copyright 2022 Jason Monk
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.monkopedia.konstructor.frontend.model
 
 import com.monkopedia.konstructor.frontend.utils.MutablePersistentFlow
@@ -21,8 +36,10 @@ class RenderModel(
         val isEnabled: Boolean
     )
 
-    private val numberOfTargets =
-        MutablePersistentFlow.serialized("rendered.${konstructionModel.workspaceId}.${konstructionModel.konstructionId}.keys", emptySet<String>())
+    private val numberOfTargets = MutablePersistentFlow.serialized(
+        "rendered.${konstructionModel.workspaceId}.${konstructionModel.konstructionId}.keys",
+        emptySet<String>()
+    )
     private val targetFlows = numberOfTargets.map { names ->
         names.associateWith { name ->
             persistentFlowFor(name)
@@ -35,11 +52,10 @@ class RenderModel(
         }
     }
 
-    private fun persistentFlowFor(name: String) =
-        MutablePersistentFlow.serialized(
-            "rendered.${konstructionModel.workspaceId}.${konstructionModel.konstructionId}.item.$name",
-            DisplayTarget(name, "#ffffff", false)
-        )
+    private fun persistentFlowFor(name: String) = MutablePersistentFlow.serialized(
+        "rendered.${konstructionModel.workspaceId}.${konstructionModel.konstructionId}.item.$name",
+        DisplayTarget(name, "#ffffff", false)
+    )
 
     init {
         coroutineScope.launch {
@@ -49,7 +65,9 @@ class RenderModel(
             }
         }
         coroutineScope.launch {
-            allTargets.map { it.filter { it.value.isEnabled }.map { it.key } }.collect { enabledModels ->
+            allTargets.map {
+                it.filter { it.value.isEnabled }.map { it.key }
+            }.collect { enabledModels ->
                 konstructionModel.setTargets(enabledModels)
             }
         }

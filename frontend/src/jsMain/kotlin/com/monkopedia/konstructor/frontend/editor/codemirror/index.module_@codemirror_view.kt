@@ -1,3 +1,18 @@
+/*
+ * Copyright 2022 Jason Monk
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 @file:Suppress(
     "INTERFACE_WITH_SUPERCLASS",
     "OVERRIDING_FINAL_MEMBER",
@@ -20,9 +35,9 @@ import dukat.codemirror.state.RangeSet
 import dukat.codemirror.state.RangeValue
 import dukat.codemirror.state.SelectionRange
 import dukat.codemirror.state.StateEffect
+import dukat.codemirror.state.`T$4`
 import dukat.codemirror.state.Transaction
 import dukat.codemirror.state.TransactionSpec
-import dukat.codemirror.state.`T$4`
 import org.w3c.dom.Document
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.Node
@@ -135,8 +150,12 @@ external enum class BlockType {
     WidgetRange /* = 3 */
 }
 
-open external class Decoration(startSide: Number, endSide: Number, widget: WidgetType?, spec: Any) :
-    RangeValue<Decoration> {
+open external class Decoration(
+    startSide: Number,
+    endSide: Number,
+    widget: WidgetType?,
+    spec: Any
+) : RangeValue<Decoration> {
     open val spec: Any
     open fun eq(other: Decoration): Boolean
     override fun eq(other: RangeValue<*>): Boolean
@@ -297,6 +316,17 @@ external interface `T$11` {
         set(value) = definedExternally
 }
 
+typealias InputHandlerFacet = (view: EditorView, from: Number, to: Number, text: String) -> Boolean
+typealias DragMovesSelectionFacet = (event: MouseEvent) -> Boolean
+typealias ClickAddsSelectionRangeFacet = (event: MouseEvent) -> Boolean
+typealias CASRFA = Array<ClickAddsSelectionRangeFacet>
+typealias ClickAddsSelection = Facet<ClickAddsSelectionRangeFacet, CASRFA>
+typealias DecorationsFacet = dynamic /* DecorationSet | (view: EditorView) -> DecorationSet */
+typealias AtomicRangesFacet = (view: EditorView) -> RangeSet<out RangeValue<*>>
+typealias ScrollMarginsFacet = (view: EditorView) -> RectPartial?
+typealias ContentAttributesFacet = dynamic /* Attrs | (view: EditorView) -> Attrs? */
+typealias EditorAttributesFacet = dynamic /* Attrs | (view: EditorView) -> Attrs? */
+
 open external class EditorView(config: EditorViewConfig = definedExternally) {
     val state: EditorState
     open var _dispatch: Any
@@ -367,27 +397,29 @@ open external class EditorView(config: EditorViewConfig = definedExternally) {
         ): StateEffect<Any>
 
         var styleModule: Facet<dynamic, Array<dynamic>>
-        fun domEventHandlers(handlers: DOMEventHandlers<Any>): dynamic /* `T$6` | Array<dynamic /* `T$6` | Array<Extension> */> */
-        var inputHandler: Facet<(view: EditorView, from: Number, to: Number, text: String) -> Boolean, Array<(view: EditorView, from: Number, to: Number, text: String) -> Boolean>>
+        /* `T$6` | Array<dynamic /* `T$6` | Array<Extension> */> */
+        fun domEventHandlers(handlers: DOMEventHandlers<Any>): dynamic
+        var inputHandler: Facet<InputHandlerFacet, Array<InputHandlerFacet>>
         var perLineTextDirection: Facet<Boolean, Boolean>
         var exceptionSink: Facet<(exception: Any) -> Unit, Array<(exception: Any) -> Unit>>
         var updateListener: Facet<(update: ViewUpdate) -> Unit, Array<(update: ViewUpdate) -> Unit>>
         var editable: Facet<Boolean, Boolean>
         var mouseSelectionStyle: Facet<MakeSelectionStyle, Array<MakeSelectionStyle>>
-        var dragMovesSelection: Facet<(event: MouseEvent) -> Boolean, Array<(event: MouseEvent) -> Boolean>>
-        var clickAddsSelectionRange: Facet<(event: MouseEvent) -> Boolean, Array<(event: MouseEvent) -> Boolean>>
-        var decorations: Facet<dynamic /* DecorationSet | (view: EditorView) -> DecorationSet */, Array<dynamic /* DecorationSet | (view: EditorView) -> DecorationSet */>>
-        var atomicRanges: Facet<(view: EditorView) -> RangeSet<out RangeValue<*>>, Array<(view: EditorView) -> RangeSet<out RangeValue<*>>>>
-        var scrollMargins: Facet<(view: EditorView) -> RectPartial?, Array<(view: EditorView) -> RectPartial?>>
+        var dragMovesSelection: Facet<DragMovesSelectionFacet, Array<DragMovesSelectionFacet>>
+        var clickAddsSelectionRange: ClickAddsSelection
+        var decorations: Facet<DecorationsFacet, Array<DecorationsFacet>>
+        var atomicRanges: Facet<AtomicRangesFacet, Array<AtomicRangesFacet>>
+        var scrollMargins: Facet<ScrollMarginsFacet, Array<ScrollMarginsFacet>>
         fun theme(
             spec: `T$10`,
             options: `T$11` = definedExternally
         ): Any /* `T$6` | Array<dynamic /* `T$6` | Array<Extension> */> */
 
         var darkTheme: Facet<Boolean, Boolean>
-        fun baseTheme(spec: `T$10`): dynamic /* `T$6` | Array<dynamic /* `T$6` | Array<Extension> */> */
-        var contentAttributes: Facet<dynamic /* Attrs | (view: EditorView) -> Attrs? */, Array<dynamic /* Attrs | (view: EditorView) -> Attrs? */>>
-        var editorAttributes: Facet<dynamic /* Attrs | (view: EditorView) -> Attrs? */, Array<dynamic /* Attrs | (view: EditorView) -> Attrs? */>>
+        /* `T$6` | Array<dynamic /* `T$6` | Array<Extension> */> */
+        fun baseTheme(spec: `T$10`): dynamic
+        var contentAttributes: Facet<ContentAttributesFacet, Array<ContentAttributesFacet>>
+        var editorAttributes: Facet<EditorAttributesFacet, Array<EditorAttributesFacet>>
         var lineWrapping: dynamic /* `T$6` | Array<dynamic /* `T$6` | Array<Extension> */> */
         var announce: Any
         fun findFromDOM(dom: HTMLElement): EditorView?

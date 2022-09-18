@@ -1,3 +1,18 @@
+/*
+ * Copyright 2022 Jason Monk
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 @file:Suppress(
     "INTERFACE_WITH_SUPERCLASS",
     "OVERRIDING_FINAL_MEMBER",
@@ -111,7 +126,10 @@ open external class EditorSelection {
     open fun eq(other: EditorSelection): Boolean
     open fun asSingle(): EditorSelection
     open fun addRange(range: SelectionRange, main: Boolean = definedExternally): EditorSelection
-    open fun replaceRange(range: SelectionRange, which: Number = definedExternally): EditorSelection
+    open fun replaceRange(
+        range: SelectionRange,
+        which: Number = definedExternally
+    ): EditorSelection
     open fun toJSON(): Any
 
     companion object {
@@ -150,7 +168,8 @@ external interface FacetConfig<Input, Output> {
     var static: Boolean?
         get() = definedExternally
         set(value) = definedExternally
-    var enables: dynamic /* `T$6`? | Array<dynamic /* `T$6` | Array<Extension> */>? | ((self: Facet<Input, Output>) -> dynamic)? */
+    /* `T$6`? | Array<dynamic /* `T$6` | Array<Extension> */>? | ((self: Facet<Input, Output>) -> dynamic)? */
+    var enables: dynamic
         get() = definedExternally
         set(value) = definedExternally
 }
@@ -175,7 +194,9 @@ open external class Facet<Input, Output> {
     ): dynamic /* `T$6` | Array<Extension> */
 
     companion object {
-        fun <Input, Output> define(config: FacetConfig<Input, Output> = definedExternally): Facet<Input, Output>
+        fun <Input, Output> define(
+            config: FacetConfig<Input, Output> = definedExternally
+        ): Facet<Input, Output>
     }
 }
 
@@ -229,7 +250,8 @@ open external class Compartment {
     open fun of(ext: Array<dynamic /*Extension*/>): dynamic /* `T$6` | Array<Extension> */
     open fun reconfigure(content: `T$6`): StateEffect<Any>
     open fun reconfigure(content: Array<dynamic /*Extension*/>): StateEffect<Any>
-    open fun get(state: EditorState): dynamic /* `T$6`? | Array<dynamic /* `T$6` | Array<Extension> */>? */
+    /* `T$6`? | Array<dynamic /* `T$6` | Array<Extension> */>? */
+    open fun get(state: EditorState): dynamic
 }
 
 open external class Annotation<T> {
@@ -263,7 +285,9 @@ open external class StateEffect<Value> {
     open fun <T> `is`(type: StateEffectType<T>): Boolean
 
     companion object {
-        fun <Value> define(spec: StateEffectSpec<Value> = definedExternally): StateEffectType<Value>
+        fun <Value> define(
+            spec: StateEffectSpec<Value> = definedExternally
+        ): StateEffectType<Value>
         fun mapEffects(
             effects: Array<StateEffect<Any>>,
             mapping: ChangeDesc
@@ -367,6 +391,11 @@ external interface `T$4` {
     @nativeSetter
     operator fun set(key: String, value: String)
 }
+typealias LanguageDataFacet = (
+    state: EditorState,
+    pos: Number,
+    side: dynamic /* 0 | 1 | "-1" */
+) -> Array<Json>
 
 open external class EditorState {
     open val doc: Text
@@ -415,12 +444,15 @@ open external class EditorState {
         var lineSeparator: Facet<String, String?>
         var readOnly: Facet<Boolean, Boolean>
         var phrases: Facet<`T$4`, Array<`T$4`>>
-        var languageData: Facet<(state: EditorState, pos: Number, side: dynamic /* 0 | 1 | "-1" */) -> Array<Json>, Array<(state: EditorState, pos: Number, side: dynamic /* 0 | 1 | "-1" */) -> Array<Json>>>
+        var languageData: Facet<LanguageDataFacet, Array<LanguageDataFacet>>
         var changeFilter: Facet<(tr: Transaction) -> dynamic, Array<(tr: Transaction) -> dynamic>>
-        var transactionFilter: Facet<(tr: Transaction) -> dynamic, Array<(tr: Transaction) -> dynamic>>
-        var transactionExtender: Facet<(tr: Transaction) -> dynamic /*Pick<TransactionSpec, String /* "effects" | "annotations" */>?*/, Array<(tr: Transaction) -> dynamic /*Pick<TransactionSpec, String /* "effects" | "annotations" */>?*/>>
+        var transactionFilter: Facet<TransactionFilterFacet, Array<TransactionFilterFacet>>
+        var transactionExtender: Facet<TransactionExtenderFacet, Array<TransactionExtenderFacet>>
     }
 }
+typealias TransactionFilterFacet = (tr: Transaction) -> dynamic
+/*Pick<TransactionSpec, String /* "effects" | "annotations" */>?*/
+typealias TransactionExtenderFacet = (tr: Transaction) -> dynamic
 
 external interface `T$7` {
     var state: EditorState
@@ -530,7 +562,10 @@ open external class RangeSet<T : RangeValue<T>> {
             sort: Boolean = definedExternally
         ): RangeSet<T>
 
-        fun <T : RangeValue<T>> of(ranges: Range<T>, sort: Boolean = definedExternally): RangeSet<T>
+        fun <T : RangeValue<T>> of(
+            ranges: Range<T>,
+            sort: Boolean = definedExternally
+        ): RangeSet<T>
         var empty: RangeSet<out RangeValue<*>>
     }
 }

@@ -1,3 +1,18 @@
+/*
+ * Copyright 2022 Jason Monk
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 @file:Suppress(
     "INTERFACE_WITH_SUPERCLASS",
     "OVERRIDING_FINAL_MEMBER",
@@ -34,11 +49,11 @@ import dukat.lezer.highlight.Tag
 import dukat.lezer.lr.LRParser
 import dukat.lezer.lr.ParserConfig
 import dukat.stylemod.StyleModule
-import org.w3c.dom.HTMLElement
-import org.w3c.dom.events.Event
 import kotlin.js.Json
 import kotlin.js.Promise
 import kotlin.js.RegExp
+import org.w3c.dom.HTMLElement
+import org.w3c.dom.events.Event
 
 external var languageDataProp: NodeProp<Facet<Json, Array<Json>>>
 
@@ -52,7 +67,8 @@ external interface `T$0` {
 open external class Language(
     data: Facet__1<Json>,
     parser: Parser,
-    extraExtensions: Array<Any /* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */> = definedExternally
+    /* Array<`T$24` | Array<dynamic /* `T$24` | Array<Extension> */>> */
+    extraExtensions: Array<Any> = definedExternally
 ) {
     open val data: Facet__1<Json>
     open val extension: dynamic /* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
@@ -170,7 +186,10 @@ open external class LanguageDescription {
 
     companion object {
         fun of(spec: `T$2`): LanguageDescription
-        fun matchFilename(descs: Array<LanguageDescription>, filename: String): LanguageDescription?
+        fun matchFilename(
+            descs: Array<LanguageDescription>,
+            filename: String
+        ): LanguageDescription?
         fun matchLanguageName(
             descs: Array<LanguageDescription>,
             name: String,
@@ -179,7 +198,8 @@ open external class LanguageDescription {
     }
 }
 
-external var indentService: Facet<(context: IndentContext, pos: Number) -> Number?, Array<(context: IndentContext, pos: Number) -> Number?>>
+typealias IndentServiceFacet = (context: IndentContext, pos: Number) -> Number?
+external var indentService: Facet<IndentServiceFacet, Array<IndentServiceFacet>>
 
 external var indentUnit: Facet<String, String>
 
@@ -260,11 +280,15 @@ external interface `T$6` {
         set(value) = definedExternally
 }
 
-external fun continuedIndent(__0: `T$6` = definedExternally): (context: TreeIndentContext) -> Number
+external fun continuedIndent(
+    __0: `T$6` = definedExternally
+): (context: TreeIndentContext) -> Number
 
-external fun indentOnInput(): dynamic /* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
+/* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
+external fun indentOnInput(): dynamic
 
-external var foldService: Facet<(state: EditorState, lineStart: Number, lineEnd: Number) -> `T$0`?, Array<(state: EditorState, lineStart: Number, lineEnd: Number) -> `T$0`?>>
+typealias FoldServiceFacet = (state: EditorState, lineStart: Number, lineEnd: Number) -> `T$0`?
+external var foldService: Facet<FoldServiceFacet, Array<FoldServiceFacet>>
 
 external var foldNodeProp: NodeProp<(node: SyntaxNode, state: EditorState) -> `T$0`?>
 
@@ -304,11 +328,14 @@ external interface FoldConfig {
         set(value) = definedExternally
 }
 
-external fun codeFolding(config: FoldConfig = definedExternally): dynamic /* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
+/* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
+external fun codeFolding(config: FoldConfig = definedExternally): dynamic
 
 external interface Handlers {
     @nativeGetter
-    operator fun get(event: String): ((view: EditorView, line: BlockInfo, event: Event) -> Boolean)?
+    operator fun get(
+        event: String
+    ): ((view: EditorView, line: BlockInfo, event: Event) -> Boolean)?
 
     @nativeSetter
     operator fun set(
@@ -335,7 +362,8 @@ external interface FoldGutterConfig {
         set(value) = definedExternally
 }
 
-external fun foldGutter(config: FoldGutterConfig = definedExternally): dynamic /* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
+/* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
+external fun foldGutter(config: FoldGutterConfig = definedExternally): dynamic
 
 external interface `T$7` {
     var scope: dynamic /* Language? | NodeType? */
@@ -406,7 +434,8 @@ external interface Config {
         set(value) = definedExternally
 }
 
-external fun bracketMatching(config: Config = definedExternally): dynamic /* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
+/* `T$24` | Array<dynamic /* `T$24` | Array<Extension> */> */
+external fun bracketMatching(config: Config = definedExternally): dynamic
 
 external interface MatchResult {
     var start: `T$0`
