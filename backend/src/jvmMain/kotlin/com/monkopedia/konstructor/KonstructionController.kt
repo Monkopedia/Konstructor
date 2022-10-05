@@ -130,7 +130,12 @@ class KonstructionControllerImpl(
     override suspend fun render(targets: List<String>): List<String> {
         contentFileLock.isLocked = true
         try {
-            renderOutput.deleteRecursively()
+            for (target in targets) {
+                val targetFile = File(renderOutput, "$target.stl")
+                if (targetFile.exists()) {
+                    targetFile.delete()
+                }
+            }
             renderOutput.mkdirs()
             val executeTask =
                 ExecuteTask(
@@ -140,11 +145,11 @@ class KonstructionControllerImpl(
                     fileName = "ContentKt",
                     extraTargets = targets
                 )
-            val (result, targets) = executeTask.execute()
+            val (result, executedTargets) = executeTask.execute()
             renderResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
             }
-            return targets
+            return executedTargets
         } finally {
             contentFileLock.isLocked = false
         }
