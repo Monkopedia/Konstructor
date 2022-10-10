@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,7 +30,8 @@ import dukat.codemirror.view.ViewUpdate
 import dukat.codemirror.view.scrollPastEnd
 import dukat.codemirror.vim.CodeMirror
 import dukat.codemirror.vim.vim
-import kotlin.math.max
+import emotion.react.css
+import kotlinext.js.js
 import kotlinx.css.background
 import org.w3c.dom.HTMLDivElement
 import react.FC
@@ -42,6 +43,7 @@ import react.useRef
 import react.useState
 import styled.StyleSheet
 import styled.getClassSelector
+import kotlin.math.max
 
 private object MirrorStyles : StyleSheet("mirror", isStatic = true) {
     val errorLineBackground by css {
@@ -122,6 +124,18 @@ val CodeMirrorScreen = memo(
             }
 
             val textArea = textAreaRef.current!!
+            val heightTheme = EditorView.theme(
+                buildExt {
+                    set(
+                        "&",
+                        js {
+                            height = "calc(100vh - 64px)"
+                            width = "calc(50hw)"
+                        }
+                    )
+                    set(".cm-scroller", js { overflow = "auto" })
+                }
+            )
             val editorState = EditorState.create(
                 buildExt {
                     this.doc = props.content
@@ -133,7 +147,8 @@ val CodeMirrorScreen = memo(
                         markField,
                         EditorView.lineWrapping,
                         EditorView.updateListener.of(::onCursorChange),
-                        scrollPastEnd()
+                        scrollPastEnd(),
+                        heightTheme
                     )
                 }
             )
@@ -151,7 +166,6 @@ val CodeMirrorScreen = memo(
             CodeMirror.commands.asDynamic().save = ::onSave
             codeMirror = cm
             cleanup {
-                // TODO: Any cleanup?
                 cm.destroy()
             }
         }
