@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -106,122 +106,118 @@ external interface WorkspaceListItemProps : Props {
     var dialogModel: NavigationDialogModel
 }
 
-val WorkspaceListItem = memo(
-    FC<WorkspaceListItemProps> { props ->
-        val scope = props.existingScope
-            ?: RootScope.useSubScope { get { parametersOf(props.workspace.id) } }
-        val konstructions = scope.useCollected(emptyList()) {
-            get<WorkspaceModel>().availableKonstructions
-        }
-        var isExpanded by useState(props.existingScope != null)
-        ListItem {
-            ListItemButton {
-                ListItemIcon {
-                    Folder()
+val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
+    val scope = props.existingScope
+        ?: RootScope.useSubScope { get { parametersOf(props.workspace.id) } }
+    val konstructions = scope.useCollected(emptyList()) {
+        get<WorkspaceModel>().availableKonstructions
+    }
+    var isExpanded by useState(props.existingScope != null)
+    ListItem {
+        ListItemButton {
+            ListItemIcon {
+                Folder()
+            }
+            ListItemText {
+                this.primary = Typography.create {
+                    +props.workspace.name
                 }
-                ListItemText {
-                    this.primary = Typography.create {
-                        +props.workspace.name
-                    }
-                    this.onClick = {
-                        isExpanded = !isExpanded
-                    }
-                }
-                if (isExpanded) {
-                    ExpandLess()
-                } else {
-                    ExpandMore()
+                this.onClick = {
+                    isExpanded = !isExpanded
                 }
             }
-            ListItemSecondaryAction {
-                IconButton {
-                    edge = end
-                    ariaLabel = "rename"
-                    Edit()
-                    onClick = {
-                        props.dialogModel.showEditWorkspace(
-                            props.workspace.id,
-                            props.workspace.name
-                        )
-                    }
+            if (isExpanded) {
+                ExpandLess()
+            } else {
+                ExpandMore()
+            }
+        }
+        ListItemSecondaryAction {
+            IconButton {
+                edge = end
+                ariaLabel = "rename"
+                Edit()
+                onClick = {
+                    props.dialogModel.showEditWorkspace(
+                        props.workspace.id,
+                        props.workspace.name
+                    )
                 }
             }
         }
-        Collapse {
-            this.`in` = isExpanded
-            this.timeout = "auto"
-            mui.material.List {
-                for (konstruction in konstructions) {
-                    ListItem {
-                        css {
-                            paddingLeft = 72.px
-                        }
-                        ListItemButton {
-                            ListItemIcon {
-                                Construction()
-                            }
-                            sx {
-                                this.asDynamic().pl = 8
-                            }
-                            ListItemText {
-                                this.primary = Typography.create {
-                                    +konstruction.name
-                                }
-                            }
-                            onClick = {
-                                props.dialogModel.workManager.doWork {
-                                    RootScope.spaceListModel.setSelectedSpace(
-                                        konstruction.workspaceId
-                                    )
-                                    val workspaceScope = RootScope.scopeTracker.workspace.filter {
-                                        it?.workspaceId == konstruction.workspaceId
-                                    }.first()!!
-                                    workspaceScope.get<WorkspaceModel>()
-                                        .setSelectedKonstruction(konstruction.id)
-                                    RootScope.settingsModel.setCodePaneMode(EDITOR)
-                                }
-                            }
-                        }
-                        ListItemSecondaryAction {
-                            IconButton {
-                                edge = end
-                                ariaLabel = "rename"
-                                Edit()
-                                onClick = {
-                                    props.dialogModel.showEditKonstruction(
-                                        konstruction.workspaceId,
-                                        konstruction.id,
-                                        konstruction.name
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+    }
+    Collapse {
+        this.`in` = isExpanded
+        this.timeout = "auto"
+        mui.material.List {
+            for (konstruction in konstructions) {
                 ListItem {
                     css {
                         paddingLeft = 72.px
                     }
                     ListItemButton {
                         ListItemIcon {
-                            Add()
+                            Construction()
                         }
                         sx {
                             this.asDynamic().pl = 8
                         }
                         ListItemText {
                             this.primary = Typography.create {
-                                +"Add new konstruction"
+                                +konstruction.name
                             }
                         }
                         onClick = {
-                            props.dialogModel.showCreateKonstruction(props.workspace.id)
+                            props.dialogModel.workManager.doWork {
+                                RootScope.spaceListModel.setSelectedSpace(
+                                    konstruction.workspaceId
+                                )
+                                val workspaceScope = RootScope.scopeTracker.workspace.filter {
+                                    it?.workspaceId == konstruction.workspaceId
+                                }.first()!!
+                                workspaceScope.get<WorkspaceModel>()
+                                    .setSelectedKonstruction(konstruction.id)
+                                RootScope.settingsModel.setCodePaneMode(EDITOR)
+                            }
                         }
+                    }
+                    ListItemSecondaryAction {
+                        IconButton {
+                            edge = end
+                            ariaLabel = "rename"
+                            Edit()
+                            onClick = {
+                                props.dialogModel.showEditKonstruction(
+                                    konstruction.workspaceId,
+                                    konstruction.id,
+                                    konstruction.name
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            ListItem {
+                css {
+                    paddingLeft = 72.px
+                }
+                ListItemButton {
+                    ListItemIcon {
+                        Add()
+                    }
+                    sx {
+                        this.asDynamic().pl = 8
+                    }
+                    ListItemText {
+                        this.primary = Typography.create {
+                            +"Add new konstruction"
+                        }
+                    }
+                    onClick = {
+                        props.dialogModel.showCreateKonstruction(props.workspace.id)
                     }
                 }
             }
         }
     }
-) { oldProps, newProps ->
-    oldProps.workspace == newProps.workspace
 }
