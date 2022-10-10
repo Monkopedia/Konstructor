@@ -40,6 +40,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.time.withTimeout
+import kotlinx.coroutines.withTimeout
+import kotlin.time.Duration.Companion.seconds
 
 class KonstructionServiceImpl(private val config: Config, workspaceId: String, id: String) :
     KonstructionService {
@@ -155,7 +158,9 @@ class KonstructionServiceImpl(private val config: Config, workspaceId: String, i
 
     override suspend fun requestCompile(u: Unit) {
         scope.launch {
-            compile()
+            withTimeout(120.seconds) {
+                compile()
+            }
         }
     }
 
@@ -213,13 +218,17 @@ class KonstructionServiceImpl(private val config: Config, workspaceId: String, i
 
     override suspend fun requestKonstruct(target: String) {
         scope.launch {
-            konstruct(target)
+            withTimeout(120.seconds) {
+                konstruct(target)
+            }
         }
     }
 
     override suspend fun requestKonstructs(targets: List<String>) {
         scope.launch {
-            konstruct(targets)
+            withTimeout(120.seconds) {
+                konstruct(targets)
+            }
         }
     }
 }
@@ -302,11 +311,13 @@ class ListenerHandler(
         crossinline function: suspend KonstructionListener.() -> Unit
     ) {
         scope.launch {
-            try {
-                listener.function()
-            } catch (t: Throwable) {
-                t.printStackTrace()
-                close()
+            withTimeout(120.seconds) {
+                try {
+                    listener.function()
+                } catch (t: Throwable) {
+                    t.printStackTrace()
+                    close()
+                }
             }
         }
     }

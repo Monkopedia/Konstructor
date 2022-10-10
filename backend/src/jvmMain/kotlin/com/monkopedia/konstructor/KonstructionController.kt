@@ -68,6 +68,15 @@ class SimpleLock : Object() {
         }
 }
 
+inline fun <R> SimpleLock.withLock(exec: () -> R): R {
+    isLocked = true
+    try {
+        return exec()
+    } finally {
+        isLocked = false
+    }
+}
+
 @OptIn(ExperimentalSerializationApi::class)
 class KonstructionControllerImpl(
     private val config: Config,
@@ -96,13 +105,10 @@ class KonstructionControllerImpl(
             // Optimistically set now, to have the info available immediately.
             infoImpl = value
             GlobalScope.launch(saveContext) {
-                contentFileLock.isLocked = true
-                try {
+                contentFileLock.withLock {
                     infoFile.outputStream().use { output ->
                         config.json.encodeToStream(value, output)
                     }
-                } finally {
-                    contentFileLock.isLocked = false
                 }
                 // Always set one more time after write to settle out any race conditions.
                 infoImpl = value
@@ -110,8 +116,7 @@ class KonstructionControllerImpl(
         }
 
     override suspend fun compile() {
-        contentFileLock.isLocked = true
-        try {
+        contentFileLock.withLock {
             withContext(Dispatchers.IO) {
                 val inputStream = contentFile.inputStream()
                 copyContentToScript(inputStream, kotlinFile)
@@ -122,14 +127,11 @@ class KonstructionControllerImpl(
             compileResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
             }
-        } finally {
-            contentFileLock.isLocked = false
         }
     }
 
     override suspend fun render(targets: List<String>): List<String> {
-        contentFileLock.isLocked = true
-        try {
+        contentFileLock.withLock {
             for (target in targets) {
                 val targetFile = File(renderOutput, "$target.stl")
                 if (targetFile.exists()) {
@@ -150,8 +152,6 @@ class KonstructionControllerImpl(
                 config.json.encodeToStream(result, output)
             }
             return executedTargets
-        } finally {
-            contentFileLock.isLocked = false
         }
     }
 
@@ -192,18 +192,16 @@ class KonstructionControllerImpl(
         if (!contentFile.exists()) {
             return ""
         }
-        contentFileLock.isLocked = true
-        return contentFile.readText().also {
-            contentFileLock.isLocked = false
+        return contentFileLock.withLock {
+            contentFile.readText()
         }
     }
 
     override fun write(content: String) {
         println("Write ${content.length} to $info")
-        contentFileLock.isLocked = true
-        contentFile.writeText(content)
-
-        contentFileLock.isLocked = false
+        contentFileLock.withLock {
+            contentFile.writeText(content)
+        }
     }
 
     companion object {
