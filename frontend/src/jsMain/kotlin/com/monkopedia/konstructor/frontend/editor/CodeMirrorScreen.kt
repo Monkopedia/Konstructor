@@ -18,6 +18,7 @@ package com.monkopedia.konstructor.frontend.editor
 import codemirror.themeonedark.oneDark
 import com.monkopedia.konstructor.frontend.utils.buildExt
 import dukat.codemirror.basicSetup
+import dukat.codemirror.commands.history
 import dukat.codemirror.language.StreamLanguage
 import dukat.codemirror.legacymodes.kotlin
 import dukat.codemirror.state.EditorState
@@ -148,7 +149,8 @@ val CodeMirrorScreen = memo(
                         EditorView.lineWrapping,
                         EditorView.updateListener.of(::onCursorChange),
                         scrollPastEnd(),
-                        heightTheme
+                        heightTheme,
+                        history()
                     )
                 }
             )
