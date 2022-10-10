@@ -42,6 +42,7 @@ import react.RefCallback
 import react.dom.html.ReactHTML.div
 import react.router.LocationContext
 import react.useState
+import kotlin.math.PI
 
 external interface GLProps : Props {
     var konstruction: Konstruction?
@@ -107,7 +108,9 @@ object GLWindow {
 
         camera =
             PerspectiveCamera(75, window.innerWidth.toDouble() / 2 / window.innerHeight, 0.1, 1000)
-        camera.position.set(0, 5, -5)
+        camera.up.set(0.0, 0.0, 1.0)
+        camera.position.set(0, -5, 5)
+        camera.lookAt(0.0, 0.0, 0.0)
 
         renderer = WebGLRenderer(
             WebGLRendererParams(
