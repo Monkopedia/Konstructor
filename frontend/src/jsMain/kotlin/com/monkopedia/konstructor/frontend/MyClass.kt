@@ -17,6 +17,7 @@ package com.monkopedia.konstructor.frontend
 
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import kotlinx.browser.document
+import kotlinx.browser.window
 import mui.material.CssBaseline
 import mui.material.styles.ThemeProvider
 import react.FC
@@ -40,6 +41,12 @@ fun main() {
             Base()
         }
     )
+    window.document.onkeydown = {
+        if (it.key == "1" && it.altKey) {
+            it.stopPropagation()
+            it.preventDefault()
+        }
+    }
     println("Finishing main main 2")
 }
 
