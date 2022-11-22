@@ -22,6 +22,7 @@ plugins {
 
 repositories {
     jcenter()
+    mavenLocal()
 }
 
 kotlin {
@@ -29,6 +30,7 @@ kotlin {
         withJava()
     }
     sourceSets["jvmMain"].dependencies {
+        implementation("com.monkopedia.ksrpc:ksrpc-server:0.7.0")
         implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
         implementation("org.jetbrains.kotlin:kotlin-reflect")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3-native-mt")
@@ -36,7 +38,7 @@ kotlin {
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
         implementation(project(":protocol"))
         implementation(project(":lib"))
-        implementation("com.github.ajalt:clikt:2.8.0")
+        implementation("com.github.ajalt.clikt:clikt:3.5.0")
         implementation("io.ktor:ktor-server-core:2.0.2")
         implementation("io.ktor:ktor-server-cors:2.0.2")
         implementation("io.ktor:ktor-server-websockets:2.0.2")

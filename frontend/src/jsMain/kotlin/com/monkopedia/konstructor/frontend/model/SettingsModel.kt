@@ -24,9 +24,23 @@ class SettingsModel(private val scope: CoroutineScope) {
     private val mutableShowCodeLeft =
         MutablePersistentFlow.boolean("settings.showCodeLeft")
     val showCodeLeft: Flow<Boolean> = mutableShowCodeLeft
+    private val mutableShowFps =
+        MutablePersistentFlow.boolean("settings.showFps")
+    val showFps: Flow<Boolean> = mutableShowFps
+    private val mutableShowCameraWidget =
+        MutablePersistentFlow.boolean("settings.showCameraWidget")
+    val showCameraWidget: Flow<Boolean> = mutableShowCameraWidget
 
     fun setShowCodeLeft(showCodeLeft: Boolean) {
         mutableShowCodeLeft.set(showCodeLeft)
+    }
+
+    fun setShowFps(showFps: Boolean) {
+        mutableShowFps.set(showFps)
+    }
+
+    fun setShowCameraWidget(showCameraWidget: Boolean) {
+        mutableShowCameraWidget.set(showCameraWidget)
     }
 
     enum class CodePaneMode {

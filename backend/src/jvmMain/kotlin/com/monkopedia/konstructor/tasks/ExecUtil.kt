@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,17 +15,17 @@
  */
 package com.monkopedia.konstructor.tasks
 
-import com.monkopedia.konstructor.lib.createConnection
 import com.monkopedia.ksrpc.ErrorListener
 import com.monkopedia.ksrpc.channels.Connection
 import com.monkopedia.ksrpc.ksrpcEnvironment
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import com.monkopedia.ksrpc.sockets.asConnection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 object ExecUtil {
 
@@ -79,9 +79,7 @@ object ExecUtil {
             jobs.add(
                 launch(Dispatchers.IO) {
                     try {
-                        val connection = createConnection(
-                            proc.inputStream,
-                            proc.outputStream,
+                        val connection = (proc.inputStream to proc.outputStream).asConnection(
                             ksrpcEnvironment {
                                 errorListener = ErrorListener { t ->
                                     if (t !is CancellationException) {

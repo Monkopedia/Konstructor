@@ -1,5 +1,5 @@
 buildscript {
-    val kotlin_version by extra("1.7.10")
+    val kotlin_version by extra("1.7.20")
     repositories {
         mavenCentral()
         mavenLocal()
@@ -8,7 +8,7 @@ buildscript {
     dependencies {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
         classpath("org.jetbrains.kotlin:kotlin-serialization:$kotlin_version")
-        classpath("com.monkopedia:ksrpc-gradle-plugin:0.6.0")
+        classpath("com.monkopedia.ksrpc:ksrpc-gradle-plugin:0.7.0")
         classpath("gradle.plugin.com.github.johnrengelman:shadow:7.1.2")
     }
 }

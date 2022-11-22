@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,7 +18,10 @@ package com.monkopedia.konstructor.frontend.gl
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.model.GlControlsModel
+import com.monkopedia.konstructor.frontend.utils.useCollected
 import com.monkopedia.konstructor.frontend.utils.useEffect
+import csstype.pct
+import emotion.react.css
 import info.laht.threekt.cameras.PerspectiveCamera
 import info.laht.threekt.external.controls.OrbitControls
 import info.laht.threekt.external.libs.Stats
@@ -36,13 +39,14 @@ import kotlinx.browser.window
 import kotlinx.coroutines.flow.combine
 import org.koin.core.component.get
 import org.w3c.dom.Element
+import org.w3c.dom.HTMLDivElement
+import org.w3c.dom.Node
 import react.FC
 import react.Props
 import react.RefCallback
 import react.dom.html.ReactHTML.div
-import react.router.LocationContext
+import react.useRef
 import react.useState
-import kotlin.math.PI
 
 external interface GLProps : Props {
     var konstruction: Konstruction?
@@ -62,9 +66,16 @@ val GLComponent = FC<GLProps> { props ->
     }
 
     div {
-        ref = callbackRef
+        div {
+            css {
+                width = 100.pct
+                height = 100.pct
+            }
+            ref = callbackRef
+        }
+        MaybeStatsComponent()
+        MaybeCameraWidget()
     }
-    LocationContext
     useEffect(props.konstructionPath ?: emptyMap<String, Pair<String, String>>(), props.reload) {
         val path = props.konstructionPath
         println("Loading path $path")
@@ -89,6 +100,50 @@ val GLComponent = FC<GLProps> { props ->
     }
 }
 
+val MaybeStatsComponent = FC<Props> {
+    val showFps = RootScope.settingsModel.showFps.useCollected(false)
+    if (showFps) {
+        StatsComponent()
+    }
+}
+
+val StatsComponent = FC<Props> {
+    val parentRef = useRef<HTMLDivElement>()
+    div {
+        css {
+            width = 100.pct
+            height = 100.pct
+        }
+        ref = parentRef
+    }
+    react.useEffect(parentRef) {
+        val parent = parentRef.current ?: return@useEffect
+        parent.appendChild(GLWindow.statsElement)
+        GLWindow.statsElement.asDynamic().style.left = null
+        cleanup {
+            parent.removeChild(GLWindow.statsElement)
+        }
+    }
+}
+
+val MaybeCameraWidget = FC<Props> {
+    val showCameraWidget = RootScope.settingsModel.showCameraWidget.useCollected(false)
+    if (showCameraWidget) {
+        CameraWidget()
+    }
+}
+
+val CameraWidget = FC<Props> {
+    val parentRef = useRef<HTMLDivElement>()
+    div {
+        css {
+            width = 100.pct
+            height = 100.pct
+        }
+        ref = parentRef
+    }
+}
+
 object GLWindow {
 
     private var lastElement: Element? = null
@@ -96,6 +151,9 @@ object GLWindow {
     private val renderer: WebGLRenderer
     private val camera: PerspectiveCamera
     private val controls: OrbitControls
+
+    val statsElement: Node
+        get() = stats.dom
     val scene: Scene = Scene()
     val models: MutableList<Mesh> = ArrayList()
     val currentLights = mutableListOf<Light>()
@@ -153,10 +211,9 @@ object GLWindow {
 
     fun setElement(element: Element?) {
         lastElement?.removeChild(renderer.domElement)
-        lastElement?.removeChild(stats.dom)
         element?.appendChild(renderer.domElement)
-        element?.appendChild(stats.dom)
-        stats.dom.asDynamic().style.left = null
+//            element?.appendChild(stats.dom)
+//            stats.dom.asDynamic().style.left = null
         lastElement = element
     }
 

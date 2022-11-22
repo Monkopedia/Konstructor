@@ -18,6 +18,7 @@ package com.monkopedia.konstructor.frontend.settings
 import com.monkopedia.konstructor.frontend.WorkManager
 import com.monkopedia.konstructor.frontend.koin.KonstructionScope
 import com.monkopedia.konstructor.frontend.koin.RootScope
+import com.monkopedia.konstructor.frontend.model.KonstructionModel
 import com.monkopedia.konstructor.frontend.model.RenderModel
 import com.monkopedia.konstructor.frontend.model.RenderModel.DisplayTarget
 import com.monkopedia.konstructor.frontend.utils.buildExt
@@ -30,7 +31,9 @@ import csstype.LineStyle
 import csstype.number
 import csstype.px
 import emotion.react.css
+import kotlinx.browser.window
 import mui.icons.material.Colorize
+import mui.icons.material.Download
 import mui.material.Box
 import mui.material.IconButton
 import mui.material.ListItem
@@ -80,6 +83,8 @@ external interface ScopedSelectModelsProps : Props {
 
 val ScopedSelectModelsPane = FC<ScopedSelectModelsProps> { props ->
     val targets = props.renderModel.allTargets.useCollected(emptyMap())
+    val model = props.scope.get<KonstructionModel>()
+    val renderedModels = model.rendered.useCollected(emptyMap())
     val keys = targets.keys.sorted()
     var targetPicker by useState<Pair<HTMLButtonElement, DisplayTarget>?>(null)
     div {
@@ -99,6 +104,16 @@ val ScopedSelectModelsPane = FC<ScopedSelectModelsProps> { props ->
                         }
                         this.onClick = {
                             props.renderModel.setTargetEnabled(key, !state.isEnabled)
+                        }
+                        renderedModels[key]?.let { path ->
+                            IconButton {
+                                ariaLabel = "download"
+                                Download()
+                                onClick = {
+                                    window.open(path, "_blank")
+                                    it.stopPropagation()
+                                }
+                            }
                         }
                         IconButton {
                             ariaLabel = "color"

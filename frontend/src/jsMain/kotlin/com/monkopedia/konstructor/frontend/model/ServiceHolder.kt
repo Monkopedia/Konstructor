@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,9 +18,9 @@ package com.monkopedia.konstructor.frontend.model
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.ksrpc.ErrorListener
-import com.monkopedia.ksrpc.connect
 import com.monkopedia.ksrpc.ksrpcEnvironment
-import com.monkopedia.ksrpc.toKsrpcUri
+import com.monkopedia.ksrpc.ktor.asConnection
+import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
 import com.monkopedia.ksrpc.toStub
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
@@ -46,19 +46,6 @@ class ServiceHolder(scope: CoroutineScope) {
     private val mutableUseWs = MutableStateFlow(true)
     val useWs: Flow<Boolean> = mutableUseWs
 
-    val uri = combine(hostname, port, useWs) { hostname, port, useWs ->
-        buildString {
-            if (useWs) append("ws")
-            else append("https")
-            append("://")
-            append(hostname)
-            if (port != null) {
-                append(':')
-                append(port)
-            }
-            append("/konstructor")
-        }.toKsrpcUri()
-    }
     val errorHandler: FlowCollector<*>.(Throwable) -> Unit = { throwable ->
         println("Error occurred: ${throwable.stackTraceToString()}")
         console.log(throwable)
@@ -75,20 +62,19 @@ class ServiceHolder(scope: CoroutineScope) {
     )
 
     val service = combine(
-        uri,
+        hostname, port, useWs,
         retryConnectCount.filter { it >= 0 },
         errorListener
-    ) { uri, retryCount, errorListener ->
-        uri.connect(
-            ksrpcEnvironment {
-                this.errorListener = errorListener
-            }
-        ) {
-            HttpClient {
-                install(WebSockets)
-            }
-        }.defaultChannel().toStub<Konstructor>().also {
-            println("Connected to $uri")
+    ) { hostname, port, useWs, retryCount, errorListener ->
+        val env = ksrpcEnvironment {
+            this.errorListener = errorListener
+        }
+        val url = "http://$hostname${port?.let { ":$it" } ?: ""}/konstructor"
+        val conn =
+            if (useWs) HttpClient { install(WebSockets) }.asWebsocketConnection(url, env)
+            else HttpClient().asConnection(url, env)
+        conn.defaultChannel().toStub<Konstructor>().also {
+            println("Connected to $useWs $hostname $port")
         }
     }.shareIn(scope, SharingStarted.Lazily, replay = 1)
 

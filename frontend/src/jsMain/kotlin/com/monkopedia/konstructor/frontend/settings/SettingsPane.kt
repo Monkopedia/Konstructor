@@ -35,6 +35,10 @@ val SettingsPane = FC<Props> {
     val setShowLeft = useCallback { value: Boolean ->
         RootScope.settingsModel.setShowCodeLeft(value)
     }
+    val showFps = RootScope.settingsModel.showFps.useCollected(false)
+    val setShowFps = useCallback { value: Boolean ->
+        RootScope.settingsModel.setShowFps(value)
+    }
     div {
         css {
             background = Color(theme.palette.background.paper)
@@ -55,6 +59,15 @@ val SettingsPane = FC<Props> {
             this.label = "Show code on left"
             this.value = showLeft
             this.onValueChanged = setShowLeft
+        }
+        Divider()
+        SwitchRow {
+            css {
+                width = 100.pct
+            }
+            this.label = "Show FPS"
+            this.value = showFps
+            this.onValueChanged = setShowFps
         }
         Divider()
     }

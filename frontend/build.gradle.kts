@@ -57,6 +57,8 @@ kotlin {
         }
     }
     sourceSets["jsMain"].dependencies {
+        implementation("com.monkopedia.ksrpc:ksrpc-ktor-client:0.7.0")
+        implementation("com.monkopedia.ksrpc:ksrpc-ktor-websocket-client:0.7.0")
         implementation("io.insert-koin:koin-core:3.1.2")
         implementation("org.jetbrains.kotlin:kotlin-stdlib-js:1.7.0")
         compileOnly("io.ktor:ktor-client-core:2.0.2")
