@@ -30,7 +30,7 @@ kotlin {
         withJava()
     }
     sourceSets["jvmMain"].dependencies {
-        implementation("com.monkopedia.ksrpc:ksrpc-server:0.7.0")
+        implementation("com.monkopedia.ksrpc:ksrpc-server:0.7.1")
         implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
         implementation("org.jetbrains.kotlin:kotlin-reflect")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3-native-mt")
@@ -68,7 +68,7 @@ application {
 
 val browser = rootProject.findProject(":frontend")!!
 
-val debugFrontend = true
+val debugFrontend = properties["release"] == null
 val copy = tasks.register<Copy>("copyJsBundleToKtor") {
     if (debugFrontend) {
         from("${browser.buildDir}/developmentExecutable")
