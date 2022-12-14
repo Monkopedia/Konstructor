@@ -33,7 +33,7 @@ object LibsJar {
                 libFile.parentFile.mkdirs()
             }
             libFile.outputStream().use { output ->
-                this::class.java.getResourceAsStream("/lib-all.jar").use {
+                this::class.java.getResourceAsStream("/lib-all.raj").use {
                     it.copyTo(output)
                 }
             }

@@ -75,12 +75,15 @@ val copy = tasks.register<Copy>("copyJsBundleToKtor") {
     } else {
         from("${browser.buildDir}/distributions")
     }
-    into("$buildDir/processedResources/web")
+    into("$buildDir/importedResources/web")
 }
 val lib = rootProject.findProject(":lib")!!
 val copyLib = tasks.register<Copy>("copyLibToKtor") {
     from("${lib.buildDir}/libs/lib-all.jar")
-    into("$buildDir/processedResources/")
+    into("$buildDir/importedResources")
+    rename { fileName: String ->
+        fileName.replace(".jar", ".raj")
+    }
 }
 afterEvaluate {
 
@@ -120,7 +123,7 @@ sourceSets {
             }
         }
         resources {
-            srcDir("$buildDir/processedResources")
+            srcDir("$buildDir/importedResources")
             compiledBy(copy, copyLib)
         }
     }
