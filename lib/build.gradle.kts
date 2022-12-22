@@ -39,6 +39,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3")
     implementation("io.ktor:ktor-io:2.0.2")
     implementation("io.ktor:ktor-client-cio:2.0.2")
-    api("com.monkopedia:kcsg-dsl:0.1.0")
-    api("com.monkopedia:kcsg:0.1.0")
+    api("com.monkopedia:kcsg-dsl:0.1.1")
+    api("com.monkopedia:kcsg:0.1.1")
 }

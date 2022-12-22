@@ -38,6 +38,9 @@ val DialogMenus = memo(
         editWorkspaceDialog {
             this.dialogModel = props.dialogModel
         }
+        uploadStlDialog {
+            this.dialogModel = props.dialogModel
+        }
     }
 ) { oldProps, newProps ->
     oldProps.dialogModel === newProps.dialogModel

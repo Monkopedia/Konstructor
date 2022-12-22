@@ -36,6 +36,7 @@ import mui.icons.material.Edit
 import mui.icons.material.ExpandLess
 import mui.icons.material.ExpandMore
 import mui.icons.material.Folder
+import mui.icons.material.Upload
 import mui.material.Collapse
 import mui.material.IconButton
 import mui.material.IconButtonEdge.end
@@ -215,6 +216,27 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                     }
                     onClick = {
                         props.dialogModel.showCreateKonstruction(props.workspace.id)
+                    }
+                }
+            }
+            ListItem {
+                css {
+                    paddingLeft = 72.px
+                }
+                ListItemButton {
+                    ListItemIcon {
+                        Upload()
+                    }
+                    sx {
+                        this.asDynamic().pl = 8
+                    }
+                    ListItemText {
+                        this.primary = Typography.create {
+                            +"Upload STL"
+                        }
+                        onClick = {
+                            props.dialogModel.showUploadStl(props.workspace.id)
+                        }
                     }
                 }
             }

@@ -24,6 +24,7 @@ import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.C
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.EDIT_KONSTRUCTION
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.EDIT_WORKSPACE
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.NONE
+import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.UPLOAD_STL
 import com.monkopedia.ksrpc.use
 import io.ktor.utils.io.core.Closeable
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +45,7 @@ class NavigationDialogModel(
         CREATE_KONSTRUCTION,
         EDIT_WORKSPACE,
         EDIT_KONSTRUCTION,
+        UPLOAD_STL
     }
 
     data class DialogState(
@@ -60,6 +62,7 @@ class NavigationDialogModel(
     val createKonstructionOpen = dialog.map { it.dialog == CREATE_KONSTRUCTION }
     val editWorkspaceOpen = dialog.map { it.dialog == EDIT_WORKSPACE }
     val editKonstructionOpen = dialog.map { it.dialog == EDIT_KONSTRUCTION }
+    val uploadStlOpen = dialog.map { it.dialog == UPLOAD_STL }
     val targetWorkspace = dialog.map { it.targetWorkspace }
     val targetKonstruction = dialog.map { it.targetKonstruction }
     val currentName = dialog.map { it.currentName }
@@ -70,6 +73,10 @@ class NavigationDialogModel(
 
     fun showCreateKonstruction(workspaceId: String) {
         mutableDialog.value = DialogState(CREATE_KONSTRUCTION, targetWorkspace = workspaceId)
+    }
+
+    fun showUploadStl(workspaceId: String) {
+        mutableDialog.value = DialogState(UPLOAD_STL, targetWorkspace = workspaceId)
     }
 
     fun showEditWorkspace(workspaceId: String, currentName: String) {
