@@ -18,6 +18,7 @@ package com.monkopedia.konstructor.common
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
+import io.ktor.utils.io.ByteReadChannel
 
 @KsService
 interface KonstructionService : RpcService {
@@ -35,6 +36,9 @@ interface KonstructionService : RpcService {
 
     @KsMethod("/set")
     suspend fun set(content: String)
+
+    @KsMethod("/set_binary")
+    suspend fun setBinary(content: ByteReadChannel)
 
     @KsMethod("/register")
     suspend fun register(listener: KonstructionListener): String

@@ -18,7 +18,7 @@ package com.monkopedia.konstructor
 import com.monkopedia.konstructor.common.DirtyState.CLEAN
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionInfo
-import com.monkopedia.konstructor.common.KonstructionType.OBJ
+import com.monkopedia.konstructor.common.KonstructionType.CSGS
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
 import java.io.File
@@ -69,7 +69,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         }
         targetInfo.parentFile.mkdirs()
         targetInfo.outputStream().use { output ->
-            config.json.encodeToStream(KonstructionInfo(newItem, OBJ, CLEAN, emptyList()), output)
+            config.json.encodeToStream(KonstructionInfo(newItem, CLEAN, emptyList()), output)
         }
         return newItem
     }

@@ -15,6 +15,7 @@
  */
 package com.monkopedia.konstructor.frontend.settings
 
+import com.monkopedia.konstructor.common.KonstructionType.CSGS
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.frontend.WorkManager
 import com.monkopedia.konstructor.frontend.koin.RootScope
@@ -23,6 +24,10 @@ import com.monkopedia.konstructor.frontend.menu.DialogMenus
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.EDITOR
 import com.monkopedia.konstructor.frontend.model.WorkspaceModel
+import com.monkopedia.konstructor.frontend.utils.Icons.blocks
+import com.monkopedia.konstructor.frontend.utils.Icons.blocksBorder
+import com.monkopedia.konstructor.frontend.utils.Icons.filledBlocks
+import com.monkopedia.konstructor.frontend.utils.Icons.svgIcon
 import com.monkopedia.konstructor.frontend.utils.useCloseable
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import com.monkopedia.konstructor.frontend.utils.useSubScope
@@ -31,11 +36,11 @@ import emotion.react.css
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import mui.icons.material.Add
-import mui.icons.material.Construction
 import mui.icons.material.Edit
 import mui.icons.material.ExpandLess
 import mui.icons.material.ExpandMore
 import mui.icons.material.Folder
+import mui.icons.material.Upload
 import mui.material.Collapse
 import mui.material.IconButton
 import mui.material.IconButtonEdge.end
@@ -44,14 +49,23 @@ import mui.material.ListItemButton
 import mui.material.ListItemIcon
 import mui.material.ListItemSecondaryAction
 import mui.material.ListItemText
+import mui.material.SvgIcon
+import mui.material.SvgIconColor.primary
 import mui.material.Typography
 import mui.system.sx
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
+import org.w3c.dom.svg.SVGPathElement
 import react.FC
 import react.Props
 import react.create
 import react.dom.aria.ariaLabel
+import react.dom.svg.ReactSVG.path
+import react.dom.svg.SVGAttributes
+import react.dom.svg.StrokeLinecap
+import react.dom.svg.StrokeLinecap.round
+import react.dom.svg.StrokeLinejoin
+import react.dom.svg.StrokeLinejoin.miter
 import react.memo
 import react.useState
 
@@ -157,7 +171,26 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                     }
                     ListItemButton {
                         ListItemIcon {
-                            Construction()
+                            if (konstruction.type == CSGS) {
+                                SvgIcon {
+                                    width = 24.0
+                                    height = 24.0
+                                    viewBox = "0 0 20 20"
+                                    color = primary
+                                    path {
+                                        filledBlocks()
+                                    }
+                                }
+                            } else {
+                                SvgIcon {
+                                    width = 24.0
+                                    height = 14.0
+                                    viewBox = "0 0 35 20"
+                                    path {
+                                        svgIcon()
+                                    }
+                                }
+                            }
                         }
                         sx {
                             this.asDynamic().pl = 8
@@ -168,16 +201,18 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                             }
                         }
                         onClick = {
-                            props.dialogModel.workManager.doWork {
-                                RootScope.spaceListModel.setSelectedSpace(
-                                    konstruction.workspaceId
-                                )
-                                val workspaceScope = RootScope.scopeTracker.workspace.filter {
-                                    it?.workspaceId == konstruction.workspaceId
-                                }.first()!!
-                                workspaceScope.get<WorkspaceModel>()
-                                    .setSelectedKonstruction(konstruction.id)
-                                RootScope.settingsModel.setCodePaneMode(EDITOR)
+                            if (konstruction.type == CSGS) {
+                                props.dialogModel.workManager.doWork {
+                                    RootScope.spaceListModel.setSelectedSpace(
+                                        konstruction.workspaceId
+                                    )
+                                    val workspaceScope = RootScope.scopeTracker.workspace.filter {
+                                        it?.workspaceId == konstruction.workspaceId
+                                    }.first()!!
+                                    workspaceScope.get<WorkspaceModel>()
+                                        .setSelectedKonstruction(konstruction.id)
+                                    RootScope.settingsModel.setCodePaneMode(EDITOR)
+                                }
                             }
                         }
                     }
@@ -215,6 +250,27 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                     }
                     onClick = {
                         props.dialogModel.showCreateKonstruction(props.workspace.id)
+                    }
+                }
+            }
+            ListItem {
+                css {
+                    paddingLeft = 72.px
+                }
+                ListItemButton {
+                    ListItemIcon {
+                        Upload()
+                    }
+                    sx {
+                        this.asDynamic().pl = 8
+                    }
+                    ListItemText {
+                        this.primary = Typography.create {
+                            +"Upload STL"
+                        }
+                        onClick = {
+                            props.dialogModel.showUploadStl(props.workspace.id)
+                        }
                     }
                 }
             }

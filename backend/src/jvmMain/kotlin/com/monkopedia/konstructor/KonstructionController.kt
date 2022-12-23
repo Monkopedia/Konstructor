@@ -22,6 +22,8 @@ import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.tasks.CompileTask
 import com.monkopedia.konstructor.tasks.ExecuteTask
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.jvm.javaio.copyTo
 import java.io.File
 import java.io.InputStream
 import kotlin.coroutines.CoroutineContext
@@ -40,6 +42,7 @@ interface KonstructionController {
 
     fun read(): String
     fun write(content: String)
+    suspend fun write(content: ByteReadChannel)
     suspend fun compile()
     suspend fun lastCompileResult(): TaskResult
     suspend fun render(targets: List<String>): List<String>
@@ -201,6 +204,14 @@ class KonstructionControllerImpl(
         println("Write ${content.length} to $info")
         contentFileLock.withLock {
             contentFile.writeText(content)
+        }
+    }
+
+    override suspend fun write(content: ByteReadChannel) {
+        contentFileLock.withLock {
+            contentFile.outputStream().use {
+                content.copyTo(it)
+            }
         }
     }
 

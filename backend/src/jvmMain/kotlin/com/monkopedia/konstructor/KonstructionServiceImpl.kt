@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -31,16 +31,18 @@ import com.monkopedia.konstructor.common.KonstructionListener
 import com.monkopedia.konstructor.common.KonstructionRender
 import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.KonstructionTarget
+import com.monkopedia.konstructor.common.KonstructionType.CSGS
+import com.monkopedia.konstructor.common.KonstructionType.STL
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.ksrpc.channels.randomUuid
+import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.time.withTimeout
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
 
@@ -101,6 +103,10 @@ class KonstructionServiceImpl(private val config: Config, workspaceId: String, i
                 it.onContentChange()
             }
         }
+    }
+
+    override suspend fun setBinary(content: ByteReadChannel) {
+        konstructionController.write(content)
     }
 
     override suspend fun compile(u: Unit): TaskResult {

@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,19 +15,21 @@
  */
 package com.monkopedia.konstructor.common
 
+import com.monkopedia.konstructor.common.KonstructionType.CSGS
 import kotlinx.serialization.Serializable
 
 @Serializable
 enum class KonstructionType {
-    OBJ,
-    LIB
+    CSGS,
+    STL
 }
 
 @Serializable
 data class Konstruction(
     val name: String,
     val workspaceId: String,
-    val id: String
+    val id: String,
+    val type: KonstructionType = CSGS
 )
 
 @Serializable
@@ -50,7 +52,6 @@ enum class KonstructionCallbacks {
 @Serializable
 data class KonstructionInfo(
     val konstruction: Konstruction,
-    val type: KonstructionType,
     val dirtyState: DirtyState,
     val targets: List<KonstructionTarget> = emptyList()
 )
