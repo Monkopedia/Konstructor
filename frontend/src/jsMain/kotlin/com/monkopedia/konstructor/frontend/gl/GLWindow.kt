@@ -26,11 +26,13 @@ import info.laht.threekt.cameras.PerspectiveCamera
 import info.laht.threekt.external.controls.OrbitControls
 import info.laht.threekt.external.libs.Stats
 import info.laht.threekt.external.loaders.STLLoader
+import info.laht.threekt.geometries.SphereGeometry
 import info.laht.threekt.lights.AmbientLight
 import info.laht.threekt.lights.DirectionalLight
 import info.laht.threekt.lights.Light
 import info.laht.threekt.materials.MeshPhongMaterial
 import info.laht.threekt.math.ColorConstants
+import info.laht.threekt.math.Sphere
 import info.laht.threekt.objects.Mesh
 import info.laht.threekt.renderers.WebGLRenderer
 import info.laht.threekt.renderers.WebGLRendererParams
@@ -47,6 +49,7 @@ import react.RefCallback
 import react.dom.html.ReactHTML.div
 import react.useRef
 import react.useState
+import kotlin.math.min
 
 external interface GLProps : Props {
     var konstruction: Konstruction?
@@ -142,19 +145,30 @@ val CameraWidget = FC<Props> {
         }
         ref = parentRef
     }
+    react.useEffect(parentRef) {
+        val parent = parentRef.current ?: return@useEffect
+        GLWindow.setOrientationElement(parent)
+        cleanup {
+            GLWindow.setOrientationElement(null)
+        }
+    }
 }
 
 object GLWindow {
 
     private var lastElement: Element? = null
+    private var lastOrientationElement: Element? = null
     private val stats: Stats = Stats()
     private val renderer: WebGLRenderer
+    private val orientationRenderer: WebGLRenderer
     private val camera: PerspectiveCamera
+    private val orientationCamera: PerspectiveCamera
     private val controls: OrbitControls
 
     val statsElement: Node
         get() = stats.dom
     val scene: Scene = Scene()
+    val orientationScene: Scene = Scene()
     val models: MutableList<Mesh> = ArrayList()
     val currentLights = mutableListOf<Light>()
 
@@ -164,19 +178,32 @@ object GLWindow {
         scene.add(light)
         currentLights.add(light)
 
+        orientationScene.add(AmbientLight())
+        orientationScene.add(Mesh(SphereGeometry(1.0), MeshPhongMaterial().apply {
+            color.set("#ff0000")
+            specular.set(0x111111)
+            shininess = 200.0
+        }))
+
         camera =
             PerspectiveCamera(75, window.innerWidth.toDouble() / 2 / window.innerHeight, 0.1, 1000)
         camera.up.set(0.0, 0.0, 1.0)
         camera.position.set(0, -5, 5)
         camera.lookAt(0.0, 0.0, 0.0)
 
-        renderer = WebGLRenderer(
-            WebGLRendererParams(
-                antialias = true
-            )
-        ).apply {
+        orientationCamera = PerspectiveCamera(75, 1.0, 0.1, 1000)
+        orientationCamera.up.set(0.0, 0.0, 1.0)
+        orientationCamera.position.set(0, -5, 5)
+        orientationCamera.lookAt(0.0, 0.0, 0.0)
+
+        renderer = WebGLRenderer(WebGLRendererParams(antialias = true)).apply {
             setClearColor(ColorConstants.skyblue, alpha = 1)
             setSize(window.innerWidth / 2, window.innerHeight)
+        }
+        orientationRenderer = WebGLRenderer(WebGLRendererParams(antialias = true)).apply {
+            setClearColor(ColorConstants.darkgray, alpha = 1)
+            val min = min(window.innerWidth / 20, window.innerHeight / 10)
+            setSize(min, min)
         }
 
         controls = OrbitControls(camera, renderer.domElement)
@@ -217,6 +244,14 @@ object GLWindow {
         lastElement = element
     }
 
+    fun setOrientationElement(element: Element?) {
+        lastOrientationElement?.removeChild(orientationRenderer.domElement)
+        orientationRenderer.domElement.asDynamic().style.position = "fixed"
+        orientationRenderer.domElement.asDynamic().style.bottom = "0px"
+        element?.appendChild(orientationRenderer.domElement)
+        lastOrientationElement = element
+    }
+
     fun setLighting(lights: List<Light>) {
         for (light in currentLights) {
             scene.remove(light)
@@ -233,6 +268,7 @@ object GLWindow {
             animate()
         }
         renderer.render(scene, camera)
+        orientationRenderer.render(orientationScene, orientationCamera)
         stats.update()
     }
 }

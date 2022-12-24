@@ -39,6 +39,10 @@ val SettingsPane = FC<Props> {
     val setShowFps = useCallback { value: Boolean ->
         RootScope.settingsModel.setShowFps(value)
     }
+    val showCameraWidget = RootScope.settingsModel.showCameraWidget.useCollected(false)
+    val setShowCameraWidget = useCallback { value: Boolean ->
+        RootScope.settingsModel.setShowCameraWidget(value)
+    }
     div {
         css {
             background = Color(theme.palette.background.paper)
@@ -68,6 +72,15 @@ val SettingsPane = FC<Props> {
             this.label = "Show FPS"
             this.value = showFps
             this.onValueChanged = setShowFps
+        }
+        Divider()
+        SwitchRow {
+            css {
+                width = 100.pct
+            }
+            this.label = "Show camera widget"
+            this.value = showCameraWidget
+            this.onValueChanged = setShowCameraWidget
         }
         Divider()
     }
