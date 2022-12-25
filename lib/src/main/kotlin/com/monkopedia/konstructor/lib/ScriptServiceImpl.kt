@@ -21,18 +21,31 @@ import java.io.File
 import kotlin.system.exitProcess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 class ScriptServiceImpl(private val script: KcsgScript) : ScriptService {
     private val serviceCache = mutableMapOf<String, BuildServiceImpl>()
     private val statusCache = mutableMapOf<String, TargetStatus>()
     private val job = SupervisorJob()
     private val scope = CoroutineScope(job + Dispatchers.IO)
+
+    private val dispatchThread = BlockableThread("SingleThreadScript").also { dispatcher ->
+        job.invokeOnCompletion {
+            dispatcher.close()
+        }
+    }
     private val lock = Mutex()
     private lateinit var outputDirectory: File
     private var isInitialized = false
+
+    override suspend fun initializeHostServices(hostService: HostService) {
+        script.host = KcsgRemoteHostImpl(hostService, dispatchThread)
+    }
 
     override suspend fun initialize(config: ScriptConfiguration) {
         if (isInitialized) {
@@ -51,7 +64,9 @@ class ScriptServiceImpl(private val script: KcsgScript) : ScriptService {
     }
 
     override suspend fun listTargets(onlyExports: Boolean): List<ScriptTargetInfo> {
-        val targets = if (onlyExports) script.exports() else script.targets()
+        val targets = withContext(dispatchThread.dispatcher) {
+            if (onlyExports) script.exports() else script.targets()
+        }
         lock.withLock {
             return targets.map { target ->
                 ScriptTargetInfo(
@@ -65,7 +80,7 @@ class ScriptServiceImpl(private val script: KcsgScript) : ScriptService {
     override suspend fun buildTarget(name: String): BuildService {
         lock.withLock {
             return serviceCache.getOrPut(name) {
-                BuildServiceImpl(scope, script, name, outputDirectory) { status ->
+                BuildServiceImpl(scope, dispatchThread.dispatcher, script, name, outputDirectory) { status ->
                     lock.withLock {
                         statusCache[name] = status
                         serviceCache.remove(name)
@@ -82,4 +97,6 @@ class ScriptServiceImpl(private val script: KcsgScript) : ScriptService {
             exitProcess(0)
         }
     }
+
+    override suspend fun close() = closeService()
 }

@@ -13,33 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.DirtyState.CLEAN
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionInfo
-import com.monkopedia.konstructor.common.KonstructionType.CSGS
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
-import java.io.File
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
+import java.io.File
 
-@ExperimentalSerializationApi
 class WorkspaceImpl(private val config: Config, private val workspaceId: String) : Workspace {
 
-    @ExperimentalSerializationApi
     override suspend fun list(u: Unit): List<Konstruction> {
-        return workspaceDir.listFiles().mapNotNull {
+        return workspaceDir.listFiles()?.mapNotNull {
             if (!it.isDirectory) return@mapNotNull null
             val infoFile = File(it, "info.json")
             if (!infoFile.exists()) return@mapNotNull null
             infoFile.inputStream().use { input ->
                 config.json.decodeFromStream<KonstructionInfo>(input).konstruction
             }
-        }
+        } ?: emptyList()
     }
+
     override suspend fun getName(u: Unit): String {
         return infoFile.inputStream().use { input ->
             config.json.decodeFromStream<Space>(input).name
@@ -55,7 +55,6 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         }
     }
 
-    @ExperimentalSerializationApi
     override suspend fun create(newItem: Konstruction): Konstruction {
         if (newItem.workspaceId != workspaceId) {
             throw IllegalArgumentException("Trying to create item in wrong workspace")

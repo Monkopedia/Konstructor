@@ -20,10 +20,12 @@ import com.monkopedia.ksrpc.channels.Connection
 import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.sockets.asConnection
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -53,33 +55,24 @@ object ExecUtil {
         }
     }
 
-    suspend fun executeWithChannel(
-        command: String,
-        withConnection: suspend (Connection) -> Unit
-    ): Int {
-        val rt = Runtime.getRuntime()
-        println("Executing: $command")
-        val commands = arrayOf(
-            "bash",
-            "-c",
-            command
-        )
-        val returnCode = coroutineScope {
-            val jobs = mutableListOf<Job>()
-            val proc = rt.exec(commands)
-            jobs.add(
-                launch(Dispatchers.IO) {
-                    try {
-                        proc.errorStream.copyTo(System.err)
-                    } catch (t: CancellationException) {
-                        // That's fine.
-                    }
+    class ExecProcess(private val proc: Process) {
+        private val parentJob = SupervisorJob()
+        val parentScope = CoroutineScope(parentJob + Dispatchers.IO)
+        val exitCode = CompletableDeferred<Int>()
+        val connection = CompletableDeferred<Connection>()
+
+        init {
+            parentScope.launch {
+                try {
+                    proc.errorStream.copyTo(System.err)
+                } catch (t: CancellationException) {
+                    // That's fine.
                 }
-            )
-            jobs.add(
-                launch(Dispatchers.IO) {
-                    try {
-                        val connection = (proc.inputStream to proc.outputStream).asConnection(
+            }
+            parentScope.launch {
+                try {
+                    connection.complete(
+                        (proc.inputStream to proc.outputStream).asConnection(
                             ksrpcEnvironment {
                                 errorListener = ErrorListener { t ->
                                     if (t !is CancellationException) {
@@ -88,25 +81,34 @@ object ExecUtil {
                                 }
                             }
                         )
-                        withConnection(connection)
-                    } catch (t: CancellationException) {
-                        // That's fine.
-                    }
+                    )
+                } catch (t: CancellationException) {
+                    // That's fine.
                 }
-            )
-            proc.waitFor().also {
-                jobs.forEach {
-                    try {
-                        it.cancel()
-                    } catch (t: Throwable) {
-                    }
+            }
+            parentScope.launch {
+                val returnCode = withContext(Dispatchers.IO) {
+                    proc.waitFor()
+                }.also {
+                    proc.errorStream.close()
+                    proc.outputStream.close()
+                    proc.inputStream.close()
                 }
-                proc.errorStream.close()
-                proc.outputStream.close()
-                proc.inputStream.close()
+                exitCode.complete(returnCode)
+                println("Done executing: ($returnCode)")
+                parentJob.cancel()
             }
         }
-        println("Done executing: $command ($returnCode)")
-        return returnCode
+
+        fun kill() {
+            proc.destroyForcibly()
+        }
+    }
+
+    suspend fun executeWithChannel(command: String): ExecProcess {
+        val rt = Runtime.getRuntime()
+        println("Executing: $command")
+        val commands = arrayOf("bash", "-c", command)
+        return ExecProcess(rt.exec(commands))
     }
 }

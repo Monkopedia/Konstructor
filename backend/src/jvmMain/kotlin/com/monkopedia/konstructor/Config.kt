@@ -18,9 +18,15 @@ package com.monkopedia.konstructor
 import com.monkopedia.konstructor.tasks.LibsJar
 import kotlinx.serialization.json.Json
 import java.io.File
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 class Config {
 
+    val executeTimeout: Duration
+        get() = 5.minutes
+    val cachingEnabled: Boolean
+        get() = false
     val compilerOpts: String
         get() = ""
     val runtimeOpts: String

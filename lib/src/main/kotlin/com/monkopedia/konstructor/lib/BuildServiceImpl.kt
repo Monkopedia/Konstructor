@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,14 +21,17 @@ import com.monkopedia.konstructor.lib.TargetStatus.BUILT
 import com.monkopedia.konstructor.lib.TargetStatus.ERROR
 import com.monkopedia.konstructor.lib.TargetStatus.NONE
 import com.monkopedia.ksrpc.asString
-import java.io.File
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
 
 class BuildServiceImpl(
     private val scope: CoroutineScope,
+    private val scriptDispatcher: CoroutineDispatcher,
     private val script: KcsgScript,
     private val name: String,
     outputDirectory: File,
@@ -46,16 +49,18 @@ class BuildServiceImpl(
             val start = System.currentTimeMillis()
             status = BUILDING
             fireStatusUpdated()
-            try {
-                val result = script.generateTarget(name)
-                val stl = result.toStlString()
-                outputFile.writeText(stl)
-                status = BUILT
-            } catch (t: Throwable) {
-                errorMessage = t.asString
-                status = ERROR
-            } finally {
-                buildTime = System.currentTimeMillis() - start
+            withContext(scriptDispatcher) {
+                try {
+                    val result = script.generateTarget(name)
+                    val stl = result.toStlString()
+                    outputFile.writeText(stl)
+                    status = BUILT
+                } catch (t: Throwable) {
+                    errorMessage = t.asString
+                    status = ERROR
+                } finally {
+                    buildTime = System.currentTimeMillis() - start
+                }
             }
             fireStatusUpdated()
         }

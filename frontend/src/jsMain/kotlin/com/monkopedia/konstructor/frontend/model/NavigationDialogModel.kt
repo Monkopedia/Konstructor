@@ -28,13 +28,17 @@ import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.N
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.UPLOAD_STL
 import com.monkopedia.konstructor.frontend.utils.asArrayBuffer
 import com.monkopedia.ksrpc.use
-import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.bits.Memory
+import io.ktor.utils.io.close
 import io.ktor.utils.io.core.Closeable
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import org.khronos.webgl.DataView
 import org.w3c.files.File
 
@@ -177,7 +181,15 @@ class NavigationDialogModel(
                 val name = state.name.replace(".stl", "")
                 val newFile = ks.create(Konstruction(name, targetWorkspace, "", type = STL))
                 service.konstruction(newFile).use { newFileService ->
-                    newFileService.setBinary(ByteReadChannel(DataView(state.asArrayBuffer())))
+                    coroutineScope {
+                        val content = state.asArrayBuffer()
+                        val channel = ByteChannel(autoFlush = true)
+                        launch {
+                            channel.writeFully(Memory(DataView(content)), 0, content.byteLength)
+                            channel.close()
+                        }
+                        newFileService.setBinary(channel)
+                    }
                 }
             }
             WorkspaceModel.refreshAllKonstructions()

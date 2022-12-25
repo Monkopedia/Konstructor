@@ -20,6 +20,7 @@ package com.monkopedia.konstructor
 import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.TaskResult
+import com.monkopedia.konstructor.hostservices.ScriptManager
 import com.monkopedia.konstructor.tasks.CompileTask
 import com.monkopedia.konstructor.tasks.ExecuteTask
 import io.ktor.utils.io.ByteReadChannel
@@ -32,12 +33,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 
 interface KonstructionController {
+    val paths: PathController.Paths
+    val scriptLock: Mutex
     var info: KonstructionInfo
 
     fun read(): String
@@ -87,15 +91,10 @@ class KonstructionControllerImpl(
     private val id: String,
     private val saveContext: CoroutineContext = newSingleThreadContext("KonstructionController")
 ) : KonstructionController {
-    private val workspaceDir = File(config.dataDir, workspaceId)
-    private val infoFile = File(File(workspaceDir, id), "info.json")
-    private val compileResultFile = File(File(workspaceDir, id), "compile.json")
-    private val compileOutput = File(File(workspaceDir, id), "out")
-    private val renderResultFile = File(File(workspaceDir, id), "result.json")
-    private val renderOutput = File(File(workspaceDir, id), "renders")
-    private val contentFile = File(File(workspaceDir, id), "content.csgs")
-    private val kotlinFile = File(File(workspaceDir, id), "content.kt")
+    private val pathController = PathController(config)
+    override val paths = pathController[workspaceId, id]
     private val contentFileLock = SimpleLock()
+    private val scriptExecLock = SimpleLock()
     private var hasInitialized = false
     private var infoImpl: KonstructionInfo? = null
     override var info: KonstructionInfo
@@ -109,7 +108,7 @@ class KonstructionControllerImpl(
             infoImpl = value
             GlobalScope.launch(saveContext) {
                 contentFileLock.withLock {
-                    infoFile.outputStream().use { output ->
+                    paths.infoFile.outputStream().use { output ->
                         config.json.encodeToStream(value, output)
                     }
                 }
@@ -117,17 +116,18 @@ class KonstructionControllerImpl(
                 infoImpl = value
             }
         }
+    override val scriptLock: Mutex = Mutex()
 
     override suspend fun compile() {
         contentFileLock.withLock {
             withContext(Dispatchers.IO) {
-                val inputStream = contentFile.inputStream()
-                copyContentToScript(inputStream, kotlinFile)
+                val inputStream = paths.contentFile.inputStream()
+                copyContentToScript(inputStream, paths.kotlinFile)
             }
             val compileTask =
-                CompileTask(config = config, input = kotlinFile, output = compileOutput)
+                CompileTask(config = config, input = paths.kotlinFile, output = paths.compileOutput)
             val result = compileTask.execute()
-            compileResultFile.outputStream().use { output ->
+            paths.compileResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
             }
         }
@@ -136,22 +136,20 @@ class KonstructionControllerImpl(
     override suspend fun render(targets: List<String>): List<String> {
         contentFileLock.withLock {
             for (target in targets) {
-                val targetFile = File(renderOutput, "$target.stl")
+                val targetFile = File(paths.renderOutput, "$target.stl")
                 if (targetFile.exists()) {
                     targetFile.delete()
                 }
             }
-            renderOutput.mkdirs()
-            val executeTask =
-                ExecuteTask(
+            paths.renderOutput.mkdirs()
+            val script = ScriptManager(config).getScript(paths)
+            val executeTask = ExecuteTask(
                     config = config,
-                    outputDir = compileOutput,
-                    renderOutputDir = renderOutput,
-                    fileName = "ContentKt",
+                    script = script,
                     extraTargets = targets
                 )
             val (result, executedTargets) = executeTask.execute()
-            renderResultFile.outputStream().use { output ->
+            paths.renderResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
             }
             return executedTargets
@@ -159,16 +157,16 @@ class KonstructionControllerImpl(
     }
 
     override suspend fun lastRenderResult(): TaskResult = withContext(Dispatchers.IO) {
-        renderResultFile.inputStream().use { input ->
+        paths.renderResultFile.inputStream().use { input ->
             config.json.decodeFromStream(input)
         }
     }
 
     override suspend fun renderFile(target: String): File? {
-        if (!renderOutput.exists() || !renderOutput.isDirectory) {
+        if (!paths.renderOutput.exists() || !paths.renderOutput.isDirectory) {
             return null
         }
-        val target = File(renderOutput, "$target.stl")
+        val target = File(paths.renderOutput, "$target.stl")
         if (!target.exists()) {
             return null
         }
@@ -176,7 +174,7 @@ class KonstructionControllerImpl(
     }
 
     override suspend fun lastCompileResult(): TaskResult = withContext(Dispatchers.IO) {
-        compileResultFile.inputStream().use { input ->
+        paths.compileResultFile.inputStream().use { input ->
             config.json.decodeFromStream(input)
         }
     }
@@ -184,7 +182,7 @@ class KonstructionControllerImpl(
     private fun ensureLoaded() {
         synchronized(this) {
             if (hasInitialized) return
-            infoImpl = infoFile.inputStream().use { output ->
+            infoImpl = paths.infoFile.inputStream().use { output ->
                 config.json.decodeFromStream(output)
             }
             hasInitialized = true
@@ -192,24 +190,24 @@ class KonstructionControllerImpl(
     }
 
     override fun read(): String {
-        if (!contentFile.exists()) {
+        if (!paths.contentFile.exists()) {
             return ""
         }
         return contentFileLock.withLock {
-            contentFile.readText()
+            paths.contentFile.readText()
         }
     }
 
     override fun write(content: String) {
         println("Write ${content.length} to $info")
         contentFileLock.withLock {
-            contentFile.writeText(content)
+            paths.contentFile.writeText(content)
         }
     }
 
     override suspend fun write(content: ByteReadChannel) {
         contentFileLock.withLock {
-            contentFile.outputStream().use {
+            paths.contentFile.outputStream().use {
                 content.copyTo(it)
             }
         }
