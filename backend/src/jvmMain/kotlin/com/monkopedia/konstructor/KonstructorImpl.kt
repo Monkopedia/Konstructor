@@ -1,18 +1,20 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.Konstruction
@@ -20,24 +22,23 @@ import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
-import java.io.File
-import java.io.InputStream
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
+import java.io.File
+import java.io.InputStream
 
 class KonstructorImpl(private val config: Config) : Konstructor {
 
-    @ExperimentalSerializationApi
     override suspend fun list(u: Unit): List<Space> {
-        return config.dataDir.listFiles().mapNotNull {
+        return config.dataDir.listFiles()?.mapNotNull {
             if (!it.isDirectory) return@mapNotNull null
             val infoFile = File(it, "info.json")
             if (!infoFile.exists()) return@mapNotNull null
             infoFile.inputStream().use { input ->
                 config.json.decodeFromStream<Space>(input)
             }
-        }
+        } ?: emptyList()
     }
 
     override suspend fun konstruction(id: Konstruction): KonstructionService {
@@ -48,7 +49,6 @@ class KonstructorImpl(private val config: Config) : Konstructor {
         return WorkspaceImpl(config, id)
     }
 
-    @ExperimentalSerializationApi
     override suspend fun create(newItem: Space): Space {
         val newItem = newItem.copy(
             id = newItem.id.ifEmpty { generateId() }

@@ -39,7 +39,6 @@ import org.slf4j.LoggerFactory
 
 fun main(args: Array<String>) = App().main(args)
 
-@OptIn(DelicateCoroutinesApi::class)
 class App : ServiceApp("konstructor") {
     private val log by option("-l", "--log", help = "Path to log to, or stdout")
         .default("/tmp/scriptorium.log")
