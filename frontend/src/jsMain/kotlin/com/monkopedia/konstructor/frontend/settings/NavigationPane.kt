@@ -24,10 +24,8 @@ import com.monkopedia.konstructor.frontend.menu.DialogMenus
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.EDITOR
 import com.monkopedia.konstructor.frontend.model.WorkspaceModel
-import com.monkopedia.konstructor.frontend.utils.Icons.blocks
-import com.monkopedia.konstructor.frontend.utils.Icons.blocksBorder
 import com.monkopedia.konstructor.frontend.utils.Icons.filledBlocks
-import com.monkopedia.konstructor.frontend.utils.Icons.svgIcon
+import com.monkopedia.konstructor.frontend.utils.Icons.stlIcon
 import com.monkopedia.konstructor.frontend.utils.useCloseable
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import com.monkopedia.konstructor.frontend.utils.useSubScope
@@ -55,17 +53,11 @@ import mui.material.Typography
 import mui.system.sx
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
-import org.w3c.dom.svg.SVGPathElement
 import react.FC
 import react.Props
 import react.create
 import react.dom.aria.ariaLabel
 import react.dom.svg.ReactSVG.path
-import react.dom.svg.SVGAttributes
-import react.dom.svg.StrokeLinecap
-import react.dom.svg.StrokeLinecap.round
-import react.dom.svg.StrokeLinejoin
-import react.dom.svg.StrokeLinejoin.miter
 import react.memo
 import react.useState
 
@@ -183,11 +175,11 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                                 }
                             } else {
                                 SvgIcon {
-                                    width = 24.0
-                                    height = 14.0
-                                    viewBox = "0 0 35 20"
+                                    width = 26.0
+                                    height = 13.0
+                                    viewBox = "0 0 26 13"
                                     path {
-                                        svgIcon()
+                                        stlIcon()
                                     }
                                 }
                             }
