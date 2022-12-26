@@ -330,6 +330,7 @@ external interface TransactionSpec {
 
 open external class Transaction {
     open val startState: EditorState
+    open val state: EditorState
     open val changes: ChangeSet
     open val selection: EditorSelection?
     open val effects: Array<StateEffect<Any>>

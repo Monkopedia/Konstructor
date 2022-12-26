@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,8 +15,6 @@
  */
 package com.monkopedia.konstructor.frontend.editor
 
-import com.monkopedia.konstructor.common.MessageImportance.ERROR
-import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.frontend.invertedTheme
 import com.monkopedia.konstructor.frontend.model.KonstructionModel
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State
@@ -32,7 +30,11 @@ import csstype.Position
 import csstype.integer
 import csstype.pct
 import csstype.px
+import dukat.codemirror.state.EditorState
+import dukat.codemirror.state.Transaction
+import dukat.codemirror.view.EditorView
 import emotion.react.css
+import kotlinx.coroutines.flow.Flow
 import mui.material.Card
 import mui.material.CircularProgress
 import mui.material.Typography
@@ -40,9 +42,6 @@ import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.memo
-import react.useCallback
-import react.useMemo
-import react.useState
 
 external interface KonstructionEditorProps : Props {
     var konstructionModel: KonstructionModel
@@ -64,63 +63,51 @@ val LoadingUi = FC<KonstructionEditorProps> {
 
 val KonstructionEditor = FC<KonstructionEditorProps> { props ->
     val state = props.konstructionModel.state.useCollected(LOADING)
-    val messages = props.konstructionModel.messages.useCollected(emptyList())
+    val currentMessage = props.konstructionModel.currentMessage.useCollected(null)
     val currentText = props.konstructionModel.currentText.useCollected()
     if (state == LOADING || currentText == null) {
         LoadingUi()
         return@FC
     }
     EditorScreen {
-        content = currentText
-        onSave = props.konstructionModel.onSave
-        this.messages = messages
+//        content = currentText
+        this.setView = props.konstructionModel.setView
+        this.editorState = props.konstructionModel.editorState
+        this.onSave = props.konstructionModel.onSave
+        this.currentMessage = currentMessage
         this.state = state
     }
 }
 
 external interface EditorScreenProps : Props {
-    var content: String?
+    var setView: (EditorView?) -> Unit
+    var editorState: EditorState
+    var target: String
     var onSave: ((String?) -> Unit)?
-    var messages: List<TaskMessage>
     var state: State
+    var currentMessage: String?
 }
 
 val EditorScreen = memo(
     FC<EditorScreenProps> { props ->
-        var currentMessage by useState<String>()
-        val classes = useMemo(props.messages) {
-            mapOf(
-                errorClass to props.messages.filter { it.importance == ERROR }
-                    .mapNotNull { it.line },
-                warningClass to props.messages.filter { it.importance != ERROR }
-                    .mapNotNull { it.line }
-            )
-        }
-
-        val onCursorChange = useCallback(props.messages) { line: Int ->
-            val message = props.messages.find {
-                it.line == line
-            }?.message
-            currentMessage = message
-        }
-
         CodeMirrorScreen {
-            this.onCursorChange = onCursorChange
-            this.content = props.content
+            this.setView = props.setView
+            this.editorState = props.editorState
+            this.target = props.target
             this.onSave = props.onSave
-            this.customClasses = classes
         }
 
-        if (currentMessage != null || props.state == COMPILING || props.state == EXECUTING) {
+        if (props.currentMessage != null || props.state == COMPILING || props.state == EXECUTING) {
             MessageComponent {
-                message = currentMessage
+                message = props.currentMessage
                 this.state = props.state
             }
         }
     }
 ) { oldProps, newProps ->
-    oldProps.content === newProps.content &&
-        oldProps.messages == newProps.messages &&
+    oldProps.editorState === newProps.editorState &&
+        oldProps.target == newProps.target &&
+        oldProps.currentMessage == newProps.currentMessage &&
         oldProps.state == newProps.state
 }
 

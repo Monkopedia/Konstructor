@@ -17,6 +17,7 @@ package com.monkopedia.konstructor.frontend.koin
 
 import com.monkopedia.konstructor.frontend.WorkManager
 import com.monkopedia.konstructor.frontend.model.GlControlsModel
+import com.monkopedia.konstructor.frontend.model.GlobalDialogsModel
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel
 import com.monkopedia.konstructor.frontend.model.ServiceHolder
 import com.monkopedia.konstructor.frontend.model.SettingsModel
@@ -54,6 +55,9 @@ object RootScope : KoinComponent {
         }
         factory { (workManager: WorkManager) ->
             NavigationDialogModel(get(), workManager)
+        }
+        factory { (workManager: WorkManager) ->
+            GlobalDialogsModel(get(), workManager, get())
         }
 
         scope<WorkspaceScope> {

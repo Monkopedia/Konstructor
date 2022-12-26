@@ -39,7 +39,7 @@ class KonstructionScope(private val workspaceScope: WorkspaceScope, val konstruc
                 get<KonstructionScope>().konstructionId
             }
             scoped {
-                KonstructionModel(get(), get(), get(konstructionId), get())
+                KonstructionModel(get(), get(), get(konstructionId), get(),)
             }
             scoped {
                 RenderModel(get(), get())

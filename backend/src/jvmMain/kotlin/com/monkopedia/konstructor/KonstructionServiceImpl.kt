@@ -31,8 +31,6 @@ import com.monkopedia.konstructor.common.KonstructionListener
 import com.monkopedia.konstructor.common.KonstructionRender
 import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.KonstructionTarget
-import com.monkopedia.konstructor.common.KonstructionType.CSGS
-import com.monkopedia.konstructor.common.KonstructionType.STL
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.ksrpc.channels.randomUuid
@@ -46,8 +44,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
 
-class KonstructionServiceImpl(private val config: Config, workspaceId: String, id: String) :
-    KonstructionService {
+class KonstructionServiceImpl(
+    private val config: Config,
+    workspaceId: String,
+    id: String,
+    private val onClose: suspend () -> Unit
+) : KonstructionService {
     private val konstructionController = KonstructorManager(config).controllerFor(workspaceId, id)
     private val listenerLock = Mutex()
     private val listeners = mutableMapOf<String, ListenerHandler>()
@@ -57,6 +59,7 @@ class KonstructionServiceImpl(private val config: Config, workspaceId: String, i
     override suspend fun close() {
         super.close()
         job.cancel()
+        onClose()
     }
 
     override suspend fun getName(u: Unit): String {

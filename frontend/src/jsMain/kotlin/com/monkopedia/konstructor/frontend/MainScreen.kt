@@ -20,6 +20,7 @@ import com.monkopedia.konstructor.frontend.gl.GLScreen
 import com.monkopedia.konstructor.frontend.koin.KonstructionScope
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.menu.MenuComponent
+import com.monkopedia.konstructor.frontend.model.GlobalDialogsModel
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.EDITOR
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.GL_SETTINGS
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.NAVIGATION
@@ -34,10 +35,13 @@ import csstype.Display
 import csstype.FlexDirection
 import csstype.pct
 import emotion.react.css
+import org.koin.core.component.get
+import org.koin.core.parameter.parametersOf
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.memo
+import react.useMemo
 
 external interface MainScreenProps : Props {
     var workManager: WorkManager
@@ -121,6 +125,9 @@ val MainScreenContentPane = FC<MainScreenPaneProps> { props ->
 }
 
 val MainScreenCodePane = FC<MainScreenPaneProps> { props ->
+    val globalDialogsModel: GlobalDialogsModel = useMemo(props.workManager) {
+        RootScope.get { parametersOf(props.workManager) }
+    }
     when (RootScope.settingsModel.codePaneMode.useCollected(EDITOR)) {
         EDITOR -> {
             props.konstructionScope?.let { konstructionScope ->
@@ -149,5 +156,8 @@ val MainScreenCodePane = FC<MainScreenPaneProps> { props ->
             SettingsPane {
             }
         }
+    }
+    GlobalDialogs {
+        dialogModel = globalDialogsModel
     }
 }

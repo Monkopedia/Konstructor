@@ -24,6 +24,7 @@ import dukat.codemirror.legacymodes.kotlin
 import dukat.codemirror.state.EditorState
 import dukat.codemirror.state.`T$5`
 import dukat.codemirror.state.Text
+import dukat.codemirror.state.Transaction
 import dukat.codemirror.state.TransactionSpec
 import dukat.codemirror.view.Decoration
 import dukat.codemirror.view.EditorView
@@ -33,6 +34,10 @@ import dukat.codemirror.vim.CodeMirror
 import dukat.codemirror.vim.vim
 import emotion.react.css
 import kotlinext.js.js
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.css.background
 import org.w3c.dom.HTMLDivElement
 import react.FC
@@ -46,7 +51,7 @@ import styled.StyleSheet
 import styled.getClassSelector
 import kotlin.math.max
 
-private object MirrorStyles : StyleSheet("mirror", isStatic = true) {
+internal object MirrorStyles : StyleSheet("mirror", isStatic = true) {
     val errorLineBackground by css {
         background = "#FF000033"
     }
@@ -56,15 +61,10 @@ private object MirrorStyles : StyleSheet("mirror", isStatic = true) {
 }
 
 external interface CodeMirrorProps : Props {
-    var content: String?
-    var onCursorChange: ((Int) -> Unit)?
+    var editorState: EditorState
+    var setView: (EditorView?) -> Unit
+    var target: String
     var onSave: ((String) -> Unit)?
-    var customClasses: Map<String, List<Int>>?
-}
-
-val errorClass by lazy { MirrorStyles.getClassSelector { it::errorLineBackground }.trimStart('.') }
-val warningClass by lazy {
-    MirrorStyles.getClassSelector { it::warningLineBackground }.trimStart('.')
 }
 
 val CodeMirrorScreen = memo(
@@ -73,90 +73,17 @@ val CodeMirrorScreen = memo(
         MirrorStyles.inject()
         val textAreaRef = useRef<HTMLDivElement>()
         val saveRef = useRef<(String) -> Unit>()
-        var codeMirror by useState<EditorView>()
-
-        val currentLineCallback = useRef(props.onCursorChange)
 
         div {
             this.ref = textAreaRef
         }
-        currentLineCallback.current = props.onCursorChange
         saveRef.current = props.onSave
 
-        useEffect(props.customClasses, props.content, codeMirror) {
-            val lastMirror = codeMirror ?: return@useEffect
-            val customClasses = props.customClasses ?: emptyMap()
-            // Clear all marks.
-            val doc = lastMirror.state.doc
-            lastMirror.dispatch(
-                buildExt<TransactionSpec> {
-                    effects = filterMarks.of { _, _, _ -> false }
-                    changes = buildExt<`T$5`> {
-                        from = 0
-                        to = doc.length
-                        this.insert = (props.content!!)
-                    }
-                }
-            )
-            val marks = customClasses.entries.flatMap { (key, lines) ->
-                lines.filter {
-                    (it + 1) <= doc.lines.toInt()
-                }.map {
-                    doc.line(it + 1).let { lineInfo ->
-                        Decoration.mark(
-                            buildExt {
-                                this.`class` = key
-                            }
-                        ).range(lineInfo.from, max(lineInfo.to.toInt(), lineInfo.from.toInt() + 1))
-                    }
-                }
-            }
-            lastMirror.dispatch(
-                buildExt<TransactionSpec> {
-                    effects = addMarks.of(marks.toTypedArray())
-                }
-            )
-        }
-        useEffect(textAreaRef) {
-            fun onCursorChange(viewUpdate: ViewUpdate) {
-                val pos = viewUpdate.state.selection.main.head.toInt()
-                val line = viewUpdate.state.doc.lineAt(pos).number.toInt() - 1
-                currentLineCallback.current?.invoke(line)
-            }
-
+        useEffect(textAreaRef, props.editorState) {
             val textArea = textAreaRef.current!!
-            val heightTheme = EditorView.theme(
-                buildExt {
-                    set(
-                        "&",
-                        js {
-                            height = "calc(100vh - 64px)"
-                            width = "calc(50hw)"
-                        }
-                    )
-                    set(".cm-scroller", js { overflow = "auto" })
-                }
-            )
-            val editorState = EditorState.create(
-                buildExt {
-                    this.doc = props.content
-                    this.extensions = arrayOf(
-                        oneDark,
-                        vim(),
-                        basicSetup,
-                        StreamLanguage.define(kotlin),
-                        markField,
-                        EditorView.lineWrapping,
-                        EditorView.updateListener.of(::onCursorChange),
-                        scrollPastEnd(),
-                        heightTheme,
-                        history()
-                    )
-                }
-            )
             val cm = EditorView(
                 buildExt {
-                    this.state = editorState
+                    this.state = props.editorState
                     this.parent = textArea
                 }
             )
@@ -166,19 +93,18 @@ val CodeMirrorScreen = memo(
             }
             CodeMirror(cm)
             CodeMirror.commands.asDynamic().save = ::onSave
-            codeMirror = cm
+            props.setView(cm)
             cleanup {
+                props.setView(null)
                 cm.destroy()
             }
         }
     }
 ) { oldProps, newProps ->
-    oldProps.content === newProps.content && (
-        oldProps.customClasses?.equals(newProps.customClasses)
-            ?: true
-        )
+    oldProps.editorState === newProps.editorState &&
+        oldProps.target == newProps.target
 }
 
 fun Text.asString(): String {
-    return (0..lines.toInt()).joinToString("\n") { line(it + 1).text }
+    return (0 until lines.toInt()).joinToString("\n") { line(it + 1).text }
 }

@@ -22,6 +22,8 @@ import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
@@ -29,6 +31,8 @@ import java.io.File
 import java.io.InputStream
 
 class KonstructorImpl(private val config: Config) : Konstructor {
+    private val mutex = Mutex()
+    private val konstructionLookup = mutableMapOf<Pair<String, String>, KonstructionService>()
 
     override suspend fun list(u: Unit): List<Space> {
         return config.dataDir.listFiles()?.mapNotNull {
@@ -42,7 +46,15 @@ class KonstructorImpl(private val config: Config) : Konstructor {
     }
 
     override suspend fun konstruction(id: Konstruction): KonstructionService {
-        return KonstructionServiceImpl(config, id.workspaceId, id.id)
+        mutex.withLock {
+            return konstructionLookup.getOrPut(id.workspaceId to id.id) {
+                KonstructionServiceImpl(config, id.workspaceId, id.id) {
+                    mutex.withLock {
+                        konstructionLookup.remove(id.workspaceId to id.id)
+                    }
+                }
+            }
+        }
     }
 
     override suspend fun get(id: String): Workspace {

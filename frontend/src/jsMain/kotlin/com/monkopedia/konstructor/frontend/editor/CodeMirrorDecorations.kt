@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,6 +30,7 @@ import dukat.codemirror.view.EditorView
 
 // Effects can be attached to transactions to communicate with the extension
 val addMarks: StateEffectType<Array<Range<Decoration>>> = StateEffect.define()
+val replaceMarks: StateEffectType<Array<Range<Decoration>>> = StateEffect.define()
 val filterMarks: StateEffectType<RangeFilter<Decoration>> = StateEffect.define()
 
 // This value must be added to the set of extensions to enable this
@@ -45,6 +46,17 @@ val markField = StateField.define(
             for (effect in tr.effects) {
                 if (effect.`is`(addMarks)) {
                     value = value.update(
+                        buildExt {
+                            add = (effect.value as? Array<Range<Decoration>>)
+                            sort = true
+                        }
+                    )
+                } else if (effect.`is`(replaceMarks)) {
+                    value = value.update(
+                        buildExt {
+                            filter = { _: Number, _: Number, _: Decoration -> false }
+                        }
+                    ).update(
                         buildExt {
                             add = (effect.value as? Array<Range<Decoration>>)
                             sort = true

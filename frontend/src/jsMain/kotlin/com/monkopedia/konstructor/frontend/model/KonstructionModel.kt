@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,12 +32,16 @@ import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.KonstructionTarget
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
+import com.monkopedia.konstructor.frontend.editor.asString
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.COMPILING
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.DEFAULT
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.EXECUTING
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.LOADING
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.SAVING
 import com.monkopedia.konstructor.frontend.model.ServiceHolder.Companion.tryReconnects
+import dukat.codemirror.state.EditorState
+import dukat.codemirror.state.Transaction
+import dukat.codemirror.view.EditorView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -112,6 +116,18 @@ class KonstructionModel(
     private val mutableWatchingTargets = MutableStateFlow<List<String>>(emptyList())
     val watchingTargets: Flow<List<String>> = mutableWatchingTargets
 
+    private val konstructorEditorState by lazy {
+        KonstructorEditorState(this, coroutineScope)
+    }
+    val editorState: EditorState
+        get() = konstructorEditorState.editorState
+    val currentMessage: Flow<String?>
+        get() = konstructorEditorState.currentMessage
+    val setView: (EditorView?) -> Unit
+        get() = konstructorEditorState.setView
+    val pendingText: MutableStateFlow<String?>
+        get() = konstructorEditorState.pendingText
+
     init {
         coroutineScope.launch {
             konstructionService.flatMapLatest {
@@ -162,6 +178,16 @@ class KonstructionModel(
         mutableWatchingTargets.value = targets
     }
 
+    suspend fun save() {
+        val service = konstructionService.filterNotNull().first()
+        val newText = konstructorEditorState.save()
+        doSave(service, newText)
+    }
+
+    suspend fun discardLocalChanges() {
+        konstructorEditorState.discardLocalChanges()
+    }
+
     fun save(content: String?) {
         mutableState.value = SAVING
         coroutineScope.launch {
@@ -170,10 +196,7 @@ class KonstructionModel(
         }
     }
 
-    private suspend fun doSave(
-        service: KonstructionService,
-        content: String?
-    ) {
+    private suspend fun doSave(service: KonstructionService, content: String?) {
         service.set(content ?: "")
     }
 
@@ -198,7 +221,7 @@ class KonstructionModel(
                     )
 
                 override suspend fun onInfoChanged(info: KonstructionInfo) {
-                    println("onInfoChanged $info")
+//                    println("onInfoChanged $info")
                     mutableInfo.value = info
                 }
 
@@ -207,7 +230,7 @@ class KonstructionModel(
                 override suspend fun onTargetChanged(target: KonstructionTarget) = Unit
 
                 override suspend fun onRenderChanged(render: KonstructionRender) {
-                    println("onRenderChanged $render")
+//                    println("onRenderChanged $render")
                     val renderPath = render.renderPath
                     mutableRendered.value = mutableRendered.value.toMutableMap().apply {
                         if (renderPath != null) {
@@ -220,7 +243,7 @@ class KonstructionModel(
                 }
 
                 override suspend fun onContentChange(u: Unit) {
-                    println("onContentChange")
+//                    println("onContentChange")
                     mutableMessages.value = emptyList()
                     coroutineScope.launch {
                         reloadTextFlow.emit(Unit)
@@ -228,7 +251,7 @@ class KonstructionModel(
                 }
 
                 override suspend fun onTaskComplete(taskResult: TaskResult) {
-                    println("onTaskComplete $taskResult")
+//                    println("onTaskComplete $taskResult")
                     mutableMessages.value += taskResult.messages
                 }
             }
