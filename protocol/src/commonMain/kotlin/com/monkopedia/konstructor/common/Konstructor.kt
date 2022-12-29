@@ -15,6 +15,7 @@
  */
 package com.monkopedia.konstructor.common
 
+import com.monkopedia.hauler.Shipper
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
@@ -35,6 +36,9 @@ interface Konstructor : RpcService {
 
     @KsMethod("/delete")
     suspend fun delete(item: Space)
+
+    @KsMethod("/global_logging")
+    suspend fun getGlobalShipper(u: Unit = Unit): Shipper
 }
 
 @KsService

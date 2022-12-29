@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,15 +22,21 @@ import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
+import com.monkopedia.konstructor.logging.LoggingService
+import com.monkopedia.konstructor.logging.callContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 import java.io.File
 
-class WorkspaceImpl(private val config: Config, private val workspaceId: String) : Workspace {
+class WorkspaceImpl(private val config: Config, private val workspaceId: String) :
+    Workspace,
+    LoggingService {
+    override val serviceName: String
+        get() = "Workspace"
 
-    override suspend fun list(u: Unit): List<Konstruction> {
-        return workspaceDir.listFiles()?.mapNotNull {
+    override suspend fun list(u: Unit): List<Konstruction> = callContext("list") {
+        workspaceDir.listFiles()?.mapNotNull {
             if (!it.isDirectory) return@mapNotNull null
             val infoFile = File(it, "info.json")
             if (!infoFile.exists()) return@mapNotNull null
@@ -40,13 +46,13 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         } ?: emptyList()
     }
 
-    override suspend fun getName(u: Unit): String {
-        return infoFile.inputStream().use { input ->
+    override suspend fun getName(u: Unit): String = callContext("getName") {
+        infoFile.inputStream().use { input ->
             config.json.decodeFromStream<Space>(input).name
         }
     }
 
-    override suspend fun setName(name: String) {
+    override suspend fun setName(name: String) = callContext("setName") {
         val info = infoFile.inputStream().use { input ->
             config.json.decodeFromStream<Space>(input)
         }.copy(name = name)
@@ -55,22 +61,22 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         }
     }
 
-    override suspend fun create(newItem: Konstruction): Konstruction {
+    override suspend fun create(newItem: Konstruction): Konstruction = callContext("create") {
         if (newItem.workspaceId != workspaceId) {
             throw IllegalArgumentException("Trying to create item in wrong workspace")
         }
-        val newItem = newItem.copy(
+        val newItemWithId = newItem.copy(
             id = newItem.id.ifEmpty { generateId() }
         )
-        val targetInfo = newItem.infoFile
+        val targetInfo = newItemWithId.infoFile
         if (targetInfo.exists() || targetInfo.parentFile.exists()) {
-            throw IllegalArgumentException("${newItem.id} has been used already")
+            throw IllegalArgumentException("${newItemWithId.id} has been used already")
         }
         targetInfo.parentFile.mkdirs()
         targetInfo.outputStream().use { output ->
-            config.json.encodeToStream(KonstructionInfo(newItem, CLEAN, emptyList()), output)
+            config.json.encodeToStream(KonstructionInfo(newItemWithId, CLEAN, emptyList()), output)
         }
-        return newItem
+        newItemWithId
     }
 
     private suspend fun generateId(): String {
@@ -82,7 +88,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         return id.toString()
     }
 
-    override suspend fun delete(item: Konstruction) {
+    override suspend fun delete(item: Konstruction): Unit = callContext("delete") {
         val targetInfo = item.infoFile
         if (!targetInfo.exists()) {
             throw IllegalArgumentException("Can't find workspace $item")

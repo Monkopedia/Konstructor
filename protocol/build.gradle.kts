@@ -38,6 +38,8 @@ kotlin {
     }
     sourceSets["commonMain"].dependencies {
         api("com.monkopedia.ksrpc:ksrpc-core:0.7.2")
+        api("com.monkopedia:hauler:0.1.0")
+        api("org.jetbrains.kotlinx:kotlinx-datetime:0.4.0")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
@@ -46,6 +48,7 @@ kotlin {
     sourceSets["jvmMain"].dependencies {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
+        implementation("org.slf4j:slf4j-api:2.0.6")
         compileOnly("io.ktor:ktor-server-core:2.2.1")
         compileOnly("io.ktor:ktor-server-host-common:2.2.1")
         compileOnly("io.ktor:ktor-server-netty:2.2.1")

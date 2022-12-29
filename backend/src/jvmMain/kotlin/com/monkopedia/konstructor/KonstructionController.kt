@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,9 @@
 
 package com.monkopedia.konstructor
 
+import com.monkopedia.hauler.CallSign
+import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.hauler
 import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.TaskResult
@@ -25,9 +28,6 @@ import com.monkopedia.konstructor.tasks.CompileTask
 import com.monkopedia.konstructor.tasks.ExecuteTask
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.jvm.javaio.copyTo
-import java.io.File
-import java.io.InputStream
-import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -38,14 +38,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
+import java.io.File
+import java.io.InputStream
+import kotlin.coroutines.CoroutineContext
 
 interface KonstructionController {
+    val callSign: CallSign
     val paths: PathController.Paths
     val scriptLock: Mutex
     var info: KonstructionInfo
 
     fun read(): String
-    fun write(content: String)
+    suspend fun write(content: String)
     suspend fun write(content: ByteReadChannel)
     suspend fun compile()
     suspend fun lastCompileResult(): TaskResult
@@ -91,10 +95,13 @@ class KonstructionControllerImpl(
     private val id: String,
     private val saveContext: CoroutineContext = newSingleThreadContext("KonstructionController")
 ) : KonstructionController {
+    private val hauler = hauler()
+    override val callSign: CallSign by lazy {
+        CallSign("$workspaceId.$id.${info.konstruction.name}")
+    }
     private val pathController = PathController(config)
     override val paths = pathController[workspaceId, id]
     private val contentFileLock = SimpleLock()
-    private val scriptExecLock = SimpleLock()
     private var hasInitialized = false
     private var infoImpl: KonstructionInfo? = null
     override var info: KonstructionInfo
@@ -106,7 +113,7 @@ class KonstructionControllerImpl(
             if (infoImpl == value) return
             // Optimistically set now, to have the info available immediately.
             infoImpl = value
-            GlobalScope.launch(saveContext) {
+            GlobalScope.launch(saveContext + callSign) {
                 contentFileLock.withLock {
                     paths.infoFile.outputStream().use { output ->
                         config.json.encodeToStream(value, output)
@@ -142,12 +149,12 @@ class KonstructionControllerImpl(
                 }
             }
             paths.renderOutput.mkdirs()
-            val script = ScriptManager(config).getScript(paths)
+            val script = ScriptManager(config).getScript(paths, info.konstruction.name)
             val executeTask = ExecuteTask(
-                    config = config,
-                    script = script,
-                    extraTargets = targets
-                )
+                config = config,
+                script = script,
+                extraTargets = targets
+            )
             val (result, executedTargets) = executeTask.execute()
             paths.renderResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
@@ -198,8 +205,8 @@ class KonstructionControllerImpl(
         }
     }
 
-    override fun write(content: String) {
-        println("Write ${content.length} to $info")
+    override suspend fun write(content: String) {
+        hauler.debug("Write ${content.length} to $info")
         contentFileLock.withLock {
             paths.contentFile.writeText(content)
         }

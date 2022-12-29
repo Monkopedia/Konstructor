@@ -15,6 +15,11 @@
  */
 package com.monkopedia.konstructor.tasks
 
+import com.monkopedia.hauler.CallSign
+import com.monkopedia.hauler.asAsync
+import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.hauler
+import com.monkopedia.hauler.info
 import com.monkopedia.ksrpc.ErrorListener
 import com.monkopedia.ksrpc.channels.Connection
 import com.monkopedia.ksrpc.ksrpcEnvironment
@@ -22,14 +27,19 @@ import com.monkopedia.ksrpc.sockets.asConnection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import kotlin.coroutines.EmptyCoroutineContext
 
 object ExecUtil {
+    @OptIn(DelicateCoroutinesApi::class)
+    private val hauler by lazy { hauler().asAsync(GlobalScope) }
 
     data class ExecResult(
         val stdOut: BufferedReader,
@@ -39,7 +49,7 @@ object ExecUtil {
 
     fun executeAndWait(command: String): ExecResult {
         val rt = Runtime.getRuntime()
-        println("Executing: $command")
+        hauler.debug("Executing: $command")
         val commands = arrayOf(
             "bash",
             "-c",
@@ -51,13 +61,18 @@ object ExecUtil {
             BufferedReader(InputStreamReader(proc.errorStream)),
             proc.waitFor()
         ).also {
-            println("Done executing: $command (${it.returnCode})")
+            hauler.debug("Done executing: $command (${it.returnCode})")
         }
     }
 
     class ExecProcess(private val proc: Process) {
         private val parentJob = SupervisorJob()
-        val parentScope = CoroutineScope(parentJob + Dispatchers.IO)
+        val parentScope = CoroutineScope(
+            parentJob + Dispatchers.IO + (
+                CallSign.threadLoggingName?.let(::CallSign)
+                    ?: EmptyCoroutineContext
+                )
+        )
         val exitCode = CompletableDeferred<Int>()
         val connection = CompletableDeferred<Connection>()
 
@@ -95,7 +110,7 @@ object ExecUtil {
                     proc.inputStream.close()
                 }
                 exitCode.complete(returnCode)
-                println("Done executing: ($returnCode)")
+                hauler.debug("Done executing: ($returnCode)")
                 parentJob.cancel()
             }
         }
@@ -105,9 +120,9 @@ object ExecUtil {
         }
     }
 
-    suspend fun executeWithChannel(command: String): ExecProcess {
+    fun executeWithChannel(command: String): ExecProcess {
         val rt = Runtime.getRuntime()
-        println("Executing: $command")
+        hauler.info("Executing: $command")
         val commands = arrayOf("bash", "-c", command)
         return ExecProcess(rt.exec(commands))
     }

@@ -15,19 +15,20 @@
  */
 package com.monkopedia.konstructor.tasks
 
+import com.monkopedia.hauler.Shipper
+import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.error
+import com.monkopedia.hauler.hauler
+import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
-import com.monkopedia.konstructor.lib.BuildListener
 import com.monkopedia.konstructor.lib.ScriptService
-import com.monkopedia.konstructor.lib.ScriptTargetInfo
 import com.monkopedia.konstructor.lib.TargetStatus.BUILT
 import com.monkopedia.konstructor.lib.TargetStatus.ERROR
 import com.monkopedia.konstructor.lib.statusFlow
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.onEach
 
@@ -36,6 +37,7 @@ class ExecuteTask(
     private val script: ScriptService,
     private val extraTargets: List<String>
 ) {
+    private val hauler by lazy { hauler() }
     suspend fun execute(): Pair<TaskResult, List<String>> {
         val errors = StringBuilder()
         var isSuccessful = true
@@ -44,18 +46,18 @@ class ExecuteTask(
         val validExtraTargets = extraTargets.filter { it in allTargets }
         val builtTargets = (exports.map { it.name } + validExtraTargets).distinct()
         for (export in builtTargets) {
-            println("Starting building $export")
+            hauler.debug("Starting building $export")
             val exportService = script.buildTarget(export)
             val status = exportService.statusFlow().onEach {
-                println("Current status $it")
+                hauler.info("Current status $it")
             }.filter { it in listOf(BUILT, ERROR) }.firstOrNull()
 
             isSuccessful = status == BUILT
             if (!isSuccessful) {
-                println("Error: ${exportService.getErrorTrace()}")
+                hauler.error("Error: ${exportService.getErrorTrace()}")
             }
             exportService.close()
-            println("Done with  $export")
+            hauler.debug("Done with $export")
         }
         try {
             script.closeService(Unit)

@@ -15,6 +15,7 @@
  */
 package com.monkopedia.konstructor.lib
 
+import com.monkopedia.hauler.Shipper
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
@@ -28,6 +29,9 @@ interface ScriptService : RpcService {
 
     @KsMethod("/initialize")
     suspend fun initialize(config: ScriptConfiguration)
+
+    @KsMethod("/set_shipper")
+    suspend fun setShipper(shipper: Shipper)
 
     @KsMethod("/hosts")
     suspend fun initializeHostServices(hostService: HostService)

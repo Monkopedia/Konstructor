@@ -17,11 +17,26 @@
 
 package com.monkopedia.konstructor
 
+import com.monkopedia.hauler.Flatbed
+import com.monkopedia.hauler.Shipper
+import com.monkopedia.hauler.attach
+import com.monkopedia.hauler.deliveries
+import com.monkopedia.hauler.route
+import com.monkopedia.hauler.withDeliveryDay
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.konstructor.common.LogFormatter
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.common.Workspace
+import com.monkopedia.konstructor.logging.LoggingService
+import com.monkopedia.konstructor.logging.WarehouseWrapper
+import com.monkopedia.konstructor.logging.callContext
+import com.monkopedia.konstructor.logging.writeBinary
+import com.monkopedia.konstructor.logging.writeText
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -30,12 +45,28 @@ import kotlinx.serialization.json.encodeToStream
 import java.io.File
 import java.io.InputStream
 
-class KonstructorImpl(private val config: Config) : Konstructor {
+@OptIn(DelicateCoroutinesApi::class)
+class KonstructorImpl(private val config: Config) : Konstructor, LoggingService {
     private val mutex = Mutex()
     private val konstructionLookup = mutableMapOf<Pair<String, String>, KonstructionService>()
+    private val warehouse = WarehouseWrapper()
+    override val serviceName: String
+        get() = "Konstructor"
 
-    override suspend fun list(u: Unit): List<Space> {
-        return config.dataDir.listFiles()?.mapNotNull {
+    // As long as the process is alive the konstructor should live.
+    private val scope = GlobalScope
+
+    init {
+        scope.launch {
+            warehouse.requestPickup().attach(scope)
+            warehouse.writeBinary(File(config.dataDir, "log.bin"))
+            warehouse.writeText(File(config.dataDir, "log.txt"))
+            warehouse.deliveries().deliveries().route(Flatbed, LogFormatter)
+        }
+    }
+
+    override suspend fun list(u: Unit): List<Space> = callContext("list") {
+        config.dataDir.listFiles()?.mapNotNull {
             if (!it.isDirectory) return@mapNotNull null
             val infoFile = File(it, "info.json")
             if (!infoFile.exists()) return@mapNotNull null
@@ -45,52 +76,57 @@ class KonstructorImpl(private val config: Config) : Konstructor {
         } ?: emptyList()
     }
 
-    override suspend fun konstruction(id: Konstruction): KonstructionService {
-        mutex.withLock {
-            return konstructionLookup.getOrPut(id.workspaceId to id.id) {
-                KonstructionServiceImpl(config, id.workspaceId, id.id) {
-                    mutex.withLock {
-                        konstructionLookup.remove(id.workspaceId to id.id)
+    override suspend fun konstruction(id: Konstruction): KonstructionService =
+        callContext("konstruction") {
+            mutex.withLock {
+                konstructionLookup.getOrPut(id.workspaceId to id.id) {
+                    KonstructionServiceImpl(config, id.workspaceId, id.id, warehouse) {
+                        mutex.withLock {
+                            konstructionLookup.remove(id.workspaceId to id.id)
+                        }
                     }
                 }
             }
         }
+
+    override suspend fun get(id: String): Workspace = callContext("get") {
+        WorkspaceImpl(config, id)
     }
 
-    override suspend fun get(id: String): Workspace {
-        return WorkspaceImpl(config, id)
-    }
-
-    override suspend fun create(newItem: Space): Space {
-        val newItem = newItem.copy(
+    override suspend fun create(newItem: Space): Space = callContext("create") {
+        val newItemWithId = newItem.copy(
             id = newItem.id.ifEmpty { generateId() }
         )
-        val targetInfo = newItem.infoFile
+        val targetInfo = newItemWithId.infoFile
         if (targetInfo.exists() || targetInfo.parentFile.exists()) {
-            throw IllegalArgumentException("${newItem.id} has been used already")
+            throw IllegalArgumentException("${newItemWithId.id} has been used already")
         }
         targetInfo.parentFile.mkdirs()
         targetInfo.outputStream().use { output ->
-            config.json.encodeToStream(newItem, output)
+            config.json.encodeToStream(newItemWithId, output)
         }
-        return newItem
+        newItemWithId
     }
 
-    private suspend fun generateId(): String {
+    private suspend fun generateId(): String = callContext("generateId") {
         val usedIds = list().map { it.id }
         var id = 0
         while (usedIds.contains(id.toString())) {
             id++
         }
-        return id.toString()
+        id.toString()
     }
 
-    override suspend fun delete(item: Space) {
+    override suspend fun delete(item: Space): Unit = callContext("delete") {
         val targetInfo = item.infoFile
         if (!targetInfo.exists()) {
             throw IllegalArgumentException("Can't find workspace $item")
         }
         targetInfo.parentFile.deleteRecursively()
+    }
+
+    override suspend fun getGlobalShipper(u: Unit): Shipper = callContext("getGlobalShipper") {
+        warehouse
     }
 
     fun getInputStream(target: String): InputStream {

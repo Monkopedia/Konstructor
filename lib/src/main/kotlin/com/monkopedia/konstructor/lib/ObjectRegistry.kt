@@ -21,9 +21,11 @@ import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.sockets.withStdInOut
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 
 fun runKonstruction(args: Array<String>, script: KcsgScript) {
     runBlocking {
+        LoggerFactory.getILoggerFactory()
         withStdInOut(ksrpcEnvironment { }) { connection ->
             connection.registerDefault<ScriptService>(ScriptServiceImpl(script))
             awaitCancellation()

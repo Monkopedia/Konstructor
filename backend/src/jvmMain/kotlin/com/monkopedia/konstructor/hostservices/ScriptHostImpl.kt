@@ -1,5 +1,7 @@
 package com.monkopedia.konstructor.hostservices
 
+import com.monkopedia.hauler.hauler
+import com.monkopedia.hauler.warn
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.KonstructorManager
 import com.monkopedia.konstructor.WorkspaceImpl
@@ -19,6 +21,8 @@ class ScriptHostImpl(
     private val konstructionId: String,
     private val cacheDir: File
 ) : HostService {
+
+    private val hauler by lazy { hauler() }
 
     init {
         cacheDir.mkdirs()
@@ -58,7 +62,7 @@ class ScriptHostImpl(
             }
         }
 
-        return scriptManager.getScript(controller.paths)
+        return scriptManager.getScript(controller.paths, controller.info.konstruction.name)
     }
 
     private suspend fun findTarget(targetName: String): Konstruction? {
@@ -67,7 +71,7 @@ class ScriptHostImpl(
             it.id == targetName || it.name == targetName
         } ?: return null
         if (target.id == konstructionId) {
-            println("Warning: Script cannot target itself")
+            hauler.warn("Script cannot target itself")
             return null
         }
         return target

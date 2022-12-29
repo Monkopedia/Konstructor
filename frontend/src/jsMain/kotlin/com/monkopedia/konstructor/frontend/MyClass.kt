@@ -28,6 +28,7 @@ import react.dom.client.createRoot
 import react.dom.render
 
 fun main() {
+    console.log("Starting everything")
     println("Starting koin")
     RootScope.init()
     println("Starting main")

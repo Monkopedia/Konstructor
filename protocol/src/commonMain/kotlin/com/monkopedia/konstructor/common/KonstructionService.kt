@@ -15,6 +15,7 @@
  */
 package com.monkopedia.konstructor.common
 
+import com.monkopedia.hauler.Shipper
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
@@ -63,6 +64,9 @@ interface KonstructionService : RpcService {
 
     @KsMethod("/request_konstructs")
     suspend fun requestKonstructs(targets: List<String>)
+
+    @KsMethod("/logging")
+    suspend fun getShipper(u: Unit = Unit): Shipper
 }
 
 @KsService
