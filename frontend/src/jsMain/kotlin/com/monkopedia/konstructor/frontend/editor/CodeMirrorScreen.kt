@@ -15,41 +15,20 @@
  */
 package com.monkopedia.konstructor.frontend.editor
 
-import codemirror.themeonedark.oneDark
 import com.monkopedia.konstructor.frontend.utils.buildExt
-import dukat.codemirror.basicSetup
-import dukat.codemirror.commands.history
-import dukat.codemirror.language.StreamLanguage
-import dukat.codemirror.legacymodes.kotlin
 import dukat.codemirror.state.EditorState
-import dukat.codemirror.state.`T$5`
 import dukat.codemirror.state.Text
-import dukat.codemirror.state.Transaction
-import dukat.codemirror.state.TransactionSpec
-import dukat.codemirror.view.Decoration
 import dukat.codemirror.view.EditorView
-import dukat.codemirror.view.ViewUpdate
-import dukat.codemirror.view.scrollPastEnd
 import dukat.codemirror.vim.CodeMirror
-import dukat.codemirror.vim.vim
-import emotion.react.css
-import kotlinext.js.js
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
 import kotlinx.css.background
-import org.w3c.dom.HTMLDivElement
+import dom.html.HTMLDivElement
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.memo
 import react.useEffect
 import react.useRef
-import react.useState
 import styled.StyleSheet
-import styled.getClassSelector
-import kotlin.math.max
 
 internal object MirrorStyles : StyleSheet("mirror", isStatic = true) {
     val errorLineBackground by css {

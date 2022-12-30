@@ -29,8 +29,8 @@ import dukat.codemirror.state.ChangeDesc
 import dukat.codemirror.state.EditorSelection
 import dukat.codemirror.view.EditorView
 import dukat.codemirror.view.ViewUpdate
+import js.core.Record
 import kotlin.js.RegExp
-import kotlinx.js.Record
 import org.w3c.dom.Element
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.Node

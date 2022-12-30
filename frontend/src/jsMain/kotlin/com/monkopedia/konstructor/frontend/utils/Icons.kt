@@ -1,6 +1,6 @@
 package com.monkopedia.konstructor.frontend.utils
 
-import org.w3c.dom.svg.SVGPathElement
+import dom.svg.SVGPathElement
 import react.dom.svg.SVGAttributes
 import react.dom.svg.StrokeLinecap.round
 import react.dom.svg.StrokeLinejoin.miter
@@ -24,7 +24,8 @@ object Icons {
         strokeLinecap = round
         strokeLinejoin = miter
         strokeOpacity = opacity
-        d = "M 3 11 h 5 a 1 1 90 0 1 1 1 v 5 a 1 1 90 0 1 -1 1 h-5 a 1 1 90 0 1 -1 -1 v-5 a 1 1 90 0 1 1 -1 M 11 11 h 5 a 1,1 0 0 1 1,1 v 5 a 1,1 0 0 1 -1,1 h -5 a 1,1 0 0 1 -1,-1 v -5 a 1,1 0 0 1 1,-1 z M 7 2 h 5 a 1,1 0 0 1 1,1 v 5 a 1,1 0 0 1 -1,1 h -5 a 1,1 0 0 1 -1,-1 v -5 a 1,1 0 0 1 1,-1 z "
+        d =
+            "M 3 11 h 5 a 1 1 90 0 1 1 1 v 5 a 1 1 90 0 1 -1 1 h-5 a 1 1 90 0 1 -1 -1 v-5 a 1 1 90 0 1 1 -1 M 11 11 h 5 a 1,1 0 0 1 1,1 v 5 a 1,1 0 0 1 -1,1 h -5 a 1,1 0 0 1 -1,-1 v -5 a 1,1 0 0 1 1,-1 z M 7 2 h 5 a 1,1 0 0 1 1,1 v 5 a 1,1 0 0 1 -1,1 h -5 a 1,1 0 0 1 -1,-1 v -5 a 1,1 0 0 1 1,-1 z "
     }
 
     fun SVGAttributes<SVGPathElement>.blocks(opacity: String = "1") {
@@ -48,5 +49,4 @@ object Icons {
         d =
             "M 5.5 17.5 h 1 a 1 1 90 0 0 1 -1 v-6 a 1,1 0 0 1 1,-1 h 1.5 a 1 1 90 0 0 1 -1 v-6 a 1,1 0 0 1 1,-1 h 5 a 1,1 0 0 1 1,1 v 5 a 1,1 0 0 1 -1,1 h -1.5 a 1 1 90 0 0 -1 1 v7 a 1 1 90 0 0 1 1 h 3.5 a 1 1 90 0 1 1 1 v 5 a 1 1 90 0 1 -1 1 h-13.5 a 1 1 90 0 1 -1 -1 v-5 a 1 1 90 0 1 1 -1"
     }
-
 }

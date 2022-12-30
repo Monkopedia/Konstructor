@@ -35,7 +35,7 @@ fun main() {
 //    kotlinext.js.require("codemirror/theme/darcula.css")
 //    kotlinext.js.require("codemirror/mode/clike/clike.js")
 //    kotlinext.js.require("codemirror/dist/index.js")
-    val root = createRoot(document.getElementById("root")!!)
+    val root = createRoot(document.getElementById("root")!! as dom.Element)
     root.render(
         Fragment.create {
             Base()

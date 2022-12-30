@@ -37,29 +37,27 @@ kotlin {
         withJava()
     }
     sourceSets["commonMain"].dependencies {
-        api("com.monkopedia.ksrpc:ksrpc-core:0.7.1")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.3.3")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
-        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3-native-mt")
-        compileOnly("io.ktor:ktor-io:2.0.2")
+        api("com.monkopedia.ksrpc:ksrpc-core:0.7.2")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+        compileOnly("io.ktor:ktor-io:2.2.1")
     }
     sourceSets["jvmMain"].dependencies {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
-        implementation("org.slf4j:slf4j-api:1.6.1")
-        compileOnly("io.ktor:ktor-server-core:2.0.2")
-        compileOnly("io.ktor:ktor-server-host-common:2.0.2")
-        compileOnly("io.ktor:ktor-server-netty:2.0.2")
-        compileOnly("io.ktor:ktor-client-core:2.0.2")
+        compileOnly("io.ktor:ktor-server-core:2.2.1")
+        compileOnly("io.ktor:ktor-server-host-common:2.2.1")
+        compileOnly("io.ktor:ktor-server-netty:2.2.1")
+        compileOnly("io.ktor:ktor-client-core:2.2.1")
 
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.0")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.0")
-        implementation("com.github.ajalt:clikt:2.8.0")
-        implementation("ch.qos.logback:logback-classic:1.2.3")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
+        implementation("ch.qos.logback:logback-classic:1.4.5")
     }
     sourceSets["jsMain"].dependencies {
-        compileOnly("io.ktor:ktor-client-core:2.0.2")
-        compileOnly("io.ktor:ktor-client-js:2.0.2")
+        compileOnly("io.ktor:ktor-client-core:2.2.1")
+        compileOnly("io.ktor:ktor-client-js:2.2.1")
     }
 }
 

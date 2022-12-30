@@ -33,12 +33,12 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
 }
 
 dependencies {
-    implementation("com.monkopedia.ksrpc:ksrpc-core:0.7.1")
-    implementation("com.monkopedia.ksrpc:ksrpc-sockets:0.7.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.3")
-    implementation("io.ktor:ktor-io:2.0.2")
-    implementation("io.ktor:ktor-client-cio:2.0.2")
-    api("com.monkopedia:kcsg-dsl:0.1.1")
-    api("com.monkopedia:kcsg:0.1.1")
+    implementation("com.monkopedia.ksrpc:ksrpc-core:0.7.2")
+    implementation("com.monkopedia.ksrpc:ksrpc-sockets:0.7.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+    implementation("io.ktor:ktor-io:2.2.1")
+    implementation("io.ktor:ktor-client-cio:2.2.1")
+    api("com.monkopedia:kcsg-dsl:0.1.3")
+    api("com.monkopedia:kcsg:0.1.3")
 }

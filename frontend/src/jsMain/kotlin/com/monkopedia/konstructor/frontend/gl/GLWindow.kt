@@ -38,9 +38,9 @@ import info.laht.threekt.scenes.Scene
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.combine
 import org.koin.core.component.get
-import org.w3c.dom.Element
-import org.w3c.dom.HTMLDivElement
-import org.w3c.dom.Node
+import dom.Element
+import dom.Node
+import dom.html.HTMLDivElement
 import react.FC
 import react.Props
 import react.RefCallback
@@ -60,7 +60,7 @@ data class GLState(
 
 val GLComponent = FC<GLProps> { props ->
     val callbackRef by useState {
-        RefCallback { v: Element? ->
+        RefCallback { v: dom.html.HTMLDivElement? ->
             GLWindow.setElement(v)
         }
     }
@@ -209,7 +209,7 @@ object GLWindow {
         }
     }
 
-    fun setElement(element: Element?) {
+    fun setElement(element: dom.html.HTMLElement?) {
         lastElement?.removeChild(renderer.domElement)
         element?.appendChild(renderer.domElement)
 //            element?.appendChild(stats.dom)

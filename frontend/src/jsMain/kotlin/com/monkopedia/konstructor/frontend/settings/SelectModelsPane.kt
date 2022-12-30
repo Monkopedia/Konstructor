@@ -30,6 +30,7 @@ import csstype.FlexDirection
 import csstype.LineStyle
 import csstype.number
 import csstype.px
+import dom.html.HTMLButtonElement
 import emotion.react.css
 import kotlinx.browser.window
 import mui.icons.material.Colorize
@@ -48,7 +49,6 @@ import mui.material.Typography
 import mui.material.styles.TypographyVariant.subtitle1
 import mui.system.sx
 import org.koin.core.component.get
-import org.w3c.dom.HTMLButtonElement
 import react.FC
 import react.Props
 import react.create
@@ -140,7 +140,7 @@ val ScopedSelectModelsPane = FC<ScopedSelectModelsProps> { props ->
         Popover {
             id = targetPicker?.second?.name
             open = targetPicker != null
-            anchorEl = { targetPicker?.first ?: it }
+            anchorEl = targetPicker?.first
             anchorOrigin = buildExt<PopoverOrigin> {
                 vertical = "bottom"
                 horizontal = "right"
