@@ -6,14 +6,14 @@ buildscript {
         gradlePluginPortal()
     }
     dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
-        classpath("org.jetbrains.kotlin:kotlin-serialization:$kotlin_version")
-        classpath("com.monkopedia.ksrpc:ksrpc-gradle-plugin:0.7.2")
-        classpath("gradle.plugin.com.github.johnrengelman:shadow:7.1.2")
+        classpath(libs.kotlin.gradle)
+        classpath(libs.kotlin.serialization)
+        classpath(libs.ksrpc)
+        classpath(libs.shadow)
     }
 }
 plugins {
-    id("com.github.autostyle") version "3.2"
+    alias(libs.plugins.autostyle)
 }
 
 subprojects {

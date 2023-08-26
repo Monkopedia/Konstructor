@@ -37,30 +37,30 @@ kotlin {
         withJava()
     }
     sourceSets["commonMain"].dependencies {
-        api("com.monkopedia.ksrpc:ksrpc-core:0.7.2")
-        api("com.monkopedia:hauler:0.1.0")
-        api("org.jetbrains.kotlinx:kotlinx-datetime:0.4.0")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
-        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-        compileOnly("io.ktor:ktor-io:2.2.1")
+        api(libs.ksrpc.core)
+        api(libs.hauler)
+        api(libs.kotlinx.datetime)
+        implementation(libs.kotlinx.serialization.core)
+        implementation(libs.kotlinx.serialization.json)
+        implementation(libs.kotlinx.coroutines.core)
+        compileOnly(libs.ktor.io)
     }
     sourceSets["jvmMain"].dependencies {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
-        implementation("org.slf4j:slf4j-api:2.0.6")
-        compileOnly("io.ktor:ktor-server-core:2.2.1")
-        compileOnly("io.ktor:ktor-server-host-common:2.2.1")
-        compileOnly("io.ktor:ktor-server-netty:2.2.1")
-        compileOnly("io.ktor:ktor-client-core:2.2.1")
+        implementation(libs.slf4j.api)
+        compileOnly(libs.ktor.server.core)
+        compileOnly(libs.ktor.server.host.common)
+        compileOnly(libs.ktor.server.netty)
+        compileOnly(libs.ktor.client.core)
 
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
-        implementation("ch.qos.logback:logback-classic:1.4.5")
+        implementation(libs.kotlinx.serialization.core)
+        implementation(libs.kotlinx.serialization.json)
+        implementation(libs.logback.classic)
     }
     sourceSets["jsMain"].dependencies {
-        compileOnly("io.ktor:ktor-client-core:2.2.1")
-        compileOnly("io.ktor:ktor-client-js:2.2.1")
+        compileOnly(libs.ktor.client.core)
+        compileOnly(libs.ktor.client.js)
     }
 }
 

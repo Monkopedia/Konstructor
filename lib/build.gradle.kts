@@ -33,14 +33,14 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
 }
 
 dependencies {
-    implementation("com.monkopedia.ksrpc:ksrpc-core:0.7.2")
-    implementation("com.monkopedia.ksrpc:ksrpc-sockets:0.7.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-    implementation("io.ktor:ktor-io:2.2.1")
-    implementation("io.ktor:ktor-client-cio:2.2.1")
-    implementation("org.slf4j:slf4j-api:2.0.6")
-    api("com.monkopedia:kcsg-dsl:0.1.3")
-    api("com.monkopedia:kcsg:0.1.3")
-    api("com.monkopedia:hauler:0.1.0")
+    implementation(libs.ksrpc.core)
+    implementation(libs.ksrpc.sockets)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.ktor.io)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.slf4j.api)
+    api(libs.kcsg.dsl)
+    api(libs.kcsg)
+    api(libs.hauler)
 }
