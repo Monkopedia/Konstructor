@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,7 +20,6 @@ import com.monkopedia.hauler.asAsync
 import com.monkopedia.hauler.debug
 import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
-import com.monkopedia.hauler.warn
 import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.common.MessageImportance.ERROR
@@ -31,14 +30,14 @@ import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.tasks.ExecUtil.executeAndWait
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.newSingleThreadContext
-import kotlinx.coroutines.runInterruptible
 import java.io.BufferedReader
 import java.io.File
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.runInterruptible
 
 class CompileTask(
     private val config: Config,

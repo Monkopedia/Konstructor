@@ -31,7 +31,6 @@ import dukat.codemirror.state.EditorStateConfig
 import dukat.codemirror.state.Facet
 import dukat.codemirror.state.Line
 import dukat.codemirror.state.Range
-import dukat.codemirror.state.RangeSet
 import dukat.codemirror.state.RangeValue
 import dukat.codemirror.state.SelectionRange
 import dukat.codemirror.state.StateEffect

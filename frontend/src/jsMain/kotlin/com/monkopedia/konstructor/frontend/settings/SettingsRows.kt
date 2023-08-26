@@ -15,7 +15,10 @@
  */
 package com.monkopedia.konstructor.frontend.settings
 
+import csstype.AlignItems
 import csstype.Auto.auto
+import csstype.Display
+import csstype.FlexDirection
 import csstype.pct
 import csstype.px
 import emotion.react.css
@@ -87,6 +90,33 @@ val SliderRow = FC<SliderRowProps> { props ->
             this.max = props.max
             this.onChange = { a, value, _ ->
                 props.onValueChanged((value as Number).toInt())
+            }
+        }
+    }
+}
+
+external interface ButtonRowProps : PropsWithClassName {
+    var label: String
+    var onClick: (() -> Unit)
+}
+
+val ButtonRow = FC<ButtonRowProps> { props ->
+    div {
+        css {
+            width = 100.pct
+            height = 48.px
+            paddingLeft = 16.px
+            display = Display.flex
+            flexDirection = FlexDirection.row
+            alignItems = AlignItems.center
+        }
+        Typography {
+            css {
+                width = 100.pct
+            }
+            +props.label
+            this.onClick = {
+                props.onClick()
             }
         }
     }

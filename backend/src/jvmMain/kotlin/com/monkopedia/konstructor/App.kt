@@ -34,7 +34,6 @@ import io.ktor.server.response.respondOutputStream
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
 import io.ktor.server.websocket.WebSockets
-import kotlinx.coroutines.DelicateCoroutinesApi
 import org.slf4j.LoggerFactory
 
 fun main(args: Array<String>) = App().main(args)

@@ -54,7 +54,7 @@ private val themeOptions: ThemeOptions = buildExt {
     }
 }
 
-val theme = createTheme(options = themeOptions)
+val nonInvertedTheme = createTheme(options = themeOptions)
 
 private val invertedThemeOptions: ThemeOptions = buildExt {
     typography = buildExt {

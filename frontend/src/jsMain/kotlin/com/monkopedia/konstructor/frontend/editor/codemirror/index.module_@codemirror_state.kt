@@ -27,7 +27,6 @@ package dukat.codemirror.state
 import dukat.codemirror.view.LanguageDataFacet
 import dukat.codemirror.view.TransactionExtenderFacet
 import dukat.codemirror.view.TransactionFilterFacet
-import kotlin.js.Json
 
 open external class Line {
     open val from: Number

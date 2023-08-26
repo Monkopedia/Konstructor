@@ -90,6 +90,7 @@ kotlin {
         implementation(npm("@material-ui/core", "4.12.4"))
         implementation(npm("css-loader", "3.5.2"))
         implementation(npm("style-loader", "1.1.3"))
+        implementation(npm("file-loader", "6.2.0"))
         implementation(npm("bootstrap", "^4.4.1"))
         implementation(npm("crypto", "1.0.1"))
         implementation(npm("crypto-browserify", "3.12.0"))

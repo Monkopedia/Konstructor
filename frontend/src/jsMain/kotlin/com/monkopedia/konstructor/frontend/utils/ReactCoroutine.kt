@@ -40,7 +40,7 @@ inline fun useEffect(
 
 inline fun <reified T : Any?> Flow<T>.useCollected(initial: T): T {
     val (state, setState) = useState(initial)
-    useEffect(this@useCollected) {
+    useEffect(this@useCollected, setState) {
         collect { value ->
             setState(value)
         }

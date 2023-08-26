@@ -16,7 +16,7 @@
 package com.monkopedia.konstructor.frontend.settings
 
 import com.monkopedia.konstructor.frontend.koin.RootScope
-import com.monkopedia.konstructor.frontend.theme
+import com.monkopedia.konstructor.frontend.nonInvertedTheme
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import csstype.Color
 import csstype.Display
@@ -45,7 +45,7 @@ val SettingsPane = FC<Props> {
     }
     div {
         css {
-            background = Color(theme.palette.background.paper)
+            background = Color(nonInvertedTheme.palette.background.paper)
         }
         css {
             width = 100.pct
@@ -81,6 +81,16 @@ val SettingsPane = FC<Props> {
             this.label = "Show camera widget"
             this.value = showCameraWidget
             this.onValueChanged = setShowCameraWidget
+        }
+        Divider()
+        ButtonRow {
+            css {
+                width = 100.pct
+            }
+            this.label = "Show Logs"
+            this.onClick = {
+                RootScope.loggingModel.openLogging()
+            }
         }
         Divider()
     }

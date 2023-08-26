@@ -16,6 +16,7 @@
 package com.monkopedia.konstructor.frontend.koin
 
 import com.monkopedia.konstructor.frontend.WorkManager
+import com.monkopedia.konstructor.frontend.logging.LoggingModel
 import com.monkopedia.konstructor.frontend.model.GlControlsModel
 import com.monkopedia.konstructor.frontend.model.GlobalDialogsModel
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel
@@ -50,6 +51,9 @@ object RootScope : KoinComponent {
         single {
             GlControlsModel(get())
         }
+        single {
+            LoggingModel(get(), get())
+        }
         factory { (workspaceId: String) ->
             WorkspaceScope(workspaceId)
         }
@@ -79,6 +83,7 @@ object RootScope : KoinComponent {
     val settingsModel by inject<SettingsModel>()
     val spaceListModel by inject<SpaceListModel>()
     val serviceHolder by inject<ServiceHolder>()
+    val loggingModel by inject<LoggingModel>()
 
     fun init() {
         startKoin {

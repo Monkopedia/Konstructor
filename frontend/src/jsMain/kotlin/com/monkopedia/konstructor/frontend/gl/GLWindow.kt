@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,6 +21,9 @@ import com.monkopedia.konstructor.frontend.model.GlControlsModel
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import com.monkopedia.konstructor.frontend.utils.useEffect
 import csstype.pct
+import dom.Element
+import dom.Node
+import dom.html.HTMLDivElement
 import emotion.react.css
 import info.laht.threekt.cameras.PerspectiveCamera
 import info.laht.threekt.external.controls.OrbitControls
@@ -40,9 +43,6 @@ import info.laht.threekt.scenes.Scene
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.combine
 import org.koin.core.component.get
-import dom.Element
-import dom.Node
-import dom.html.HTMLDivElement
 import react.FC
 import react.Props
 import react.RefCallback

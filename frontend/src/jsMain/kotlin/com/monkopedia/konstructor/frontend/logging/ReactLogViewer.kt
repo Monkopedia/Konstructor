@@ -13,50 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.monkopedia.konstructor.frontend.editor
+package com.monkopedia.konstructor.frontend.logging
 
+import com.monkopedia.konstructor.frontend.editor.MirrorStyles
 import com.monkopedia.konstructor.frontend.utils.buildExt
 import dom.html.HTMLDivElement
 import dukat.codemirror.state.EditorState
-import dukat.codemirror.state.Text
 import dukat.codemirror.view.EditorView
 import dukat.codemirror.vim.CodeMirror
-import kotlinx.css.background
 import react.FC
 import react.Props
-import react.dom.html.ReactHTML.div
+import react.dom.html.ReactHTML
 import react.memo
 import react.useEffect
 import react.useRef
-import styled.StyleSheet
 
-internal object MirrorStyles : StyleSheet("mirror", isStatic = true) {
-    val errorLineBackground by css {
-        background = "#FF000033"
-    }
-    val warningLineBackground by css {
-        background = "#FFB81C33"
-    }
-}
-
-external interface CodeMirrorProps : Props {
+external interface LogViewerProps : Props {
     var editorState: EditorState
     var setView: (EditorView?) -> Unit
     var target: String
-    var onSave: ((String) -> Unit)?
 }
 
-val CodeMirrorScreen = memo(
-    FC<CodeMirrorProps> { props ->
+val LogViewer = memo(
+    FC<LogViewerProps> { props ->
         MirrorStyles.errorLineBackground
         MirrorStyles.inject()
         val textAreaRef = useRef<HTMLDivElement>()
-        val saveRef = useRef<(String) -> Unit>()
 
-        div {
+        ReactHTML.div {
             this.ref = textAreaRef
         }
-        saveRef.current = props.onSave
 
         useEffect(textAreaRef, props.editorState) {
             val textArea = textAreaRef.current!!
@@ -67,11 +53,7 @@ val CodeMirrorScreen = memo(
                 }
             )
 
-            fun onSave(cm: CodeMirror) {
-                saveRef.current?.invoke(cm.getValue())
-            }
             CodeMirror(cm)
-            CodeMirror.commands.asDynamic().save = ::onSave
             props.setView(cm)
             cleanup {
                 props.setView(null)
@@ -82,8 +64,4 @@ val CodeMirrorScreen = memo(
 ) { oldProps, newProps ->
     oldProps.editorState === newProps.editorState &&
         oldProps.target == newProps.target
-}
-
-fun Text.asString(): String {
-    return (0 until lines.toInt()).joinToString("\n") { line(it + 1).text }
 }

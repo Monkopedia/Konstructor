@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,6 +24,9 @@ import com.monkopedia.ksrpc.ErrorListener
 import com.monkopedia.ksrpc.channels.Connection
 import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.sockets.asConnection
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -33,9 +36,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import kotlin.coroutines.EmptyCoroutineContext
 
 object ExecUtil {
     @OptIn(DelicateCoroutinesApi::class)

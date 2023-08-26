@@ -17,6 +17,7 @@ package com.monkopedia.konstructor.frontend
 
 import com.monkopedia.konstructor.frontend.empty.CreateFirstWorkspace
 import com.monkopedia.konstructor.frontend.koin.RootScope
+import com.monkopedia.konstructor.frontend.logging.LoggingOverlay
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import csstype.Auto
 import csstype.px
@@ -75,6 +76,7 @@ val Initializer = FC<Props> {
             this.workManager = state.workManager
         }
     }
+    LoggingOverlay()
     WorkDisplay {
         isWorking = state.isWorking
     }

@@ -25,8 +25,8 @@ import dukat.codemirror.state.StateEffect
 import dukat.codemirror.state.Transaction
 import dukat.lezer.common.NodeType
 import dukat.lezer.common.Tree
-import org.w3c.dom.events.MouseEvent
 import kotlin.js.Json
+import org.w3c.dom.events.MouseEvent
 
 typealias DecorationSet = RangeSet<Decoration>
 
@@ -74,4 +74,3 @@ typealias IndentServiceFacet = (
 typealias FoldServiceFacet = (state: EditorState, lineStart: Number, lineEnd: Number) -> `T$0`?
 
 typealias FacetMethod = (tr: Transaction) -> Array<StateEffect<Any>>
-

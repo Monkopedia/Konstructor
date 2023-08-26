@@ -28,9 +28,7 @@ import dukat.codemirror.state.AnnotationType
 import dukat.codemirror.state.EditorState
 import dukat.codemirror.state.Facet
 import dukat.codemirror.state.StateCommand
-import dukat.codemirror.state.StateEffect
 import dukat.codemirror.state.StateField
-import dukat.codemirror.state.Transaction
 import dukat.codemirror.view.Command
 import dukat.codemirror.view.FacetMethod
 import dukat.codemirror.view.KeyBinding
