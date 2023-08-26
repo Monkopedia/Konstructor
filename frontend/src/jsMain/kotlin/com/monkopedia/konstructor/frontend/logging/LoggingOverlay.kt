@@ -16,7 +16,6 @@
 package com.monkopedia.konstructor.frontend.logging
 
 import com.monkopedia.konstructor.frontend.koin.RootScope
-import com.monkopedia.konstructor.frontend.nonInvertedTheme
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import csstype.Border
 import csstype.BoxShadow
@@ -27,18 +26,11 @@ import csstype.Width
 import csstype.pct
 import csstype.px
 import csstype.translate
-import dukat.reactlogviewer.LogViewer
-import dukat.reactlogviewer.LogViewerSearch
-import emotion.react.css
 import mui.material.Box
 import mui.material.Modal
-import mui.material.Paper
-import mui.material.Toolbar
-import mui.system.ThemeProvider
 import mui.system.sx
 import react.FC
 import react.Props
-import react.create
 import react.dom.html.ReactHTML.div
 
 val LoggingOverlay = FC<Props> {
@@ -70,25 +62,25 @@ val GlobalLogsView = FC<Props> {
             boxShadow = 24.unsafeCast<BoxShadow>()
             asDynamic().p = 4
         }
-        LogViewer {
-            this.dataStringArray = lines
-            this.hasLineNumbers = false
-            this.isDark = true
-            this.toolbar = div.create {
-                ThemeProvider {
-                    this.theme = nonInvertedTheme
-                    Paper {
-                        css {
-                            height = 72.px
-                        }
-                        Toolbar {
-                            LogViewerSearch {
-                                this.placeholder = "Search..."
-                            }
-                        }
-                    }
-                }
-            }
-        }
+//        LogViewer {
+//            this.dataStringArray = lines
+//            this.hasLineNumbers = false
+//            this.isDark = true
+//            this.toolbar = div.create {
+//                ThemeProvider {
+//                    this.theme = nonInvertedTheme
+//                    Paper {
+//                        css {
+//                            height = 72.px
+//                        }
+//                        Toolbar {
+//                            LogViewerSearch {
+//                                this.placeholder = "Search..."
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//        }
     }
 }
