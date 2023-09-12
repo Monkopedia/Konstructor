@@ -60,7 +60,6 @@ kotlin {
     }
     sourceSets["jsMain"].dependencies {
         compileOnly(libs.ktor.client.core)
-        compileOnly(libs.ktor.client.js)
     }
 }
 

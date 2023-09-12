@@ -17,21 +17,21 @@ package com.monkopedia.konstructor.frontend.logging
 
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import csstype.Border
-import csstype.BoxShadow
-import csstype.Color
-import csstype.LineStyle
-import csstype.Position
-import csstype.Width
-import csstype.pct
-import csstype.px
-import csstype.translate
 import mui.material.Box
 import mui.material.Modal
 import mui.system.sx
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
+import web.cssom.Border
+import web.cssom.BoxShadow
+import web.cssom.Color
+import web.cssom.LineStyle
+import web.cssom.Position
+import web.cssom.Width
+import web.cssom.pct
+import web.cssom.px
+import web.cssom.translate
 
 val LoggingOverlay = FC<Props> {
     val isOpen = RootScope.loggingModel.isLoggingOpen.useCollected(false)

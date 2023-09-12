@@ -15,10 +15,10 @@
  */
 package com.monkopedia.konstructor.frontend.utils
 
-import dom.svg.SVGPathElement
 import react.dom.svg.SVGAttributes
-import react.dom.svg.StrokeLinecap.round
-import react.dom.svg.StrokeLinejoin.miter
+import react.dom.svg.StrokeLinecap.Companion.round
+import react.dom.svg.StrokeLinejoin.Companion.miter
+import web.svg.SVGPathElement
 
 object Icons {
 

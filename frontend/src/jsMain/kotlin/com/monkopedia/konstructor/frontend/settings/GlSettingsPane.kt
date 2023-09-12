@@ -20,15 +20,6 @@ import com.monkopedia.konstructor.frontend.model.GlControlsModel
 import com.monkopedia.konstructor.frontend.model.GlControlsModel.DirectionalLight
 import com.monkopedia.konstructor.frontend.nonInvertedTheme
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import csstype.AlignItems
-import csstype.Auto.auto
-import csstype.Color
-import csstype.Display
-import csstype.FlexDirection
-import csstype.JustifyContent
-import csstype.important
-import csstype.pct
-import csstype.px
 import emotion.react.css
 import kotlin.math.roundToInt
 import mui.icons.material.Add
@@ -38,10 +29,11 @@ import mui.material.CardContent
 import mui.material.Divider
 import mui.material.FormControlVariant
 import mui.material.IconButton
-import mui.material.PaperVariant.outlined
+import mui.material.PaperVariant.Companion.outlined
 import mui.material.Size.large
 import mui.material.TextField
 import mui.material.Typography
+import mui.system.sx
 import org.koin.core.component.get
 import react.FC
 import react.Props
@@ -50,6 +42,15 @@ import react.dom.aria.ariaLabel
 import react.dom.html.ReactHTML.div
 import react.dom.onChange
 import react.useMemo
+import web.cssom.AlignItems
+import web.cssom.Auto
+import web.cssom.Color
+import web.cssom.Display
+import web.cssom.FlexDirection
+import web.cssom.JustifyContent
+import web.cssom.important
+import web.cssom.pct
+import web.cssom.px
 
 val GlSettingsPane = FC<Props> {
     val ambient = RootScope.useCollected(0.0) {
@@ -100,7 +101,7 @@ val GlSettingsPane = FC<Props> {
             }
             IconButton {
                 css {
-                    marginLeft = auto
+                    marginLeft = Auto.auto
                 }
                 size = large
                 ariaLabel = "add"
@@ -113,7 +114,7 @@ val GlSettingsPane = FC<Props> {
         for ((i, light) in lights.withIndex()) {
             Card {
                 variant = outlined
-                css {
+                sx {
                     marginBottom = 16.px
                 }
                 CardContent {
@@ -137,7 +138,7 @@ val GlSettingsPane = FC<Props> {
                         }
                         IconButton {
                             css {
-                                marginLeft = auto
+                                marginLeft = Auto.auto
                             }
                             size = large
                             ariaLabel = "remove"
@@ -179,7 +180,7 @@ val GlSettingsPane = FC<Props> {
                             marginTop = 8.px
                             paddingLeft = 16.px
                             paddingRight = 16.px
-                            width = auto
+                            width = Auto.auto
                             this.display = Display.flex
                             this.flexDirection = FlexDirection.row
                             this.alignItems = AlignItems.center

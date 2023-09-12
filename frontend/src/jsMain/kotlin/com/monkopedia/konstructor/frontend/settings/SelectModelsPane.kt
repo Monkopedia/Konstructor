@@ -23,14 +23,6 @@ import com.monkopedia.konstructor.frontend.model.RenderModel
 import com.monkopedia.konstructor.frontend.model.RenderModel.DisplayTarget
 import com.monkopedia.konstructor.frontend.utils.buildExt
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import csstype.Border
-import csstype.Color
-import csstype.Display
-import csstype.FlexDirection
-import csstype.LineStyle
-import csstype.number
-import csstype.px
-import dom.html.HTMLButtonElement
 import emotion.react.css
 import kotlinx.browser.window
 import mui.icons.material.Colorize
@@ -44,9 +36,9 @@ import mui.material.Popover
 import mui.material.PopoverOrigin
 import mui.material.Switch
 import mui.material.SwitchBaseEdge
-import mui.material.SwitchColor.primary
+import mui.material.SwitchColor.Companion.primary
 import mui.material.Typography
-import mui.material.styles.TypographyVariant.subtitle1
+import mui.material.styles.TypographyVariant.Companion.subtitle1
 import mui.system.sx
 import org.koin.core.component.get
 import react.FC
@@ -56,6 +48,14 @@ import react.dom.aria.ariaLabel
 import react.dom.html.ReactHTML.div
 import react.memo
 import react.useState
+import web.cssom.Border
+import web.cssom.Color
+import web.cssom.Display
+import web.cssom.FlexDirection
+import web.cssom.LineStyle
+import web.cssom.number
+import web.cssom.px
+import web.html.HTMLButtonElement
 
 external interface SelectModelsProps : Props {
     var workManager: WorkManager

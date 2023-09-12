@@ -22,24 +22,25 @@ import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.COMPILI
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.EXECUTING
 import com.monkopedia.konstructor.frontend.model.KonstructionModel.State.LOADING
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import csstype.AlignContent
-import csstype.Color
-import csstype.Display
-import csstype.JustifyContent
-import csstype.Position
-import csstype.integer
-import csstype.pct
-import csstype.px
 import dukat.codemirror.state.EditorState
 import dukat.codemirror.view.EditorView
 import emotion.react.css
 import mui.material.Card
 import mui.material.CircularProgress
 import mui.material.Typography
+import mui.system.sx
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.memo
+import web.cssom.AlignContent
+import web.cssom.Color
+import web.cssom.Display
+import web.cssom.JustifyContent
+import web.cssom.Position
+import web.cssom.integer
+import web.cssom.pct
+import web.cssom.px
 
 external interface KonstructionEditorProps : Props {
     var konstructionModel: KonstructionModel
@@ -122,7 +123,7 @@ val MessageComponent = memo(
             else -> props.message!!
         }
         Card {
-            css {
+            sx {
                 position = Position.absolute
                 background = Color(invertedTheme.palette.background.paper)
                 left = 50.pct

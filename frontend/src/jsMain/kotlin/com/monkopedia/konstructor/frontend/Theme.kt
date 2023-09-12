@@ -16,15 +16,15 @@
 package com.monkopedia.konstructor.frontend
 
 import com.monkopedia.konstructor.frontend.utils.buildExt
-import csstype.Color
 import kotlinext.js.js
-import mui.material.PaletteMode.dark
-import mui.material.PaletteMode.light
+import mui.material.PaletteMode.Companion.dark
+import mui.material.PaletteMode.Companion.light
 import mui.material.styles.PaletteColor
 import mui.material.styles.PaletteOptions
 import mui.material.styles.ThemeOptions
 import mui.material.styles.TypeText
 import mui.material.styles.createTheme
+import web.cssom.Color
 
 private val themeOptions: ThemeOptions = buildExt {
     typography = buildExt {

@@ -31,9 +31,6 @@ import com.monkopedia.konstructor.frontend.settings.NavigationPane
 import com.monkopedia.konstructor.frontend.settings.SelectModelsPane
 import com.monkopedia.konstructor.frontend.settings.SettingsPane
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import csstype.Display
-import csstype.FlexDirection
-import csstype.pct
 import emotion.react.css
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
@@ -42,6 +39,9 @@ import react.Props
 import react.dom.html.ReactHTML.div
 import react.memo
 import react.useMemo
+import web.cssom.Display
+import web.cssom.FlexDirection
+import web.cssom.pct
 
 external interface MainScreenProps : Props {
     var workManager: WorkManager

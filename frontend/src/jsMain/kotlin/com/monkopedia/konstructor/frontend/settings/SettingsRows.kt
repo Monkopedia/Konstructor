@@ -15,24 +15,24 @@
  */
 package com.monkopedia.konstructor.frontend.settings
 
-import csstype.AlignItems
-import csstype.Auto.auto
-import csstype.Display
-import csstype.FlexDirection
-import csstype.pct
-import csstype.px
 import emotion.react.css
 import mui.material.FormControlLabel
-import mui.material.LabelPlacement.start
+import mui.material.LabelPlacement.Companion.start
 import mui.material.Slider
 import mui.material.SliderColor
 import mui.material.Switch
-import mui.material.SwitchColor.primary
+import mui.material.SwitchColor.Companion.primary
 import mui.material.Typography
 import react.FC
 import react.PropsWithClassName
 import react.create
 import react.dom.html.ReactHTML.div
+import web.cssom.AlignItems
+import web.cssom.Auto
+import web.cssom.Display
+import web.cssom.FlexDirection
+import web.cssom.pct
+import web.cssom.px
 
 external interface SwitchRowProps : PropsWithClassName {
     var label: String
@@ -75,7 +75,7 @@ external interface SliderRowProps : PropsWithClassName {
 val SliderRow = FC<SliderRowProps> { props ->
     div {
         css {
-            width = auto
+            width = Auto.auto
         }
         Typography {
             +props.label

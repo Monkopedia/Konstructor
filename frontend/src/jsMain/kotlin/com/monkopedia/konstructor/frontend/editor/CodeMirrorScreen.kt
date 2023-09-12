@@ -16,7 +16,6 @@
 package com.monkopedia.konstructor.frontend.editor
 
 import com.monkopedia.konstructor.frontend.utils.buildExt
-import dom.html.HTMLDivElement
 import dukat.codemirror.state.EditorState
 import dukat.codemirror.state.Text
 import dukat.codemirror.view.EditorView
@@ -29,6 +28,7 @@ import react.memo
 import react.useEffect
 import react.useRef
 import styled.StyleSheet
+import web.html.HTMLDivElement
 
 internal object MirrorStyles : StyleSheet("mirror", isStatic = true) {
     val errorLineBackground by css {

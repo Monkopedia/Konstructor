@@ -26,6 +26,7 @@ import react.Props
 import react.create
 import react.dom.client.createRoot
 import react.dom.render
+import web.dom.Element
 
 fun main() {
     console.log("Starting everything")
@@ -36,7 +37,7 @@ fun main() {
 //    kotlinext.js.require("codemirror/theme/darcula.css")
 //    kotlinext.js.require("codemirror/mode/clike/clike.js")
 //    kotlinext.js.require("codemirror/dist/index.js")
-    val root = createRoot(document.getElementById("root")!! as dom.Element)
+    val root = createRoot(document.getElementById("root")!! as Element)
     root.render(
         Fragment.create {
             Base()

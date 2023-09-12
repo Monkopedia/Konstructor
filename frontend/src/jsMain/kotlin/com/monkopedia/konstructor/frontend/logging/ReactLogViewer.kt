@@ -17,7 +17,6 @@ package com.monkopedia.konstructor.frontend.logging
 
 import com.monkopedia.konstructor.frontend.editor.MirrorStyles
 import com.monkopedia.konstructor.frontend.utils.buildExt
-import dom.html.HTMLDivElement
 import dukat.codemirror.state.EditorState
 import dukat.codemirror.view.EditorView
 import dukat.codemirror.vim.CodeMirror
@@ -27,6 +26,7 @@ import react.dom.html.ReactHTML
 import react.memo
 import react.useEffect
 import react.useRef
+import web.html.HTMLDivElement
 
 external interface LogViewerProps : Props {
     var editorState: EditorState

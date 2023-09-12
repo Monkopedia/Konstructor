@@ -22,14 +22,8 @@ plugins {
 version = "0.1"
 
 repositories {
-    jcenter()
     mavenCentral()
     mavenLocal()
-    maven(url = "https://dl.bintray.com/kotlin/kotlin-dev/")
-    maven(url = "https://dl.bintray.com/kotlin/kotlin-eap/")
-    maven(url = "https://kotlinx.bintray.com/kotlinx/")
-    maven("https://kotlin.bintray.com/kotlin-js-wrappers")
-    maven(url = "https://jitpack.io")
 }
 
 kotlin {
@@ -62,7 +56,6 @@ kotlin {
         implementation(libs.koin.core)
         implementation(libs.kotlin.stdlib.js)
         compileOnly(libs.ktor.client.core)
-        compileOnly(libs.ktor.client.js)
         implementation(libs.kotlin.emotion)
         implementation(libs.kotlin.css)
         implementation(libs.kotlin.styled.next)
@@ -70,7 +63,7 @@ kotlin {
         implementation(libs.kotlin.react.dom)
         implementation(libs.kotlin.react.router.dom)
         implementation(libs.kotlin.extensions)
-        implementation(libs.kotlinx.coroutines.core.js)
+        implementation(libs.kotlinx.coroutines.core)
         implementation(libs.ktor.http)
         implementation(libs.ktor.client.core)
         implementation(libs.ktor.client.websockets)

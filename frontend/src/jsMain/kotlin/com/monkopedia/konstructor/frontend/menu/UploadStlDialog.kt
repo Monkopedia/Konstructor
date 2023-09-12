@@ -18,8 +18,8 @@ package com.monkopedia.konstructor.frontend.menu
 import com.monkopedia.konstructor.frontend.utils.buildExt
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import mui.material.Button
-import mui.material.ButtonColor.primary
-import mui.material.ButtonColor.secondary
+import mui.material.ButtonColor.Companion.primary
+import mui.material.ButtonColor.Companion.secondary
 import mui.material.Dialog
 import mui.material.DialogActions
 import mui.material.DialogContent

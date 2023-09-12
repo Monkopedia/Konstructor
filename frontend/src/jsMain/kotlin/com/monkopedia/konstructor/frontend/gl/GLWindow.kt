@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,10 +20,7 @@ import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.model.GlControlsModel
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import com.monkopedia.konstructor.frontend.utils.useEffect
-import csstype.pct
-import dom.Element
-import dom.Node
-import dom.html.HTMLDivElement
+import csstype.Properties
 import emotion.react.css
 import info.laht.threekt.cameras.PerspectiveCamera
 import info.laht.threekt.external.controls.OrbitControls
@@ -35,7 +32,6 @@ import info.laht.threekt.lights.DirectionalLight
 import info.laht.threekt.lights.Light
 import info.laht.threekt.materials.MeshPhongMaterial
 import info.laht.threekt.math.ColorConstants
-import info.laht.threekt.math.Sphere
 import info.laht.threekt.objects.Mesh
 import info.laht.threekt.renderers.WebGLRenderer
 import info.laht.threekt.renderers.WebGLRendererParams
@@ -49,6 +45,13 @@ import react.RefCallback
 import react.dom.html.ReactHTML.div
 import react.useRef
 import react.useState
+import web.cssom.Position
+import web.cssom.pct
+import web.cssom.px
+import web.dom.Element
+import web.dom.Node
+import web.html.HTMLDivElement
+import web.html.HTMLElement
 import kotlin.math.min
 
 external interface GLProps : Props {
@@ -63,7 +66,7 @@ data class GLState(
 
 val GLComponent = FC<GLProps> { props ->
     val callbackRef by useState {
-        RefCallback { v: dom.html.HTMLDivElement? ->
+        RefCallback { v: HTMLDivElement? ->
             GLWindow.setElement(v)
         }
     }
@@ -179,11 +182,16 @@ object GLWindow {
         currentLights.add(light)
 
         orientationScene.add(AmbientLight())
-        orientationScene.add(Mesh(SphereGeometry(1.0), MeshPhongMaterial().apply {
-            color.set("#ff0000")
-            specular.set(0x111111)
-            shininess = 200.0
-        }))
+        orientationScene.add(
+            Mesh(
+                SphereGeometry(1.0),
+                MeshPhongMaterial().apply {
+                    color.set("#ff0000")
+                    specular.set(0x111111)
+                    shininess = 200.0
+                }
+            )
+        )
 
         camera =
             PerspectiveCamera(75, window.innerWidth.toDouble() / 2 / window.innerHeight, 0.1, 1000)
@@ -236,7 +244,7 @@ object GLWindow {
         }
     }
 
-    fun setElement(element: dom.html.HTMLElement?) {
+    fun setElement(element: HTMLElement?) {
         lastElement?.removeChild(renderer.domElement)
         element?.appendChild(renderer.domElement)
 //            element?.appendChild(stats.dom)
@@ -246,8 +254,10 @@ object GLWindow {
 
     fun setOrientationElement(element: Element?) {
         lastOrientationElement?.removeChild(orientationRenderer.domElement)
-        orientationRenderer.domElement.asDynamic().style.position = "fixed"
-        orientationRenderer.domElement.asDynamic().style.bottom = "0px"
+        @Suppress("UNCHECKED_CAST_TO_EXTERNAL_INTERFACE")
+        val style = orientationRenderer.domElement.asDynamic().style as Properties
+        style.position = Position.fixed
+        style.bottom = 0.px
         element?.appendChild(orientationRenderer.domElement)
         lastOrientationElement = element
     }

@@ -18,14 +18,14 @@ package com.monkopedia.konstructor.frontend
 import com.monkopedia.konstructor.frontend.model.GlobalDialogsModel
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import mui.material.Button
-import mui.material.ButtonColor.error
-import mui.material.ButtonColor.primary
+import mui.material.ButtonColor.Companion.error
+import mui.material.ButtonColor.Companion.primary
 import mui.material.Dialog
 import mui.material.DialogActions
 import mui.material.DialogContent
 import mui.material.DialogTitle
 import mui.material.Typography
-import mui.material.styles.TypographyVariant.body1
+import mui.material.styles.TypographyVariant.Companion.body1
 import react.FC
 import react.Props
 import react.memo

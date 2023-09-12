@@ -29,7 +29,6 @@ import com.monkopedia.konstructor.frontend.utils.Icons.stlIcon
 import com.monkopedia.konstructor.frontend.utils.useCloseable
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import com.monkopedia.konstructor.frontend.utils.useSubScope
-import csstype.px
 import emotion.react.css
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -41,14 +40,14 @@ import mui.icons.material.Folder
 import mui.icons.material.Upload
 import mui.material.Collapse
 import mui.material.IconButton
-import mui.material.IconButtonEdge.end
+import mui.material.IconButtonEdge.Companion.end
 import mui.material.ListItem
 import mui.material.ListItemButton
 import mui.material.ListItemIcon
 import mui.material.ListItemSecondaryAction
 import mui.material.ListItemText
 import mui.material.SvgIcon
-import mui.material.SvgIconColor.primary
+import mui.material.SvgIconColor.Companion.primary
 import mui.material.Typography
 import mui.system.sx
 import org.koin.core.component.get
@@ -60,6 +59,7 @@ import react.dom.aria.ariaLabel
 import react.dom.svg.ReactSVG.path
 import react.memo
 import react.useState
+import web.cssom.px
 
 external interface NavigationPaneProps : Props {
     var workManager: WorkManager

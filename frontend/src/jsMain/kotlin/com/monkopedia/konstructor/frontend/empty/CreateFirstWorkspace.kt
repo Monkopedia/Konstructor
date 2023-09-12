@@ -19,13 +19,6 @@ import com.monkopedia.konstructor.frontend.WorkManager
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel
 import com.monkopedia.konstructor.frontend.utils.useCloseable
-import csstype.AlignContent
-import csstype.AlignItems
-import csstype.Display
-import csstype.FlexDirection
-import csstype.JustifyContent
-import csstype.px
-import csstype.vh
 import emotion.react.css
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -33,7 +26,7 @@ import mui.icons.material.Login
 import mui.material.CircularProgress
 import mui.material.FormControlVariant
 import mui.material.IconButton
-import mui.material.IconButtonColor.primary
+import mui.material.IconButtonColor.Companion.primary
 import mui.material.Size.medium
 import mui.material.TextField
 import org.koin.core.component.get
@@ -43,6 +36,13 @@ import react.Props
 import react.dom.html.ReactHTML.div
 import react.dom.onChange
 import react.useState
+import web.cssom.AlignContent
+import web.cssom.AlignItems
+import web.cssom.Display
+import web.cssom.FlexDirection
+import web.cssom.JustifyContent
+import web.cssom.px
+import web.cssom.vh
 
 external interface CreateFirstWorkspaceProps : Props {
     var workManager: WorkManager

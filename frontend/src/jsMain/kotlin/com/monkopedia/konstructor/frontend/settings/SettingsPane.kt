@@ -18,17 +18,17 @@ package com.monkopedia.konstructor.frontend.settings
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.nonInvertedTheme
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import csstype.Color
-import csstype.Display
-import csstype.FlexDirection
-import csstype.pct
-import csstype.px
 import emotion.react.css
 import mui.material.Divider
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.useCallback
+import web.cssom.Color
+import web.cssom.Display
+import web.cssom.FlexDirection
+import web.cssom.pct
+import web.cssom.px
 
 val SettingsPane = FC<Props> {
     val showLeft = RootScope.settingsModel.showCodeLeft.useCollected(false)
@@ -83,15 +83,15 @@ val SettingsPane = FC<Props> {
             this.onValueChanged = setShowCameraWidget
         }
         Divider()
-        ButtonRow {
-            css {
-                width = 100.pct
-            }
-            this.label = "Show Logs"
-            this.onClick = {
-                RootScope.loggingModel.openLogging()
-            }
-        }
-        Divider()
+//        ButtonRow {
+//            css {
+//                width = 100.pct
+//            }
+//            this.label = "Show Logs"
+//            this.onClick = {
+//                RootScope.loggingModel.openLogging()
+//            }
+//        }
+//        Divider()
     }
 }

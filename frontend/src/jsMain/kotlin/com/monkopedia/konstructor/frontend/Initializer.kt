@@ -19,8 +19,6 @@ import com.monkopedia.konstructor.frontend.empty.CreateFirstWorkspace
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.logging.LoggingOverlay
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import csstype.Auto
-import csstype.px
 import emotion.react.css
 import mui.material.Typography
 import mui.material.styles.TypographyVariant
@@ -28,6 +26,8 @@ import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.useState
+import web.cssom.Auto
+import web.cssom.px
 
 data class InitializerState(
     val workManager: WorkManager,
