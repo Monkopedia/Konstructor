@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -96,10 +96,8 @@ class KonstructionServiceImpl(
                 konstruction = info.konstruction.copy(name = name)
             )
             konstructionController.info = newInfo
-            listenerLock.withLock {
-                listeners.values.forEach {
-                    it.onInfoChanged(newInfo, emptyList())
-                }
+            listenerLock.withLock { listeners.values.toList() }.forEach {
+                it.onInfoChanged(newInfo, emptyList())
             }
         }
 
@@ -127,11 +125,9 @@ class KonstructionServiceImpl(
                 }
             )
             konstructionController.info = newInfo
-            listenerLock.withLock {
-                listeners.values.forEach {
-                    it.onInfoChanged(newInfo, changedTargets, dirtyChanged = false)
-                    it.onContentChange()
-                }
+            listenerLock.withLock { listeners.values.toList() }.forEach {
+                it.onInfoChanged(newInfo, changedTargets, dirtyChanged = false)
+                it.onContentChange()
             }
         }
 
@@ -158,17 +154,13 @@ class KonstructionServiceImpl(
                     }
                 )
                 konstructionController.info = newInfo
-                listenerLock.withLock {
-                    listeners.values.forEach {
-                        it.onInfoChanged(newInfo, changedTargets)
-                    }
+                listenerLock.withLock { listeners.values.toList() }.forEach {
+                    it.onInfoChanged(newInfo, changedTargets)
                 }
             }
             konstructionController.lastCompileResult().also { result ->
-                listenerLock.withLock {
-                    listeners.values.forEach {
-                        it.onTaskComplete(result)
-                    }
+                listenerLock.withLock { listeners.values.toList() }.forEach {
+                    it.onTaskComplete(result)
                 }
             }
         }
@@ -176,19 +168,19 @@ class KonstructionServiceImpl(
     override suspend fun register(listener: KonstructionListener): String =
         callContext("register", baseCallSign = konstructionController.callSign) {
             val key = randomUuid()
-            listenerLock.withLock {
-                listeners[key] = ListenerHandler(key, this, scope, listener).also {
-                    it.init()
-                }
+            val handler = ListenerHandler(key, this, scope, listener).also {
+                it.init()
             }
+            listenerLock.withLock { listeners[key] = handler }
+
             key
         }
 
     override suspend fun unregister(key: String): Boolean =
         callContext("unregister", baseCallSign = konstructionController.callSign) {
             listenerLock.withLock {
-                listeners.remove(key)?.close() != null
-            }
+                listeners.remove(key)
+            }?.close() != null
         }
 
     override suspend fun konstructed(target: String): String? =
@@ -241,26 +233,22 @@ class KonstructionServiceImpl(
                     targets = targets
                 )
                 konstructionController.info = newInfo
-                listenerLock.withLock {
-                    listeners.values.forEach {
-                        it.onInfoChanged(newInfo, changedTargets)
-                        for (rendered in latestBuilt) {
-                            it.onRenderChanged(
-                                KonstructionRender(
-                                    info.konstruction,
-                                    rendered,
-                                    konstructed(rendered)
-                                )
+                listenerLock.withLock { listeners.values.toList() }.forEach {
+                    it.onInfoChanged(newInfo, changedTargets)
+                    for (rendered in latestBuilt) {
+                        it.onRenderChanged(
+                            KonstructionRender(
+                                info.konstruction,
+                                rendered,
+                                konstructed(rendered)
                             )
-                        }
+                        )
                     }
                 }
             }
             konstructionController.lastRenderResult().also { result ->
-                listenerLock.withLock {
-                    listeners.values.forEach {
-                        it.onTaskComplete(result)
-                    }
+                listenerLock.withLock { listeners.values.toList() }.forEach {
+                    it.onTaskComplete(result)
                 }
             }
         }
