@@ -26,12 +26,12 @@ import info.laht.threekt.cameras.PerspectiveCamera
 import info.laht.threekt.external.controls.OrbitControls
 import info.laht.threekt.external.libs.Stats
 import info.laht.threekt.external.loaders.STLLoader
-import info.laht.threekt.geometries.SphereGeometry
 import info.laht.threekt.lights.AmbientLight
 import info.laht.threekt.lights.DirectionalLight
 import info.laht.threekt.lights.Light
 import info.laht.threekt.materials.MeshPhongMaterial
 import info.laht.threekt.math.ColorConstants
+import info.laht.threekt.math.Vector3
 import info.laht.threekt.objects.Mesh
 import info.laht.threekt.renderers.WebGLRenderer
 import info.laht.threekt.renderers.WebGLRendererParams
@@ -182,16 +182,32 @@ object GLWindow {
         currentLights.add(light)
 
         orientationScene.add(AmbientLight())
-        orientationScene.add(
-            Mesh(
-                SphereGeometry(1.0),
-                MeshPhongMaterial().apply {
-                    color.set("#ff0000")
-                    specular.set(0x111111)
-                    shininess = 200.0
-                }
-            )
-        )
+        STLLoader().load("models/arrow.stl", {
+            val matZ = MeshPhongMaterial().apply {
+                color.set(0xff0000)
+                specular.set(0x111111)
+                shininess = 200.0
+            }
+            val z = Mesh(it, matZ)
+            z.lookAt(0.0, 0.0, 1.0)
+            orientationScene.add(z)
+            val matX = MeshPhongMaterial().apply {
+                color.set(0x00ff00)
+                specular.set(0x111111)
+                shininess = 200.0
+            }
+            val x = Mesh(it, matX)
+            x.lookAt(1.0, 0.0, 0.0)
+            orientationScene.add(x)
+            val matY = MeshPhongMaterial().apply {
+                color.set(0x0000ff)
+                specular.set(0x111111)
+                shininess = 200.0
+            }
+            val y = Mesh(it, matY)
+            y.lookAt(0.0, 1.0, 0.0)
+            orientationScene.add(y)
+        })
 
         camera =
             PerspectiveCamera(75, window.innerWidth.toDouble() / 2 / window.innerHeight, 0.1, 1000)
@@ -277,8 +293,17 @@ object GLWindow {
         window.requestAnimationFrame {
             animate()
         }
+        val desiredPosition = camera.getWorldDirection()
+        orientationCamera.position.x = -desiredPosition.x * 9.0
+        orientationCamera.position.y = -desiredPosition.y * 9.0
+        orientationCamera.position.z = -desiredPosition.z * 9.0
+        orientationCamera.lookAt(0, 0, 0)
         renderer.render(scene, camera)
         orientationRenderer.render(orientationScene, orientationCamera)
         stats.update()
     }
+}
+
+private fun Vector3.str(): String {
+    return "($x $y $z)"
 }
