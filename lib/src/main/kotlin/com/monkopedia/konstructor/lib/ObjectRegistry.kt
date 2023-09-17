@@ -27,7 +27,7 @@ fun runKonstruction(args: Array<String>, script: KcsgScript) {
     runBlocking {
         LoggerFactory.getILoggerFactory()
         withStdInOut(ksrpcEnvironment { }) { connection ->
-            connection.registerDefault<ScriptService>(ScriptServiceImpl(script))
+            connection.registerDefault(ScriptServiceImpl(script) as ScriptService)
             awaitCancellation()
         }
     }

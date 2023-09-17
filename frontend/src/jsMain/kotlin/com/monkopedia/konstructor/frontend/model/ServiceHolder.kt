@@ -73,7 +73,7 @@ class ServiceHolder(scope: CoroutineScope) {
         val conn =
             if (useWs) HttpClient { install(WebSockets) }.asWebsocketConnection(url, env)
             else HttpClient().asConnection(url, env)
-        conn.defaultChannel().toStub<Konstructor>().also {
+        conn.defaultChannel().toStub<Konstructor, String>().also {
             println("Connected to $useWs $hostname $port")
         }
     }.shareIn(scope, SharingStarted.Lazily, replay = 1)

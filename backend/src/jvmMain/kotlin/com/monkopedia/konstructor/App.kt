@@ -49,7 +49,7 @@ class App : ServiceApp("konstructor") {
         KonstructorImpl(config)
     }
 
-    override val env: KsrpcEnvironment = ksrpcEnvironment {
+    override val env: KsrpcEnvironment<String> = ksrpcEnvironment {
         errorListener = ErrorListener { exception ->
             logger.warn("Exception caught in ksrpc", exception)
         }
@@ -76,7 +76,7 @@ class App : ServiceApp("konstructor") {
         }
     }
 
-    override fun createChannel(): SerializedService {
-        return service.serialized<Konstructor>(ksrpcEnvironment { })
+    override fun createChannel(): SerializedService<String> {
+        return (service as Konstructor).serialized(ksrpcEnvironment { })
     }
 }

@@ -52,7 +52,7 @@ class ScriptManager private constructor(private val config: Config) {
 
         val exec = ExecUtil.executeWithChannel(command)
         val connection = exec.connection.await()
-        val service = connection.defaultChannel().toStub<ScriptService>()
+        val service = connection.defaultChannel().toStub<ScriptService, String>()
         val callSign = coroutineContext[CallSign.Key]
         GlobalScope.launch(callSign ?: EmptyCoroutineContext) {
             hauler.info("Waiting for ${paths.workspaceId}/${paths.konstructionId}")

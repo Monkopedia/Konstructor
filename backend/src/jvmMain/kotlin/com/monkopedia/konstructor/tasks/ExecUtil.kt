@@ -74,7 +74,7 @@ object ExecUtil {
                 )
         )
         val exitCode = CompletableDeferred<Int>()
-        val connection = CompletableDeferred<Connection>()
+        val connection = CompletableDeferred<Connection<String>>()
 
         init {
             parentScope.launch {

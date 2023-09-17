@@ -21,7 +21,7 @@ plugins {
 }
 
 repositories {
-    jcenter()
+    mavenCentral()
     mavenLocal()
 }
 
@@ -56,9 +56,13 @@ dependencies {
     implementation(project(":lib"))
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+}
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
         freeCompilerArgs += "-Xskip-prerelease-check"
     }
 }
@@ -72,9 +76,9 @@ val browser = rootProject.findProject(":frontend")!!
 val debugFrontend = properties["release"] == null
 val copy = tasks.register<Copy>("copyJsBundleToKtor") {
     if (debugFrontend) {
-        from("${browser.buildDir}/developmentExecutable")
+        from("${browser.buildDir}/dist/js/developmentExecutable")
     } else {
-        from("${browser.buildDir}/distributions")
+        from("${browser.buildDir}/dist/js/productionExecutable")
     }
     into("$buildDir/importedResources/web")
 }

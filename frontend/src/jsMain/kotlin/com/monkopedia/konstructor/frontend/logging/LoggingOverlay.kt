@@ -38,7 +38,7 @@ val LoggingOverlay = FC<Props> {
 
     Modal {
         this.open = isOpen
-        this.onClose = {
+        this.onClose = { _, _ ->
             RootScope.loggingModel.closeLogging()
         }
         div {
