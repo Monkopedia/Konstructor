@@ -48,6 +48,8 @@ import web.cssom.Color
 import web.cssom.Display
 import web.cssom.FlexDirection
 import web.cssom.JustifyContent
+import web.cssom.Length
+import web.cssom.Overflow.Companion.visible
 import web.cssom.important
 import web.cssom.pct
 import web.cssom.px
@@ -77,6 +79,8 @@ val GlSettingsPane = FC<Props> {
             paddingTop = 32.px
             paddingRight = 40.px
             paddingBottom = 32.px
+            height = "calc(100vh - 64px)".unsafeCast<Length>()
+            overflowY = Auto.auto
         }
         SliderRow {
             label = "Ambient Light"
@@ -116,6 +120,7 @@ val GlSettingsPane = FC<Props> {
                 variant = outlined
                 sx {
                     marginBottom = 16.px
+                    overflow = visible
                 }
                 CardContent {
                     css {

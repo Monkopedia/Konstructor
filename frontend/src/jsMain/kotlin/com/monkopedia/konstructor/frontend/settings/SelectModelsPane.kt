@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -48,11 +48,14 @@ import react.dom.aria.ariaLabel
 import react.dom.html.ReactHTML.div
 import react.memo
 import react.useState
+import web.cssom.Auto
 import web.cssom.Border
 import web.cssom.Color
 import web.cssom.Display
 import web.cssom.FlexDirection
+import web.cssom.Length
 import web.cssom.LineStyle
+import web.cssom.Overflow
 import web.cssom.number
 import web.cssom.px
 import web.html.HTMLButtonElement
@@ -89,8 +92,10 @@ val ScopedSelectModelsPane = FC<ScopedSelectModelsProps> { props ->
     var targetPicker by useState<Pair<HTMLButtonElement, DisplayTarget>?>(null)
     div {
         css {
-            this.marginLeft = 16.px
-            this.marginRight = 32.px
+            this.paddingLeft = 16.px
+            this.paddingRight = 32.px
+            height = "calc(100vh - 64px)".unsafeCast<Length>()
+            overflow = Auto.auto
         }
         mui.material.List {
             for (key in keys) {

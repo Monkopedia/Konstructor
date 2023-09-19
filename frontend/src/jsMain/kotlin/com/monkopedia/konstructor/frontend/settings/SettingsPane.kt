@@ -24,9 +24,11 @@ import react.FC
 import react.Props
 import react.dom.html.ReactHTML.div
 import react.useCallback
+import web.cssom.Auto
 import web.cssom.Color
 import web.cssom.Display
 import web.cssom.FlexDirection
+import web.cssom.Length
 import web.cssom.pct
 import web.cssom.px
 
@@ -55,6 +57,8 @@ val SettingsPane = FC<Props> {
             paddingTop = 32.px
             paddingRight = 40.px
             paddingBottom = 32.px
+            height = "calc(100vh - 64px)".unsafeCast<Length>()
+            overflowY = Auto.auto
         }
         SwitchRow {
             css {
