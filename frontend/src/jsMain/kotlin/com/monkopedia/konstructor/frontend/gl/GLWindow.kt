@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -36,6 +36,7 @@ import info.laht.threekt.objects.Mesh
 import info.laht.threekt.renderers.WebGLRenderer
 import info.laht.threekt.renderers.WebGLRendererParams
 import info.laht.threekt.scenes.Scene
+import kotlin.math.min
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.combine
 import org.koin.core.component.get
@@ -52,7 +53,6 @@ import web.dom.Element
 import web.dom.Node
 import web.html.HTMLDivElement
 import web.html.HTMLElement
-import kotlin.math.min
 
 external interface GLProps : Props {
     var konstruction: Konstruction?
