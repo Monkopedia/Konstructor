@@ -51,7 +51,7 @@ class App : ServiceApp("konstructor") {
 
     override val env: KsrpcEnvironment<String> = ksrpcEnvironment {
         errorListener = ErrorListener { exception ->
-            logger.warn("Exception caught in ksrpc", exception)
+            this@App.logger.warn("Exception caught in ksrpc", exception)
         }
     }
 
