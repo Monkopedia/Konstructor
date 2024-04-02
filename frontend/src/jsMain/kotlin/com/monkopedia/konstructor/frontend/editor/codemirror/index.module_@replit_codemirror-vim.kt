@@ -29,7 +29,6 @@ import dukat.codemirror.state.ChangeDesc
 import dukat.codemirror.state.EditorSelection
 import dukat.codemirror.view.EditorView
 import dukat.codemirror.view.ViewUpdate
-import js.core.Record
 import kotlin.js.RegExp
 import org.w3c.dom.Element
 import org.w3c.dom.HTMLElement
@@ -194,7 +193,6 @@ open external class CodeMirror(cm6: EditorView) {
     open fun openNotification(template: Node, options: NotificationOptions): () -> Unit
     open var cm6: EditorView
     open var state: `T$1`
-    open var marks: Record<String, Marker>
     open var `$mid`: Number
     open var curOp: Operation?
     open var options: Any

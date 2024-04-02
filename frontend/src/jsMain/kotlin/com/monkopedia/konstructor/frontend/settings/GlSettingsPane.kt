@@ -29,6 +29,7 @@ import mui.material.CardContent
 import mui.material.Divider
 import mui.material.FormControlVariant
 import mui.material.IconButton
+import mui.material.Paper
 import mui.material.PaperVariant.Companion.outlined
 import mui.material.Size.large
 import mui.material.TextField
@@ -116,13 +117,13 @@ val GlSettingsPane = FC<Props> {
             }
         }
         for ((i, light) in lights.withIndex()) {
-            Card {
+            Paper {
                 variant = outlined
                 sx {
                     marginBottom = 16.px
                     overflow = visible
                 }
-                CardContent {
+                div {
                     css {
                         paddingTop = important(0.px)
                         paddingBottom = important(16.px)

@@ -180,7 +180,7 @@ class KonstructionServiceImpl(
         callContext("unregister", baseCallSign = konstructionController.callSign) {
             listenerLock.withLock {
                 listeners.remove(key)
-            }?.close() != null
+            }?.onClose() != null
         }
 
     override suspend fun konstructed(target: String): String? =
@@ -294,8 +294,16 @@ class ListenerHandler(
         callbacks = listener.requestedCallbacks().toSet()
     }
 
-    suspend fun close() {
+    private suspend fun close() {
         konstruction.unregister(key)
+    }
+
+    suspend fun onClose() {
+        try {
+            listener.close()
+        } catch (t: Throwable) {
+            // Already closing, thats ok.
+        }
     }
 
     suspend fun onInfoChanged(

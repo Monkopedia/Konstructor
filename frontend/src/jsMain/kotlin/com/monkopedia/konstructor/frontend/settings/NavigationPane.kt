@@ -158,7 +158,7 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
         mui.material.List {
             for (konstruction in konstructions) {
                 ListItem {
-                    css {
+                    sx {
                         paddingLeft = 72.px
                     }
                     ListItemButton {
@@ -225,7 +225,7 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                 }
             }
             ListItem {
-                css {
+                sx {
                     paddingLeft = 72.px
                 }
                 ListItemButton {
@@ -246,7 +246,7 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                 }
             }
             ListItem {
-                css {
+                sx {
                     paddingLeft = 72.px
                 }
                 ListItemButton {

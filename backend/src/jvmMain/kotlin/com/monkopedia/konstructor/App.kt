@@ -27,6 +27,7 @@ import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.serialized
 import com.monkopedia.ksrpc.server.ServiceApp
 import io.ktor.server.application.Application
+import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.http.content.defaultResource
 import io.ktor.server.http.content.resources
@@ -52,28 +53,30 @@ class App : ServiceApp("konstructor") {
         KonstructorImpl(config)
     }
 
-    override val env: KsrpcEnvironment<String> = ksrpcEnvironment {
-        if (ksrpcLog) {
-            logger = object : Logger {
-                override fun debug(tag: String, message: String, throwable: Throwable?) {
-                    LoggerFactory.getLogger(tag).debug(message, throwable)
-                }
+    override val env: KsrpcEnvironment<String> by lazy {
+        ksrpcEnvironment {
+            if (ksrpcLog) {
+                logger = object : Logger {
+                    override fun debug(tag: String, message: String, throwable: Throwable?) {
+                        LoggerFactory.getLogger(tag).debug(message, throwable)
+                    }
 
-                override fun info(tag: String, message: String, throwable: Throwable?) {
-                    LoggerFactory.getLogger(tag).info(message, throwable)
-                }
+                    override fun info(tag: String, message: String, throwable: Throwable?) {
+                        LoggerFactory.getLogger(tag).info(message, throwable)
+                    }
 
-                override fun warn(tag: String, message: String, throwable: Throwable?) {
-                    LoggerFactory.getLogger(tag).warn(message, throwable)
-                }
+                    override fun warn(tag: String, message: String, throwable: Throwable?) {
+                        LoggerFactory.getLogger(tag).warn(message, throwable)
+                    }
 
-                override fun error(tag: String, message: String, throwable: Throwable?) {
-                    LoggerFactory.getLogger(tag).error(message, throwable)
+                    override fun error(tag: String, message: String, throwable: Throwable?) {
+                        LoggerFactory.getLogger(tag).error(message, throwable)
+                    }
                 }
             }
-        }
-        errorListener = ErrorListener { exception ->
-            this@App.logger.warn("Exception caught in ksrpc", exception)
+            errorListener = ErrorListener { exception ->
+                this@App.logger.warn("Exception caught in ksrpc", exception)
+            }
         }
     }
 

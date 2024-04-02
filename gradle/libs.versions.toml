@@ -5,17 +5,17 @@ hauler = "0.1.1"
 kcsg = "0.1.4"
 ksrpc = "0.8.2"
 koin = "3.6.0-wasm-alpha2"
-ktor = "3.0.0-beta-1"
+ktor = "2.3.9"
 kotlin = "1.9.23"
-kotlin-browser = "1.0.0-pre.722"
-kotlin-css = "1.0.0-pre.722"
-kotlin-emotion = "11.11.4-pre.722"
-kotlin-extensions = "1.0.1-pre.722"
-kotlin-mui = "5.14.12-pre.638"
-kotlin-mui-icons = "5.14.12-pre.638"
-kotlin-react = "18.2.0-pre.722"
-kotlin-react-router-dom = "6.22.1-pre.722"
-kotlin-styled-next = "1.2.4-pre.722"
+kotlin-browser = "1.0.0-pre.624"
+kotlin-css = "1.0.0-pre.624"
+kotlin-emotion = "11.11.1-pre.624"
+kotlin-extensions = "1.0.1-pre.624"
+kotlin-mui = "5.14.7-pre.624"
+kotlin-mui-icons = "5.14.7-pre.624"
+kotlin-react = "18.2.0-pre.624"
+kotlin-react-router-dom = "6.15.0-pre.624"
+kotlin-styled-next = "1.2.3-pre.624"
 kotlin-coroutines = "1.8.1-Beta"
 kotlin-datetime = "0.6.0-RC.2"
 kotlin-serialization = "1.6.3"
@@ -45,7 +45,7 @@ ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor"
 ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", version.ref = "ktor" }
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
 ktor-websocket-serialization = { module = "io.ktor:ktor-websocket-serialization", version.ref = "ktor" }
-kotlin-stdlib-js = { module = "org.jetbrains.kotlin:kotlin-stdlib-js", version.ref = "kotlin" }
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 kotlin-browser = { module = "org.jetbrains.kotlin-wrappers:kotlin-browser", version.ref = "kotlin-browser" }
 kotlin-css = { module = "org.jetbrains.kotlin-wrappers:kotlin-css", version.ref = "kotlin-css" }
 kotlin-emotion = { module = "org.jetbrains.kotlin-wrappers:kotlin-emotion", version.ref = "kotlin-emotion" }
