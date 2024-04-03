@@ -41,7 +41,7 @@ internal object MirrorStyles : StyleSheet("mirror", isStatic = true) {
 
 external interface CodeMirrorProps : Props {
     var editorState: EditorState
-    var setView: (EditorView?) -> Unit
+    var setViewAvailable: (EditorView, Boolean) -> Unit
     var target: String
     var onSave: ((String) -> Unit)?
 }
@@ -72,9 +72,9 @@ val CodeMirrorScreen = memo(
             }
             CodeMirror(cm)
             CodeMirror.commands.asDynamic().save = ::onSave
-            props.setView(cm)
+            props.setViewAvailable(cm, true)
             cleanup {
-                props.setView(null)
+                props.setViewAvailable(cm, false)
                 cm.destroy()
             }
         }

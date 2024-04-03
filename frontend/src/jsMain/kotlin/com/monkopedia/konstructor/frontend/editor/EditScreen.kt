@@ -70,7 +70,7 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
     }
     EditorScreen {
 //        content = currentText
-        this.setView = props.konstructionModel.setView
+        this.setViewAvailable = props.konstructionModel.setViewAvailable
         this.editorState = props.konstructionModel.editorState
         this.onSave = props.konstructionModel.onSave
         this.currentMessage = currentMessage
@@ -79,7 +79,7 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
 }
 
 external interface EditorScreenProps : Props {
-    var setView: (EditorView?) -> Unit
+    var setViewAvailable: (EditorView, Boolean) -> Unit
     var editorState: EditorState
     var target: String
     var onSave: ((String?) -> Unit)?
@@ -90,7 +90,7 @@ external interface EditorScreenProps : Props {
 val EditorScreen = memo(
     FC<EditorScreenProps> { props ->
         CodeMirrorScreen {
-            this.setView = props.setView
+            this.setViewAvailable = props.setViewAvailable
             this.editorState = props.editorState
             this.target = props.target
             this.onSave = props.onSave

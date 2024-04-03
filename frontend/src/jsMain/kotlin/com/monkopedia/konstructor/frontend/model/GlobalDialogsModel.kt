@@ -36,7 +36,7 @@ class GlobalDialogsModel(
     val hasConflictingState: Flow<Boolean> =
         scopeTracker.konstruction.filterNotNull().flatMapLatest {
             it.get<KonstructionModel>().pendingText
-        }.map { it != null }
+        }
 
     fun overwriteState() {
         val model = konstructionModel.value ?: return

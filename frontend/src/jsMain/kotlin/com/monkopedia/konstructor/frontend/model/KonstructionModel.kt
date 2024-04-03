@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -68,7 +68,7 @@ class KonstructionModel(
     private val serviceHolder: ServiceHolder,
     private val workspaceModel: WorkspaceModel,
     val konstructionId: String,
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
 ) {
     val workspaceId: String
         get() = workspaceModel.workspaceId
@@ -79,7 +79,7 @@ class KonstructionModel(
         }.shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
     private val konstructionService: Flow<KonstructionService?> = combine(
         serviceHolder.service,
-        konstruction
+        konstruction,
     ) { service, konstruction ->
         konstruction?.let { service.konstruction(it) }
     }.tryReconnects()
@@ -89,7 +89,7 @@ class KonstructionModel(
     private val mutableState = MutableStateFlow(LOADING)
     val currentText: Flow<String?> = combine(
         konstructionService,
-        reloadTextFlow.onStart { emit(Unit) }
+        reloadTextFlow.onStart { emit(Unit) },
     ) { konstructionService, _ ->
         konstructionService?.fetch().also {
             if (mutableState.value == LOADING) {
@@ -123,10 +123,10 @@ class KonstructionModel(
         get() = konstructorEditorState.editorState
     val currentMessage: Flow<String?>
         get() = konstructorEditorState.currentMessage
-    val setView: (EditorView?) -> Unit
-        get() = konstructorEditorState.setView
-    val pendingText: MutableStateFlow<String?>
-        get() = konstructorEditorState.pendingText
+    val setViewAvailable: (EditorView, Boolean) -> Unit
+        get() = konstructorEditorState.setViewAvailable
+    val pendingText: Flow<Boolean>
+        get() = konstructorEditorState.conflictingText
 
     init {
         coroutineScope.launch {
@@ -208,7 +208,7 @@ class KonstructionModel(
         DEFAULT,
         SAVING,
         COMPILING,
-        EXECUTING
+        EXECUTING,
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -220,7 +220,7 @@ class KonstructionModel(
                         CONTENT_CHANGE,
                         INFO_CHANGE,
                         RENDER_CHANGE,
-                        TASK_COMPLETE
+                        TASK_COMPLETE,
                     )
 
                 override suspend fun onInfoChanged(info: KonstructionInfo) {
@@ -258,19 +258,15 @@ class KonstructionModel(
                     mutableMessages.value += taskResult.messages
                 }
             }
-            try {
-                val key = register(listener)
-                send(Unit)
-                awaitClose {
-                    GlobalScope.launch {
-                        try {
-                            unregister(key)
-                        } catch (t: Throwable) {
-                        }
+            val key = register(listener)
+            send(Unit)
+            awaitClose {
+                GlobalScope.launch {
+                    try {
+                        unregister(key)
+                    } catch (t: Throwable) {
                     }
                 }
-            } catch (t: Throwable) {
-                t.printStackTrace()
             }
         }
     }

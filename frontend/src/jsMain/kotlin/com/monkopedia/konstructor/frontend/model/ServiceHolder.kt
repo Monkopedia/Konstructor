@@ -15,6 +15,7 @@
  */
 package com.monkopedia.konstructor.frontend.model
 
+import com.monkopedia.hauler.attach
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.ksrpc.ErrorListener
@@ -75,6 +76,7 @@ class ServiceHolder(scope: CoroutineScope) {
             else HttpClient().asConnection(url, env)
         conn.defaultChannel().toStub<Konstructor, String>().also {
             println("Connected to $useWs $hostname $port")
+            it.getGlobalShipper().requestDockPickup().attach(scope)
         }
     }.shareIn(scope, SharingStarted.Lazily, replay = 1)
 
