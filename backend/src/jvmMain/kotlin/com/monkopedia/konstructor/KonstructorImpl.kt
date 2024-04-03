@@ -128,6 +128,8 @@ class KonstructorImpl(private val config: Config) : Konstructor, LoggingService 
         warehouse
     }
 
+    override suspend fun ping(u: Unit) = Unit
+
     fun getInputStream(target: String): InputStream {
         return File(config.dataDir, target).inputStream()
     }

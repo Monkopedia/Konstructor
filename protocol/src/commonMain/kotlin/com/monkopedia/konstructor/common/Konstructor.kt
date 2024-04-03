@@ -39,6 +39,9 @@ interface Konstructor : RpcService {
 
     @KsMethod("/global_logging")
     suspend fun getGlobalShipper(u: Unit = Unit): Shipper
+
+    @KsMethod("/ping")
+    suspend fun ping(u: Unit = Unit)
 }
 
 @KsService

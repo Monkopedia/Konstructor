@@ -61,7 +61,7 @@ object RootScope : KoinComponent {
             NavigationDialogModel(get(), workManager)
         }
         factory { (workManager: WorkManager) ->
-            GlobalDialogsModel(get(), workManager, get())
+            GlobalDialogsModel(get(), workManager, get(), get())
         }
 
         scope<WorkspaceScope> {

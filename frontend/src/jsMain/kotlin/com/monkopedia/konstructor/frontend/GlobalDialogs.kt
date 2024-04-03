@@ -37,6 +37,7 @@ external interface GlobalDialogsProps : Props {
 val GlobalDialogs = memo(
     FC<GlobalDialogsProps> { props ->
         val pendingPresent = props.dialogModel.hasConflictingState.useCollected(false)
+        val isConnected = props.dialogModel.hasConnection.useCollected(false)
 
         Dialog {
             open = pendingPresent
@@ -64,6 +65,20 @@ val GlobalDialogs = memo(
                     onClick = {
                         props.dialogModel.overwriteState()
                     }
+                }
+            }
+        }
+
+        Dialog {
+            open = !isConnected
+            onClose = { _, _ -> }
+            DialogTitle {
+                +"You are no longer connected to the server"
+            }
+            DialogContent {
+                Typography {
+                    this.variant = body1
+                    +"I'll try to reconnect, why don't you breath some air."
                 }
             }
         }
