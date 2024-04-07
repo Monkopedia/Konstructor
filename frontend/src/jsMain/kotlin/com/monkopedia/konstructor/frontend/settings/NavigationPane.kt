@@ -29,7 +29,6 @@ import com.monkopedia.konstructor.frontend.utils.Icons.stlIcon
 import com.monkopedia.konstructor.frontend.utils.useCloseable
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import com.monkopedia.konstructor.frontend.utils.useSubScope
-import emotion.react.css
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import mui.icons.material.Add
@@ -124,12 +123,12 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
             ListItemIcon {
                 Folder()
             }
+            this.onClick = {
+                isExpanded = !isExpanded
+            }
             ListItemText {
                 this.primary = Typography.create {
                     +props.workspace.name
-                }
-                this.onClick = {
-                    isExpanded = !isExpanded
                 }
             }
             if (isExpanded) {
