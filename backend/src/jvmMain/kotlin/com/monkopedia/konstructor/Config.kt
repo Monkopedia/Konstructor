@@ -26,11 +26,11 @@ class Config {
     val executeTimeout: Duration
         get() = 5.minutes
     val cachingEnabled: Boolean
-        get() = false
+        get() = true
     val compilerOpts: String
         get() = ""
     val runtimeOpts: String
-        get() = "-cp ${LibsJar.getLibsJar(this).absolutePath}"
+        get() = "-cp ${LibsJar.getLibsJar(this).absolutePath} -J-Xmx4g -J-Xms4g"
     val json: Json = Json {
         ignoreUnknownKeys = true
     }
