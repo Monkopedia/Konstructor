@@ -21,7 +21,9 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.serialization.json.Json
 
-class Config {
+class Config(
+    dataDirFile: File = File(File(System.getenv("HOME")), ".konstructor")
+) {
 
     val executeTimeout: Duration
         get() = 5.minutes
@@ -35,6 +37,6 @@ class Config {
         ignoreUnknownKeys = true
     }
     val dataDir: File by lazy {
-        File(File(System.getenv("HOME")), ".konstructor").also { it.mkdirs() }
+        dataDirFile.also { it.mkdirs() }
     }
 }

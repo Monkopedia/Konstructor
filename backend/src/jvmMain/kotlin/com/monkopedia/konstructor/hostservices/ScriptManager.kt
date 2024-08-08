@@ -19,6 +19,7 @@ import com.monkopedia.hauler.CallSign
 import com.monkopedia.hauler.debug
 import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
+import com.monkopedia.hauler.warn
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.KonstructorManager
 import com.monkopedia.konstructor.PathController
@@ -66,18 +67,23 @@ class ScriptManager private constructor(private val config: Config) {
                 name
             )
         )
-        service.initializeHostServices(scriptHost)
-        service.initialize(
-            ScriptConfiguration(
-                outputDirectory = paths.renderOutput.absolutePath,
-                eagerExport = true
+        try {
+            service.initializeHostServices(scriptHost)
+            service.initialize(
+                ScriptConfiguration(
+                    outputDirectory = paths.renderOutput.absolutePath,
+                    eagerExport = true
+                )
             )
-        )
-        hauler.debug("Initialized ${paths.workspaceId}/${paths.konstructionId}")
-        exec.parentScope.launch(callSign ?: EmptyCoroutineContext) {
-            delay(config.executeTimeout)
-            hauler.debug("Force killing ${paths.workspaceId}/${paths.konstructionId}")
-            exec.kill()
+            hauler.debug("Initialized ${paths.workspaceId}/${paths.konstructionId}")
+            exec.parentScope.launch(callSign ?: EmptyCoroutineContext) {
+                delay(config.executeTimeout)
+                hauler.debug("Force killing ${paths.workspaceId}/${paths.konstructionId}")
+                exec.kill()
+            }
+        } catch (t: Throwable) {
+            hauler.warn("$name could not be initialized", t)
+            throw InvalidScriptException("$name could not be initialized", t)
         }
         return service
     }

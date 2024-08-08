@@ -23,11 +23,11 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
-fun runKonstruction(args: Array<String>, script: KcsgScript) {
+fun runKonstruction(args: Array<String>, script: KcsgScript, exec: KcsgScript.() -> Unit) {
     runBlocking {
         LoggerFactory.getILoggerFactory()
         withStdInOut(ksrpcEnvironment { }) { connection ->
-            connection.registerDefault(ScriptServiceImpl(script) as ScriptService)
+            connection.registerDefault(ScriptServiceImpl(script, exec) as ScriptService)
             awaitCancellation()
         }
     }

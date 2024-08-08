@@ -17,9 +17,12 @@ package com.monkopedia.konstructor.tasks
 
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.KonstructionControllerImpl.Companion.copyContentToScript
+import com.monkopedia.konstructor.hostservices.ScriptManager
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
+import com.monkopedia.konstructor.PathController
+import com.monkopedia.konstructor.hostservices.InvalidScriptException
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,14 +30,13 @@ import kotlinx.coroutines.runBlocking
 
 class ExecuteTaskTest {
 
-    @Test
+    @Test(expected = InvalidScriptException::class)
     fun `compiled script exits with failure`() {
-        val result = execCode(
+        execCode(
             """
             kotlin.system.exitProcess(1)
             """.trimIndent()
         )
-        assertEquals(FAILURE, result.status)
     }
 
     @Test
@@ -49,23 +51,23 @@ class ExecuteTaskTest {
             }
             """.trimIndent()
         )
-        assertEquals(SUCCESS, result.status)
+        assertEquals(SUCCESS, result.status, "Result: $result")
     }
 
     fun execCode(code: String): TaskResult {
         val testDirectory = kotlin.io.path.createTempDirectory().toFile()
-        testDirectory.mkdirs()
-        val testFile = File(testDirectory, "convert.kt")
-        copyContentToScript(code.byteInputStream(), testFile)
-        require(testFile.exists())
-        val outputDirectory = kotlin.io.path.createTempDirectory().toFile()
-        outputDirectory.mkdirs()
+        val config = Config(testDirectory)
+        val pathController = PathController(config)
+        val paths = pathController["0", "0"]
+        copyContentToScript(code.byteInputStream(), paths.kotlinFile)
+        require(paths.kotlinFile.exists())
         val result = runBlocking {
-            CompileTask(Config(), testFile, outputDirectory).execute()
+            CompileTask(config, paths.kotlinFile, paths.compileOutput).execute()
         }
-        assertEquals(SUCCESS, result.status)
+        assertEquals(SUCCESS, result.status, "Result: $result")
         return runBlocking {
-            ExecuteTask("ConvertKt", outputDirectory, config = Config()).execute()
-        }
+            val script = ScriptManager(config).getScript(paths, "ConvertKt")
+            ExecuteTask(config, script, extraTargets = emptyList()).execute()
+        }.first
     }
 }

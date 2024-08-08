@@ -35,18 +35,19 @@ class PathController private constructor(private val config: Config) {
 
     operator fun get(workspaceId: String, id: String): Paths {
         val workspaceDir = File(config.dataDir, workspaceId)
+        val scriptDir = File(workspaceDir, id).also { it.mkdirs() }
         return Paths(
             workspaceId = workspaceId,
             konstructionId = id,
             workspaceDir = File(config.dataDir, workspaceId),
-            infoFile = File(File(workspaceDir, id), "info.json"),
-            compileResultFile = File(File(workspaceDir, id), "compile.json"),
-            compileOutput = File(File(workspaceDir, id), "out"),
-            renderResultFile = File(File(workspaceDir, id), "result.json"),
-            renderOutput = File(File(workspaceDir, id), "renders"),
-            contentFile = File(File(workspaceDir, id), "content.csgs"),
-            kotlinFile = File(File(workspaceDir, id), "content.kt"),
-            cacheDir = File(File(workspaceDir, id), "cacheDir")
+            infoFile = File(scriptDir, "info.json"),
+            compileResultFile = File(scriptDir, "compile.json"),
+            compileOutput = File(scriptDir, "out"),
+            renderResultFile = File(scriptDir, "result.json"),
+            renderOutput = File(scriptDir, "renders"),
+            contentFile = File(scriptDir, "content.csgs"),
+            kotlinFile = File(scriptDir, "content.kt"),
+            cacheDir = File(scriptDir, "cacheDir")
         )
     }
 

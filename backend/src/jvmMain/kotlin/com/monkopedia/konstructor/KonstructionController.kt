@@ -221,20 +221,15 @@ class KonstructionControllerImpl(
     }
 
     companion object {
-        val KONSTRUCTION_FOOTER = """
-            
-            fun main(args: Array<String>) = com.monkopedia.konstructor.lib.runKonstruction(args, script)            
-        """.trimIndent()
 
         fun copyContentToScript(inputStream: InputStream, kotlinFile: File) {
             kotlinFile.outputStream().use { os ->
-                KcsgScript.HEADER.replace(
+                (KcsgScript.HEADER.replace(
                     "com.monkopedia.kcsg.KcsgScript().apply",
-                    "val script = com.monkopedia.kcsg.KcsgScript().apply"
-                ).byteInputStream().copyTo(os)
+                    "fun main(args: Array<String>) = com.monkopedia.konstructor.lib.runKonstruction(args, com.monkopedia.kcsg.KcsgScript())"
+                ) + "\n").byteInputStream().copyTo(os)
                 inputStream.use { it.copyTo(os) }
-                KcsgScript.FOOTER.byteInputStream().copyTo(os)
-                KONSTRUCTION_FOOTER.byteInputStream().copyTo(os)
+                ("\n" + KcsgScript.FOOTER).byteInputStream().copyTo(os)
             }
         }
     }

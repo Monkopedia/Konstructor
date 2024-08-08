@@ -28,7 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class ScriptServiceImpl(private val script: KcsgScript) : ScriptService {
+class ScriptServiceImpl(private val script: KcsgScript, private val exec: KcsgScript.() -> Unit) : ScriptService {
     private var shipper: Shipper? = null
     private val serviceCache = mutableMapOf<String, BuildServiceImpl>()
     private val statusCache = mutableMapOf<String, TargetStatus>()
@@ -57,6 +57,9 @@ class ScriptServiceImpl(private val script: KcsgScript) : ScriptService {
             throw IllegalArgumentException("Can't write to ${outputDirectory.absolutePath}")
         }
         shipper?.requestDockPickup()?.attach(scope, config.loggingDeliveryRates.asDeliveryRates)
+        lock.withLock {
+            script.exec()
+        }
         isInitialized = true
         if (config.eagerExport) {
             for (target in listTargets(onlyExports = true)) {
