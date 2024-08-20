@@ -26,7 +26,6 @@ repositories {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
     kotlinOptions {
-        jvmTarget = "1.8"
         freeCompilerArgs += "-Xskip-prerelease-check"
         freeCompilerArgs += "-Xno-param-assertions"
     }

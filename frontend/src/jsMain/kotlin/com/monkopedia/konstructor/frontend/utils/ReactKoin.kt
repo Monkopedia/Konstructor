@@ -39,7 +39,7 @@ inline fun <reified T : KoinScopeComponent> KoinComponent.useSubScope(
             setScope(createdScope)
         }
         cleanup {
-            createdScope.closeScope()
+            createdScope.scope.close()
         }
     }
     return scope

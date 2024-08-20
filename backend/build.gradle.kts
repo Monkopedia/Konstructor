@@ -68,7 +68,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
 }
 
 application {
-    mainClassName = "com.monkopedia.konstructor.AppKt"
+    mainClass.set("com.monkopedia.konstructor.AppKt")
 }
 
 val browser = rootProject.findProject(":frontend")!!

@@ -18,8 +18,8 @@ package com.monkopedia.konstructor.frontend.gl
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.model.GlControlsModel
+import com.monkopedia.konstructor.frontend.utils.cleanup
 import com.monkopedia.konstructor.frontend.utils.useCollected
-import com.monkopedia.konstructor.frontend.utils.useEffect
 import csstype.Properties
 import emotion.react.css
 import info.laht.threekt.cameras.PerspectiveCamera
@@ -44,6 +44,7 @@ import react.FC
 import react.Props
 import react.RefCallback
 import react.dom.html.ReactHTML.div
+import react.useEffect
 import react.useRef
 import react.useState
 import web.cssom.Position
@@ -122,7 +123,7 @@ val StatsComponent = FC<Props> {
         }
         ref = parentRef
     }
-    react.useEffect(parentRef) {
+    useEffect(parentRef) {
         val parent = parentRef.current ?: return@useEffect
         parent.appendChild(GLWindow.statsElement)
         GLWindow.statsElement.asDynamic().style.left = null
@@ -148,7 +149,7 @@ val CameraWidget = FC<Props> {
         }
         ref = parentRef
     }
-    react.useEffect(parentRef) {
+    useEffect(parentRef) {
         val parent = parentRef.current ?: return@useEffect
         GLWindow.setOrientationElement(parent)
         cleanup {

@@ -16,10 +16,13 @@
 package com.monkopedia.konstructor.frontend.editor
 
 import com.monkopedia.konstructor.frontend.utils.buildExt
+import com.monkopedia.konstructor.frontend.utils.cleanup
 import dukat.codemirror.state.EditorState
 import dukat.codemirror.state.Text
 import dukat.codemirror.view.EditorView
 import dukat.codemirror.vim.CodeMirror
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.css.background
 import react.FC
 import react.Props
@@ -83,6 +86,7 @@ val CodeMirrorScreen = memo(
     oldProps.editorState === newProps.editorState &&
         oldProps.target == newProps.target
 }
+
 
 fun Text.asString(): String {
     return (0 until lines.toInt()).joinToString("\n") { line(it + 1).text }

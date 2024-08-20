@@ -15,28 +15,35 @@
  */
 package com.monkopedia.konstructor.frontend.utils
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
+import react.useEffect
 import react.useState
 
-inline fun useEffect(
-    vararg deps: Any,
-    crossinline action: suspend CoroutineScope.() -> Unit
-) {
-    react.useEffect(*deps) {
-        val job = SupervisorJob()
-        val scope = CoroutineScope(job)
-        scope.launch {
-            action()
-        }
-        cleanup {
-            job.cancel()
-        }
+suspend inline fun cleanup(function: () -> Unit) {
+    try {
+        awaitCancellation()
+    } finally {
+        function()
     }
 }
+
+//inline fun useEffect(
+//    vararg deps: Any,
+//    crossinline action: suspend CoroutineScope.() -> Unit
+//) {
+//    react.useEffect(*deps) {
+//        val job = SupervisorJob()
+//        val scope = CoroutineScope(job)
+//        scope.launch {
+//            action()
+//        }
+//        cleanup {
+//            job.cancel()
+//        }
+//    }
+//}
 
 inline fun <reified T : Any?> Flow<T>.useCollected(initial: T): T {
     val (state, setState) = useState(initial)

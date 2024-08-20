@@ -16,7 +16,7 @@
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
-    id("com.monkopedia.ksrpc.plugin")
+//    id("com.monkopedia.ksrpc.plugin")
 }
 
 version = "0.1"
@@ -92,7 +92,6 @@ kotlin {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
     kotlinOptions {
-        jvmTarget = "1.8"
         freeCompilerArgs += "-Xskip-prerelease-check"
         freeCompilerArgs += "-Xno-param-assertions"
     }

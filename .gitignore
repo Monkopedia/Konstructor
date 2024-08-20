@@ -33,3 +33,5 @@ build
 
 # Some kotlin/js thing
 kotlin-js-store
+
+**/.kotlin

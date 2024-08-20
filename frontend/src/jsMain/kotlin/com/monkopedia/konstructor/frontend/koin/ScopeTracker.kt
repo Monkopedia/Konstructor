@@ -56,7 +56,7 @@ class ScopeTracker(
         scope.launch {
             spaceListModel.selectedSpaceId.collect { space ->
                 println("Current workspace scope $space")
-                mutableWorkspace.value?.closeScope()
+                mutableWorkspace.value?.scope?.close()
                 mutableWorkspace.value = space?.let { space -> get { parametersOf(space) } }
             }
         }
@@ -71,7 +71,7 @@ class ScopeTracker(
                 launch {
                     // Grace period to avoid react issues.
                     delay(100)
-                    lastScope?.closeScope()
+                    lastScope?.scope?.close()
                 }
             }
         }

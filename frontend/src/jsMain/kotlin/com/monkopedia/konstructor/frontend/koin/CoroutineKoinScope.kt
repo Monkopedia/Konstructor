@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.KoinScopeComponent
 import org.koin.core.component.createScope
 import org.koin.core.scope.Scope
+import org.koin.core.scope.ScopeCallback
 
 open class CoroutineKoinScope(parent: Job? = null) : KoinScopeComponent {
     private val job = SupervisorJob(parent)
@@ -39,14 +40,14 @@ open class CoroutineKoinScope(parent: Job? = null) : KoinScopeComponent {
 
     override val scope: Scope by lazy {
         createScope(this).also {
+            it.registerCallback(object : ScopeCallback {
+                override fun onScopeClose(scope: Scope) {
+                    job.cancel()
+                }
+            })
             onScopeCreated(it)
         }
     }
 
     protected open fun onScopeCreated(scope: Scope) = Unit
-
-    override fun closeScope() {
-        job.cancel()
-        super.closeScope()
-    }
 }
