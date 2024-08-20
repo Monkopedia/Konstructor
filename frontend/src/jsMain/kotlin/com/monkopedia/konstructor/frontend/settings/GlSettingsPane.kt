@@ -31,7 +31,7 @@ import mui.material.FormControlVariant
 import mui.material.IconButton
 import mui.material.Paper
 import mui.material.PaperVariant.Companion.outlined
-import mui.material.Size.large
+import mui.material.Size.Companion.large
 import mui.material.TextField
 import mui.material.Typography
 import mui.system.sx

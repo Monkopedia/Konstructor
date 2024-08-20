@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,12 +28,9 @@ import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.N
 import com.monkopedia.konstructor.frontend.model.NavigationDialogModel.Dialogs.UPLOAD_STL
 import com.monkopedia.konstructor.frontend.utils.asArrayBuffer
 import com.monkopedia.ksrpc.use
-import io.ktor.util.toByteArray
 import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.bits.Memory
 import io.ktor.utils.io.core.Closeable
-import io.ktor.utils.io.core.Memory
-import io.ktor.utils.io.core.writeFully
-import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -41,16 +38,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.io.Buffer
 import org.khronos.webgl.DataView
-import org.khronos.webgl.Int8Array
 import org.w3c.files.File
 
 class NavigationDialogModel(
     private val coroutineScope: CoroutineScope,
-    val workManager: WorkManager
+    val workManager: WorkManager,
 ) : Closeable {
-
     enum class Dialogs {
         NONE,
         WORKING,
@@ -58,14 +52,14 @@ class NavigationDialogModel(
         CREATE_KONSTRUCTION,
         EDIT_WORKSPACE,
         EDIT_KONSTRUCTION,
-        UPLOAD_STL
+        UPLOAD_STL,
     }
 
     data class DialogState(
         val dialog: Dialogs,
         val targetWorkspace: String? = null,
         val targetKonstruction: String? = null,
-        val currentName: String? = null
+        val currentName: String? = null,
     )
 
     private val mutableDialog = MutableStateFlow(DialogState(NONE))
@@ -92,18 +86,26 @@ class NavigationDialogModel(
         mutableDialog.value = DialogState(UPLOAD_STL, targetWorkspace = workspaceId)
     }
 
-    fun showEditWorkspace(workspaceId: String, currentName: String) {
+    fun showEditWorkspace(
+        workspaceId: String,
+        currentName: String,
+    ) {
         mutableDialog.value =
             DialogState(EDIT_WORKSPACE, targetWorkspace = workspaceId, currentName = currentName)
     }
 
-    fun showEditKonstruction(workspaceId: String, konstructionId: String, currentName: String) {
-        mutableDialog.value = DialogState(
-            EDIT_KONSTRUCTION,
-            targetWorkspace = workspaceId,
-            targetKonstruction = konstructionId,
-            currentName = currentName
-        )
+    fun showEditKonstruction(
+        workspaceId: String,
+        konstructionId: String,
+        currentName: String,
+    ) {
+        mutableDialog.value =
+            DialogState(
+                EDIT_KONSTRUCTION,
+                targetWorkspace = workspaceId,
+                targetKonstruction = konstructionId,
+                currentName = currentName,
+            )
     }
 
     fun cancel() {
@@ -126,8 +128,8 @@ class NavigationDialogModel(
                     Konstruction(
                         id = "",
                         name = lastTextInput,
-                        workspaceId = targetWorkspace
-                    )
+                        workspaceId = targetWorkspace,
+                    ),
                 )
             }
             WorkspaceModel.refreshAllKonstructions()
@@ -140,7 +142,7 @@ class NavigationDialogModel(
         workManager.doWork {
             val service = RootScope.serviceHolder.service.first()
             service.create(
-                Space(id = "", name = lastTextInput)
+                Space(id = "", name = lastTextInput),
             )
             RootScope.spaceListModel.refreshWorkspaces()
         }
@@ -189,9 +191,7 @@ class NavigationDialogModel(
                         val content = state.asArrayBuffer()
                         val channel = ByteChannel(autoFlush = true)
                         launch {
-                            val array = Int8Array(content).toByteArray()
-                            channel.writeFully(array, 0, array.size)
-                            channel.close()
+                            channel.writeFully(Memory(DataView(content)), 0, content.byteLength)
                         }
                         newFileService.setBinary(channel)
                     }
@@ -213,6 +213,7 @@ class NavigationDialogModel(
                     RootScope.spaceListModel.refreshWorkspaces()
                 }
             }
+
             EDIT_KONSTRUCTION -> {
                 val dialogInfo = mutableDialog.value
                 val targetWorkspace = dialogInfo.targetWorkspace ?: return
@@ -226,6 +227,7 @@ class NavigationDialogModel(
                     WorkspaceModel.refreshAllKonstructions()
                 }
             }
+
             else -> {
                 error("Unsupported dialog type")
             }

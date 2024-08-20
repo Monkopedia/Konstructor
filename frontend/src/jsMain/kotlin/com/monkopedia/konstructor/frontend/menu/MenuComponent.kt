@@ -33,7 +33,7 @@ import mui.material.IconButton
 import mui.material.IconButtonColor.Companion.inherit
 import mui.material.IconButtonEdge.Companion.end
 import mui.material.IconButtonEdge.Companion.start
-import mui.material.Size.large
+import mui.material.Size.Companion.large
 import mui.material.Toolbar
 import mui.material.Typography
 import mui.material.styles.TypographyVariant

@@ -27,7 +27,7 @@ import mui.material.CircularProgress
 import mui.material.FormControlVariant
 import mui.material.IconButton
 import mui.material.IconButtonColor.Companion.primary
-import mui.material.Size.medium
+import mui.material.Size.Companion.medium
 import mui.material.TextField
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
