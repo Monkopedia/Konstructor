@@ -2,7 +2,7 @@
 logback = "1.5.6"
 clikt = "4.4.0"
 hauler = "0.2.0"
-kcsg = "0.2.0"
+kcsg = "0.2.1"
 ksrpc = "0.9.1"
 koin = "4.0.0-RC1"
 ktor = "2.3.12"

@@ -76,10 +76,11 @@ val browser = rootProject.findProject(":frontend")!!
 val debugFrontend = properties["release"] == null
 val copy = tasks.register<Copy>("copyJsBundleToKtor") {
     if (debugFrontend) {
-        from("${browser.buildDir}/dist/js/developmentExecutable")
+        from("${browser.buildDir}/kotlin-webpack/js/developmentExecutable")
     } else {
-        from("${browser.buildDir}/dist/js/productionExecutable")
+        from("${browser.buildDir}/kotlin-webpack/js/productionExecutable")
     }
+    from("${browser.buildDir}/processedResources/js/main")
     into("$buildDir/importedResources/web")
 }
 val lib = rootProject.findProject(":lib")!!
