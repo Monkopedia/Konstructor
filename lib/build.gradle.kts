@@ -17,7 +17,8 @@ plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
     id("com.monkopedia.ksrpc.plugin")
-    id("com.github.johnrengelman.shadow")
+    id("com.gradleup.shadow")
+    alias(libs.plugins.javafx)
 }
 
 repositories {
@@ -39,6 +40,9 @@ dependencies {
     implementation(libs.ktor.io)
     implementation(libs.ktor.client.cio)
     implementation(libs.slf4j.api)
+    implementation(libs.kcsg.dsl)
+    implementation(libs.kcsg)
+    implementation(libs.hauler)
     api(libs.kcsg.dsl)
     api(libs.kcsg)
     api(libs.hauler)

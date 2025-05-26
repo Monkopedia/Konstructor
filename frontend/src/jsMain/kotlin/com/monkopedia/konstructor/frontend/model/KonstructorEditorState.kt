@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import styled.getClassSelector
+import js.objects.jso
 
 class KonstructorEditorState(
     private val model: KonstructionModel,
@@ -65,12 +66,12 @@ class KonstructorEditorState(
         buildExt {
             set(
                 "&",
-                kotlinext.js.js {
+                jso {
                     height = "calc(100vh - 64px)"
                     width = "calc(50hw)"
                 },
             )
-            set(".cm-scroller", kotlinext.js.js { overflow = "auto" })
+            set(".cm-scroller", jso { overflow = "auto" })
         },
     )
     var editorState = EditorState.create(

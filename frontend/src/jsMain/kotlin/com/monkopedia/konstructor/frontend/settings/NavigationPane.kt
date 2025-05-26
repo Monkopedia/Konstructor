@@ -54,7 +54,6 @@ import org.koin.core.parameter.parametersOf
 import react.FC
 import react.Props
 import react.create
-import react.dom.aria.ariaLabel
 import react.dom.svg.ReactSVG.path
 import react.memo
 import react.useState

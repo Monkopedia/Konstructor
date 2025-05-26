@@ -8,11 +8,11 @@ buildscript {
         classpath(libs.kotlin.gradle)
         classpath(libs.kotlin.serialization)
         classpath(libs.ksrpc)
-        classpath(libs.shadow)
     }
 }
 plugins {
     alias(libs.plugins.autostyle)
+    alias(libs.plugins.shadow) apply false
 }
 
 subprojects {

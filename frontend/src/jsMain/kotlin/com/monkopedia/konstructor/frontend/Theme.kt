@@ -16,7 +16,6 @@
 package com.monkopedia.konstructor.frontend
 
 import com.monkopedia.konstructor.frontend.utils.buildExt
-import kotlinext.js.js
 import mui.material.PaletteMode.Companion.dark
 import mui.material.PaletteMode.Companion.light
 import mui.material.styles.PaletteColor
@@ -25,16 +24,17 @@ import mui.material.styles.ThemeOptions
 import mui.material.styles.TypeText
 import mui.material.styles.createTheme
 import web.cssom.Color
+import js.objects.jso
 
 private val themeOptions: ThemeOptions = buildExt {
     typography = buildExt {
         useNextVariants = true
-        button = js {
+        button = jso {
             textTransform = "none"
         }
     }
     // themeOptions.typography?.fontSize = 12
-    palette = buildExt<PaletteOptions> {
+    palette = buildExt {
         mode = light
         secondary = buildExt<PaletteColor> {
             main = Color("#212121")
@@ -46,7 +46,7 @@ private val themeOptions: ThemeOptions = buildExt {
             light = Color("#FFCCBC")
             dark = Color("#E64A19")
         }
-        text = buildExt<TypeText> {
+        text = buildExt {
             primary = Color("#FFFFFF")
             secondary = Color("#FAFAFA")
             disabled = Color("#757575")
@@ -61,7 +61,7 @@ private val invertedThemeOptions: ThemeOptions = buildExt {
         useNextVariants = true
     }
     // themeOptions.typography?.fontSize = 12
-    palette = buildExt<PaletteOptions> {
+    palette = buildExt {
         mode = dark
 //        type = "dark"
 
@@ -77,7 +77,7 @@ private val invertedThemeOptions: ThemeOptions = buildExt {
             dark = Color("#E64A19")
             contrastText = Color("#212121")
         }
-        text = buildExt<TypeText> {
+        text = buildExt {
             primary = Color("#FFFFFF")
             secondary = Color("#FAFAFA")
             disabled = Color("#757575")

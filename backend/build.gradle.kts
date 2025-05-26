@@ -17,7 +17,7 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform")
     application
     id("com.monkopedia.ksrpc.plugin")
-    id("com.github.johnrengelman.shadow")
+    id("com.gradleup.shadow")
 }
 
 repositories {

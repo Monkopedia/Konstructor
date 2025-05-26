@@ -35,12 +35,14 @@ kotlin {
                     org.jetbrains.kotlin.gradle.targets.js.webpack
                         .KotlinWebpackOutput.Target.COMMONJS
             }
-            dceTask {
-                keep += "kotlin.defineModule"
-                keep += "io.ktor.http.Headers"
-                keep += "kotlin.math.pow"
-                println("Adding to $name")
-            }
+
+            // TODO: Remove?
+            //dceTask {
+            //    keep += "kotlin.defineModule"
+            //    keep += "io.ktor.http.Headers"
+            //    keep += "kotlin.math.pow"
+            //    println("Adding to $name")
+            //}
         }
         binaries.executable()
     }
@@ -56,13 +58,14 @@ kotlin {
         implementation(libs.koin.core)
         implementation(kotlin("stdlib-js"))
         compileOnly(libs.ktor.client.core)
+        implementation(platform("org.jetbrains.kotlin-wrappers:kotlin-wrappers-bom:${libs.versions.kotlin.wrappers.bom.get()}"))
         implementation(libs.kotlin.emotion)
+        implementation(libs.kotlin.emotion.styled)
         implementation(libs.kotlin.css)
         implementation(libs.kotlin.styled.next)
         implementation(libs.kotlin.react)
         implementation(libs.kotlin.react.dom)
-        implementation(libs.kotlin.react.router.dom)
-        implementation(libs.kotlin.extensions)
+        implementation(libs.kotlin.react.router)
         implementation(libs.kotlinx.coroutines.core)
         implementation(libs.ktor.http)
         implementation(libs.ktor.client.core)
@@ -73,21 +76,25 @@ kotlin {
         implementation(libs.kotlin.mui)
         implementation(libs.kotlin.mui.icons)
         implementation(project(":protocol"))
+        implementation(npm("@codemirror/language", "^6.10.1"))
+        implementation(npm("@codemirror/state", "^6.4.1"))
         implementation(npm("codemirror", "6.0.1"))
+        implementation(npm("@codemirror/commands", "6.8.1"))
+        implementation(npm("@codemirror/legacy-modes", "6.5.0"))
+        implementation(npm("@codemirror/search", "6.5.10"))
         implementation(npm("@codemirror/theme-one-dark", "6.1.2"))
-        implementation(npm("@codemirror/legacy-modes", "6.3.3"))
-        implementation(npm("@codemirror/language", "6.10.1"))
-        implementation(npm("@codemirror/commands", "6.3.3"))
-        implementation(npm("@codemirror/view", "6.26.1"))
-        implementation(npm("@replit/codemirror-vim", "6.2.1"))
-        implementation(npm("css-loader", "6.10.0"))
-        implementation(npm("style-loader", "3.3.4"))
+        implementation(npm("@codemirror/view", "6.36.5"))
+        implementation(npm("@replit/codemirror-vim", "6.3.0"))
+        implementation(npm("css-loader", "7.1.2"))
+        implementation(npm("style-loader", "4.0.0"))
         implementation(npm("file-loader", "6.2.0"))
-        implementation(npm("bootstrap", "^5.3.3"))
+        implementation(npm("bootstrap", "^5.3.5"))
         implementation(npm("crypto", "1.0.1"))
-        implementation(npm("crypto-browserify", "3.12.0"))
+        implementation(npm("crypto-browserify", "3.12.1"))
 //        implementation(npm("three", "0.133.1"))
     }
+}
+dependencies {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {

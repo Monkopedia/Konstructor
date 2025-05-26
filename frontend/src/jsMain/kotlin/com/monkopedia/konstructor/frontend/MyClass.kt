@@ -25,7 +25,6 @@ import react.Fragment
 import react.Props
 import react.create
 import react.dom.client.createRoot
-import react.dom.render
 import web.dom.Element
 
 fun main() {

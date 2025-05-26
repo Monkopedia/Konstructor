@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import js.objects.jso
 
 class LogViewerState(
 //    private val model: KonstructionModel,
@@ -46,7 +47,7 @@ class LogViewerState(
 //                    width = "calc(50hw)"
 //                }
 //            )
-            set(".cm-scroller", kotlinext.js.js { overflow = "auto" })
+            set(".cm-scroller", jso { overflow = "auto" })
         }
     )
     var editorState = EditorState.create(

@@ -16,14 +16,14 @@
 package com.monkopedia.konstructor.frontend.utils
 
 import kotlin.coroutines.resume
-import kotlinext.js.js
+import js.objects.jso
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.khronos.webgl.ArrayBuffer
 import org.w3c.files.Blob
 import org.w3c.files.FileReader
 
-inline fun <T> buildExt(builder: T.() -> Unit): T {
-    return (js { } as T).also(builder)
+inline fun <T : Any> buildExt(builder: T.() -> Unit): T {
+    return (jso<T>()).also(builder)
 }
 
 suspend fun Blob.asArrayBuffer(): ArrayBuffer {

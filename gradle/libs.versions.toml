@@ -1,25 +1,20 @@
 [versions]
-logback = "1.5.6"
-clikt = "4.4.0"
-hauler = "0.2.0"
-kcsg = "0.2.1"
-ksrpc = "0.9.1"
-koin = "4.0.0-RC1"
-ktor = "2.3.12"
-kotlin = "2.0.0"
-kotlin-browser = "1.0.0-pre.793"
-kotlin-css = "1.0.0-pre.793"
-kotlin-emotion = "11.13.0-pre.793"
-kotlin-extensions = "1.0.1-pre.793"
-kotlin-mui = "5.0.0-beta.52-pre.793"
-kotlin-mui-icons = "5.16.7-pre.793"
-kotlin-react = "18.3.1-pre.793"
-kotlin-react-router-dom = "6.26.0-pre.793"
-kotlin-styled-next = "1.2.4-pre.793"
-kotlin-coroutines = "1.9.0-RC.2"
-kotlin-datetime = "0.6.0"
-kotlin-serialization = "1.7.1"
+logback = "1.5.18"
+clikt = "5.0.3"
+hauler = "0.2.1"
+kcsg = "0.2.3"
+ksrpc = "0.9.5"
+koin = "4.1.0-Beta6"
+ktor = "3.1.2"
+kotlin = "2.1.20"
+kotlin-wrappers-bom = "2025.4.15"
+kotlin-coroutines = "1.10.1"
+kotlin-datetime = "0.6.2"
+kotlin-serialization = "1.8.1"
 slf4j = "2.1.0-alpha1"
+shadow = "8.3.6"
+javafx = "0.1.0"
+
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -46,16 +41,18 @@ ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", versio
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
 ktor-websocket-serialization = { module = "io.ktor:ktor-websocket-serialization", version.ref = "ktor" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
-kotlin-browser = { module = "org.jetbrains.kotlin-wrappers:kotlin-browser", version.ref = "kotlin-browser" }
-kotlin-css = { module = "org.jetbrains.kotlin-wrappers:kotlin-css", version.ref = "kotlin-css" }
-kotlin-emotion = { module = "org.jetbrains.kotlin-wrappers:kotlin-emotion", version.ref = "kotlin-emotion" }
-kotlin-extensions = { module = "org.jetbrains.kotlin-wrappers:kotlin-extensions", version.ref = "kotlin-extensions" }
-kotlin-mui = { module = "org.jetbrains.kotlin-wrappers:kotlin-mui-base", version.ref = "kotlin-mui" }
-kotlin-mui-icons = { module = "org.jetbrains.kotlin-wrappers:kotlin-mui-icons-material", version.ref = "kotlin-mui-icons" }
-kotlin-react = { module = "org.jetbrains.kotlin-wrappers:kotlin-react", version.ref = "kotlin-react" }
-kotlin-react-dom = { module = "org.jetbrains.kotlin-wrappers:kotlin-react-dom", version.ref = "kotlin-react" }
-kotlin-react-router-dom = { module = "org.jetbrains.kotlin-wrappers:kotlin-react-router-dom", version.ref = "kotlin-react-router-dom" }
-kotlin-styled-next = { module = "org.jetbrains.kotlin-wrappers:kotlin-styled-next", version.ref = "kotlin-styled-next" }
+kotlin-browser = { module = "org.jetbrains.kotlin-wrappers:kotlin-browser" }
+kotlin-css = { module = "org.jetbrains.kotlin-wrappers:kotlin-css" }
+kotlin-emotion = { module = "org.jetbrains.kotlin-wrappers:kotlin-emotion-react" }
+kotlin-emotion-styled = { module = "org.jetbrains.kotlin-wrappers:kotlin-emotion-styled" }
+kotlin-extensions = { module = "org.jetbrains.kotlin-wrappers:kotlin-extensions" }
+kotlin-mui = { module = "org.jetbrains.kotlin-wrappers:kotlin-mui-base" }
+kotlin-mui-icons = { module = "org.jetbrains.kotlin-wrappers:kotlin-mui-icons-material" }
+kotlin-wrappers-bom = { module = "org.jetbrains.kotlin-wrappers:kotlin-wrappers-bom", version.ref = "kotlin-wrappers-bom" }
+kotlin-react = { module = "org.jetbrains.kotlin-wrappers:kotlin-react" }
+kotlin-react-dom = { module = "org.jetbrains.kotlin-wrappers:kotlin-react-dom" }
+kotlin-react-router = { module = "org.jetbrains.kotlin-wrappers:kotlin-react-router" }
+kotlin-styled-next = { module = "org.jetbrains.kotlin-wrappers:kotlin-styled-next" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlin-coroutines" }
 kotlinx-coroutines-core-js = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core-js", version.ref = "kotlin-coroutines" }
 kotlinx-coroutines-core-jvm = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm", version.ref = "kotlin-coroutines" }
@@ -67,10 +64,11 @@ slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlin-serialization = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
 ksrpc = { module = "com.monkopedia.ksrpc:ksrpc-gradle-plugin", version.ref = "ksrpc" }
-shadow = { module = "gradle.plugin.com.github.johnrengelman:shadow", version = "7.1.2" }
 
 [plugins]
 autostyle = { id = "com.github.autostyle", version = "3.2" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+javafx = { id = "org.openjfx.javafxplugin", version.ref = "javafx" }
 
 #material-ui-color-picker, 3.5.1
 #@material-ui/core, 4.12.4

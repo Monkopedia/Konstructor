@@ -21,11 +21,8 @@ import com.monkopedia.konstructor.frontend.model.GlControlsModel.DirectionalLigh
 import com.monkopedia.konstructor.frontend.nonInvertedTheme
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import emotion.react.css
-import kotlin.math.roundToInt
 import mui.icons.material.Add
 import mui.icons.material.Delete
-import mui.material.Card
-import mui.material.CardContent
 import mui.material.Divider
 import mui.material.FormControlVariant
 import mui.material.IconButton
@@ -39,7 +36,6 @@ import org.koin.core.component.get
 import react.FC
 import react.Props
 import react.create
-import react.dom.aria.ariaLabel
 import react.dom.html.ReactHTML.div
 import react.dom.onChange
 import react.useMemo
@@ -54,6 +50,7 @@ import web.cssom.Overflow.Companion.visible
 import web.cssom.important
 import web.cssom.pct
 import web.cssom.px
+import kotlin.math.roundToInt
 
 val GlSettingsPane = FC<Props> {
     val ambient = RootScope.useCollected(0.0) {

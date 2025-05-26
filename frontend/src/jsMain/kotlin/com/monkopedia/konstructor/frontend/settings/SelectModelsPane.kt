@@ -44,7 +44,6 @@ import org.koin.core.component.get
 import react.FC
 import react.Props
 import react.create
-import react.dom.aria.ariaLabel
 import react.dom.html.ReactHTML.div
 import react.memo
 import react.useState

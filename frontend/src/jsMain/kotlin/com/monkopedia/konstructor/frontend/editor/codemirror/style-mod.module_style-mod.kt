@@ -57,7 +57,7 @@ open external class StyleModule(spec: `T$44`, options: `T$45` = definedExternall
 
 external interface StyleSpec {
     @nativeGetter
-    operator fun get(propOrSelector: String): dynamic /* String? | Number? | StyleSpec? */
+    operator fun get(propOrSelector: String): Any? /* String? | Number? | StyleSpec? */
 
     @nativeSetter
     operator fun set(propOrSelector: String, value: String?)

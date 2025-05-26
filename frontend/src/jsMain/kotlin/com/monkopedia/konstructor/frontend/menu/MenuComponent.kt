@@ -17,13 +17,19 @@ package com.monkopedia.konstructor.frontend.menu
 
 import com.monkopedia.konstructor.frontend.WorkManager
 import com.monkopedia.konstructor.frontend.koin.RootScope
+import com.monkopedia.konstructor.frontend.koin.WorkspaceScope
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.EDITOR
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.GL_SETTINGS
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.NAVIGATION
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.RULE
 import com.monkopedia.konstructor.frontend.model.SettingsModel.CodePaneMode.SETTINGS
+import com.monkopedia.konstructor.frontend.model.WorkspaceModel
 import com.monkopedia.konstructor.frontend.utils.useCollected
+import com.monkopedia.konstructor.frontend.utils.useSubScope
 import emotion.react.css
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import mui.icons.material.ArrowBack
 import mui.icons.material.LightMode
 import mui.icons.material.Rule
@@ -38,10 +44,12 @@ import mui.material.Toolbar
 import mui.material.Typography
 import mui.material.styles.TypographyVariant
 import mui.system.sx
+import org.koin.core.component.get
+import org.koin.core.parameter.parametersOf
 import react.FC
 import react.Props
-import react.dom.aria.ariaLabel
 import react.dom.html.ReactHTML.div
+import react.useEffect
 import web.cssom.Position.Companion.relative
 import web.cssom.important
 import web.cssom.number

@@ -303,7 +303,7 @@ external interface `T$9` {
 
 external interface `T$10` {
     @nativeGetter
-    operator fun get(selector: String): dynamic?
+    operator fun get(selector: String): Any?
 
     @nativeSetter
     operator fun set(selector: String, value: dynamic)
@@ -424,7 +424,7 @@ external interface DOMEventMap {
 
 external interface `T$12` {
     @nativeGetter
-    operator fun get(selector: String): dynamic/* StyleSpec? */
+    operator fun get(selector: String): Any? /* StyleSpec? */
 
     @nativeSetter
     operator fun set(selector: String, value: dynamic/*StyleSpec*/)
