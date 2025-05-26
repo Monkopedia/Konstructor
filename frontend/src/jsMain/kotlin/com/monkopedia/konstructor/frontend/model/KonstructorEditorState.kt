@@ -198,7 +198,7 @@ class KonstructorEditorState(
 
     private fun onViewUpdate(viewUpdate: ViewUpdate) {
         val pos = viewUpdate.state.selection.main.head.toInt()
-        val line = viewUpdate.state.doc.lineAt(pos).number.toInt() - 1
+        val line = viewUpdate.state.doc.lineAt(pos).number.toInt()
         currentText.value = viewUpdate.state.doc.asString()
         currentLine.value = line
         currentPos.value = pos
@@ -235,9 +235,9 @@ private value class TextSegment(val text: String) {
 private fun setMarks(doc: Text, customClasses: Map<String, List<Int>>): TransactionSpec {
     val marks = customClasses.entries.flatMap { (key, lines) ->
         lines.filter {
-            (it + 1) <= doc.lines.toInt()
+            (it) <= doc.lines.toInt()
         }.map {
-            doc.line(it + 1).let { lineInfo ->
+            doc.line(it).let { lineInfo ->
                 Decoration.mark(
                     buildExt {
                         this.`class` = key
