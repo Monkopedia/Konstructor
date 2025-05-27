@@ -86,9 +86,7 @@ val CreateFirstWorkspace = FC<CreateFirstWorkspaceProps> { props ->
             }
             IconButton {
                 Login()
-                disabled = textValue.isNullOrEmpty().also {
-                    println("Disabling: $it ($textValue)")
-                }
+                disabled = textValue.isNullOrEmpty()
                 size = medium
                 color = primary
                 onClick = {

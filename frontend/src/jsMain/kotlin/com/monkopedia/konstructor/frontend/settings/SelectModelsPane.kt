@@ -15,7 +15,10 @@
  */
 package com.monkopedia.konstructor.frontend.settings
 
+import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.hauler
 import com.monkopedia.konstructor.frontend.WorkManager
+import com.monkopedia.konstructor.frontend.async
 import com.monkopedia.konstructor.frontend.koin.KonstructionScope
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.model.KonstructionModel
@@ -57,6 +60,8 @@ import web.cssom.LineStyle
 import web.cssom.number
 import web.cssom.px
 import web.html.HTMLButtonElement
+
+private val logger = hauler("SelectModelsPane").async()
 
 external interface SelectModelsProps : Props {
     var workManager: WorkManager
@@ -126,7 +131,7 @@ val ScopedSelectModelsPane = FC<ScopedSelectModelsProps> { props ->
                                 }
                             }
                             onClick = {
-                                println("TargetPicker: $state")
+                                logger.debug("TargetPicker: $state")
                                 targetPicker = it.currentTarget to state
                                 it.stopPropagation()
                             }

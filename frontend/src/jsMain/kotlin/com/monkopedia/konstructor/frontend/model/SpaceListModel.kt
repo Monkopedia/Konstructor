@@ -15,6 +15,9 @@
  */
 package com.monkopedia.konstructor.frontend.model
 
+import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.hauler
+import com.monkopedia.konstructor.frontend.async
 import com.monkopedia.konstructor.frontend.model.ServiceHolder.Companion.tryReconnects
 import com.monkopedia.konstructor.frontend.utils.MutablePersistentFlow
 import kotlinx.coroutines.CoroutineScope
@@ -33,13 +36,14 @@ class SpaceListModel(
 ) {
     private val relistSpaces = MutableSharedFlow<Unit>()
     private val mutableSelectedSpace = MutablePersistentFlow.optionalString("selected.workspace")
+    private val logger = hauler().async()
 
     val availableWorkspaces =
         combine(serviceHolder.service, relistSpaces.onStart { emit(Unit) }) { service, _ ->
             service.list()
         }.tryReconnects()
             .onEach {
-                println("Fetch workspaces: $it")
+                logger.debug("Fetched workspaces: $it")
             }.shareIn(coroutineScope, SharingStarted.Eagerly, replay = 1)
 
     fun refreshWorkspaces() {

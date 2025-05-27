@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,6 +15,10 @@
  */
 package com.monkopedia.konstructor.frontend.koin
 
+import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.hauler
+import com.monkopedia.hauler.info
+import com.monkopedia.konstructor.frontend.async
 import com.monkopedia.konstructor.frontend.model.KonstructionModel
 import com.monkopedia.konstructor.frontend.model.SpaceListModel
 import com.monkopedia.konstructor.frontend.model.WorkspaceModel
@@ -32,10 +36,9 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
 
-class ScopeTracker(
-    private val spaceListModel: SpaceListModel,
-    private val scope: CoroutineScope
-) : KoinComponent {
+class ScopeTracker(private val spaceListModel: SpaceListModel, private val scope: CoroutineScope) :
+    KoinComponent {
+    private val logger = hauler().async()
 
     private val mutableWorkspace = MutableStateFlow<WorkspaceScope?>(null)
     val workspace = mutableWorkspace.asStateFlow()
@@ -55,7 +58,7 @@ class ScopeTracker(
     init {
         scope.launch {
             spaceListModel.selectedSpaceId.collect { space ->
-                println("Current workspace scope $space")
+                logger.info("Current workspace scope $space")
                 mutableWorkspace.value?.scope?.close()
                 mutableWorkspace.value = space?.let { space -> get { parametersOf(space) } }
             }
@@ -63,11 +66,13 @@ class ScopeTracker(
         scope.launch {
             targetKonstruction.collectLatest { (parentScope, konstructionId) ->
                 val workspaceId = parentScope?.get<WorkspaceModel>()?.workspaceId
-                println("Current konstruction scope $workspaceId $konstructionId")
+                logger.info("Current konstruction scope $workspaceId $konstructionId")
                 val lastScope = mutableKonstruction.value
                 mutableKonstruction.value = if (parentScope != null && konstructionId != null) {
                     KonstructionScope(parentScope, konstructionId)
-                } else null
+                } else {
+                    null
+                }
                 launch {
                     // Grace period to avoid react issues.
                     delay(100)

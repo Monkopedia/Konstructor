@@ -68,7 +68,7 @@ class KonstructionModel(
     private val serviceHolder: ServiceHolder,
     private val workspaceModel: WorkspaceModel,
     val konstructionId: String,
-    private val coroutineScope: CoroutineScope,
+    private val coroutineScope: CoroutineScope
 ) {
     val workspaceId: String
         get() = workspaceModel.workspaceId
@@ -79,7 +79,7 @@ class KonstructionModel(
         }.shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
     private val konstructionService: Flow<KonstructionService?> = combine(
         serviceHolder.service,
-        konstruction,
+        konstruction
     ) { service, konstruction ->
         konstruction?.let { service.konstruction(it) }
     }.tryReconnects()
@@ -89,7 +89,7 @@ class KonstructionModel(
     private val mutableState = MutableStateFlow(LOADING)
     val currentText: Flow<String?> = combine(
         konstructionService,
-        reloadTextFlow.onStart { emit(Unit) },
+        reloadTextFlow.onStart { emit(Unit) }
     ) { konstructionService, _ ->
         konstructionService?.fetch().also {
             if (mutableState.value == LOADING) {
@@ -208,64 +208,57 @@ class KonstructionModel(
         DEFAULT,
         SAVING,
         COMPILING,
-        EXECUTING,
+        EXECUTING
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun KonstructionService.listener(): Flow<Unit> {
-        return callbackFlow {
-            val listener = object : KonstructionListener {
-                override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> =
-                    listOf(
-                        CONTENT_CHANGE,
-                        INFO_CHANGE,
-                        RENDER_CHANGE,
-                        TASK_COMPLETE,
-                    )
+    private fun KonstructionService.listener(): Flow<Unit> = callbackFlow {
+        val listener = object : KonstructionListener {
+            override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> = listOf(
+                CONTENT_CHANGE,
+                INFO_CHANGE,
+                RENDER_CHANGE,
+                TASK_COMPLETE
+            )
 
-                override suspend fun onInfoChanged(info: KonstructionInfo) {
-//                    println("onInfoChanged $info")
-                    mutableInfo.value = info
-                }
+            override suspend fun onInfoChanged(info: KonstructionInfo) {
+                mutableInfo.value = info
+            }
 
-                override suspend fun onDirtyStateChanged(state: DirtyState) = Unit
+            override suspend fun onDirtyStateChanged(state: DirtyState) = Unit
 
-                override suspend fun onTargetChanged(target: KonstructionTarget) = Unit
+            override suspend fun onTargetChanged(target: KonstructionTarget) = Unit
 
-                override suspend fun onRenderChanged(render: KonstructionRender) {
-//                    println("onRenderChanged $render")
-                    val renderPath = render.renderPath
-                    mutableRendered.value = mutableRendered.value.toMutableMap().apply {
-                        if (renderPath != null) {
-                            this[render.name] = renderPath
-                        } else {
-                            this.remove(render.name)
-                        }
-                    }
-                    mutableReload.value += 1
-                }
-
-                override suspend fun onContentChange(u: Unit) {
-//                    println("onContentChange")
-                    mutableMessages.value = emptyList()
-                    coroutineScope.launch {
-                        reloadTextFlow.emit(Unit)
+            override suspend fun onRenderChanged(render: KonstructionRender) {
+                val renderPath = render.renderPath
+                mutableRendered.value = mutableRendered.value.toMutableMap().apply {
+                    if (renderPath != null) {
+                        this[render.name] = renderPath
+                    } else {
+                        this.remove(render.name)
                     }
                 }
+                mutableReload.value += 1
+            }
 
-                override suspend fun onTaskComplete(taskResult: TaskResult) {
-//                    println("onTaskComplete $taskResult")
-                    mutableMessages.value += taskResult.messages
+            override suspend fun onContentChange(u: Unit) {
+                mutableMessages.value = emptyList()
+                coroutineScope.launch {
+                    reloadTextFlow.emit(Unit)
                 }
             }
-            val key = register(listener)
-            send(Unit)
-            awaitClose {
-                GlobalScope.launch {
-                    try {
-                        unregister(key)
-                    } catch (t: Throwable) {
-                    }
+
+            override suspend fun onTaskComplete(taskResult: TaskResult) {
+                mutableMessages.value += taskResult.messages
+            }
+        }
+        val key = register(listener)
+        send(Unit)
+        awaitClose {
+            GlobalScope.launch {
+                try {
+                    unregister(key)
+                } catch (t: Throwable) {
                 }
             }
         }

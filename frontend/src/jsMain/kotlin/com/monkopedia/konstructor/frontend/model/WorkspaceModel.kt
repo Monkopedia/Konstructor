@@ -15,6 +15,9 @@
  */
 package com.monkopedia.konstructor.frontend.model
 
+import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.hauler
+import com.monkopedia.konstructor.frontend.async
 import com.monkopedia.konstructor.frontend.model.ServiceHolder.Companion.tryReconnects
 import com.monkopedia.konstructor.frontend.utils.MutablePersistentFlow
 import kotlinx.coroutines.CoroutineScope
@@ -32,18 +35,19 @@ class WorkspaceModel(
     val workspaceId: String,
     private val coroutineScope: CoroutineScope
 ) {
+    private val logger = hauler().async()
 
     private val mutableSelectedKonstruction =
         MutablePersistentFlow.optionalString("selected.konstruction")
     private val service = serviceHolder.service.map {
-        println("Getting service for $workspaceId")
+        logger.debug("Getting service for $workspaceId")
         it.get(workspaceId)
     }.tryReconnects()
         .shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)
 
     val availableKonstructions =
         combine(service, relistKonstructions.onStart { emit(Unit) }) { service, _ ->
-            println("Getting konstructions for $workspaceId")
+            logger.debug("Getting konstructions for $workspaceId")
             service.list()
         }.tryReconnects()
             .shareIn(coroutineScope, SharingStarted.Lazily, replay = 1)

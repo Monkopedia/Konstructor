@@ -56,7 +56,6 @@ class GlobalDialogsModel(
                 } ?: false
                 emit(hasConnection)
                 if (!hasConnection) {
-                    serviceHolder.resetRetryCount()
                     serviceHolder.retryConnect()
                 }
                 delay(5.seconds)

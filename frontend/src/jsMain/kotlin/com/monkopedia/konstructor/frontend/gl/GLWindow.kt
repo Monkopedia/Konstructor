@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,7 +15,10 @@
  */
 package com.monkopedia.konstructor.frontend.gl
 
+import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.hauler
 import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.frontend.async
 import com.monkopedia.konstructor.frontend.koin.RootScope
 import com.monkopedia.konstructor.frontend.model.GlControlsModel
 import com.monkopedia.konstructor.frontend.utils.cleanup
@@ -61,9 +64,9 @@ external interface GLProps : Props {
     var reload: Int
 }
 
-data class GLState(
-    var currentKonstruction: Konstruction? = null
-)
+data class GLState(var currentKonstruction: Konstruction? = null)
+
+private val logger = hauler("GLWindow").async()
 
 val GLComponent = FC<GLProps> { props ->
     val callbackRef by useState {
@@ -85,7 +88,7 @@ val GLComponent = FC<GLProps> { props ->
     }
     useEffect(props.konstructionPath ?: emptyMap<String, Pair<String, String>>(), props.reload) {
         val path = props.konstructionPath
-        println("Loading path $path")
+        logger.debug("Loading path $path")
         if (path != null) {
             GLWindow.loadModels(path)
         }
@@ -305,6 +308,4 @@ object GLWindow {
     }
 }
 
-private fun Vector3.str(): String {
-    return "($x $y $z)"
-}
+private fun Vector3.str(): String = "($x $y $z)"
