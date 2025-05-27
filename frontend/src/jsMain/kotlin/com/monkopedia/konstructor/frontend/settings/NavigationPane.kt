@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,6 +29,7 @@ import com.monkopedia.konstructor.frontend.utils.Icons.stlIcon
 import com.monkopedia.konstructor.frontend.utils.useCloseable
 import com.monkopedia.konstructor.frontend.utils.useCollected
 import com.monkopedia.konstructor.frontend.utils.useSubScope
+import emotion.react.css
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import mui.icons.material.Add
@@ -54,9 +55,13 @@ import org.koin.core.parameter.parametersOf
 import react.FC
 import react.Props
 import react.create
+import react.dom.html.ReactHTML.div
 import react.dom.svg.ReactSVG.path
 import react.memo
+import react.useMemo
 import react.useState
+import web.cssom.Auto
+import web.cssom.pct
 import web.cssom.px
 
 external interface NavigationPaneProps : Props {
@@ -69,18 +74,26 @@ val NavigationPane = memo(
             get<NavigationDialogModel> { parametersOf(props.workManager) }
         }
         val workspaces = RootScope.spaceListModel.availableWorkspaces.useCollected(emptyList())
-        val selectedWorkspace = RootScope.scopeTracker.workspace.useCollected()
+        val selectedWorkspace = useMemo {
+            RootScope.scopeTracker.workspace.value
+        }
         DialogMenus {
             this.dialogModel = dialogModel
         }
         mui.material.List {
+            css {
+                overflow = Auto.auto
+            }
             for (workspace in workspaces) {
                 WorkspaceListItem {
                     this.dialogModel = dialogModel
                     this.workspace = workspace
                     this.existingScope =
-                        if (workspace.id == selectedWorkspace?.workspaceId) selectedWorkspace
-                        else null
+                        if (workspace.id == selectedWorkspace?.workspaceId) {
+                            selectedWorkspace
+                        } else {
+                            null
+                        }
                 }
             }
             ListItem {

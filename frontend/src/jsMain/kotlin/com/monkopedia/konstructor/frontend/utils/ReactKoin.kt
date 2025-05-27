@@ -25,14 +25,15 @@ import react.useRef
 import react.useState
 
 inline fun <reified T : KoinScopeComponent> KoinComponent.useSubScope(
+    dep: Any? = null,
     crossinline getter: KoinComponent.() -> T = { get() }
 ): T {
-    val createdScope = useMemo(this) {
+    val createdScope = useMemo(this, dep) {
         getter()
     }
     val first = useRef(true)
     val (scope, setScope) = useState(createdScope)
-    react.useEffect(this@useSubScope) {
+    react.useEffect(this@useSubScope, dep) {
         if (first.current == true) {
             first.current = false
         } else {

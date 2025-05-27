@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,8 +21,6 @@ import dukat.codemirror.state.EditorState
 import dukat.codemirror.state.Text
 import dukat.codemirror.view.EditorView
 import dukat.codemirror.vim.CodeMirror
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.css.background
 import react.FC
 import react.Props
@@ -87,7 +85,4 @@ val CodeMirrorScreen = memo(
         oldProps.target == newProps.target
 }
 
-
-fun Text.asString(): String {
-    return (0 until lines.toInt()).joinToString("\n") { line(it + 1).text }
-}
+fun Text.asString(): String = (0 until lines.toInt()).joinToString("\n") { line(it + 1).text }

@@ -32,7 +32,6 @@ import io.ktor.util.toByteArray
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.core.Closeable
 import io.ktor.utils.io.writeFully
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,10 +41,7 @@ import kotlinx.coroutines.launch
 import org.khronos.webgl.Int8Array
 import org.w3c.files.File
 
-class NavigationDialogModel(
-    private val coroutineScope: CoroutineScope,
-    val workManager: WorkManager,
-) : Closeable {
+class NavigationDialogModel(val workManager: WorkManager) : Closeable {
     enum class Dialogs {
         NONE,
         WORKING,
@@ -53,14 +49,14 @@ class NavigationDialogModel(
         CREATE_KONSTRUCTION,
         EDIT_WORKSPACE,
         EDIT_KONSTRUCTION,
-        UPLOAD_STL,
+        UPLOAD_STL
     }
 
     data class DialogState(
         val dialog: Dialogs,
         val targetWorkspace: String? = null,
         val targetKonstruction: String? = null,
-        val currentName: String? = null,
+        val currentName: String? = null
     )
 
     private val mutableDialog = MutableStateFlow(DialogState(NONE))
@@ -87,25 +83,18 @@ class NavigationDialogModel(
         mutableDialog.value = DialogState(UPLOAD_STL, targetWorkspace = workspaceId)
     }
 
-    fun showEditWorkspace(
-        workspaceId: String,
-        currentName: String,
-    ) {
+    fun showEditWorkspace(workspaceId: String, currentName: String) {
         mutableDialog.value =
             DialogState(EDIT_WORKSPACE, targetWorkspace = workspaceId, currentName = currentName)
     }
 
-    fun showEditKonstruction(
-        workspaceId: String,
-        konstructionId: String,
-        currentName: String,
-    ) {
+    fun showEditKonstruction(workspaceId: String, konstructionId: String, currentName: String) {
         mutableDialog.value =
             DialogState(
                 EDIT_KONSTRUCTION,
                 targetWorkspace = workspaceId,
                 targetKonstruction = konstructionId,
-                currentName = currentName,
+                currentName = currentName
             )
     }
 
@@ -129,8 +118,8 @@ class NavigationDialogModel(
                     Konstruction(
                         id = "",
                         name = lastTextInput,
-                        workspaceId = targetWorkspace,
-                    ),
+                        workspaceId = targetWorkspace
+                    )
                 )
             }
             WorkspaceModel.refreshAllKonstructions()
@@ -143,7 +132,7 @@ class NavigationDialogModel(
         workManager.doWork {
             val service = RootScope.serviceHolder.service.first()
             service.create(
-                Space(id = "", name = lastTextInput),
+                Space(id = "", name = lastTextInput)
             )
             RootScope.spaceListModel.refreshWorkspaces()
         }

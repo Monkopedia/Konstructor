@@ -15,7 +15,6 @@
  */
 package com.monkopedia.konstructor.frontend.koin
 
-import com.monkopedia.hauler.debug
 import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.frontend.async

@@ -69,7 +69,6 @@ val KonstructionEditor = FC<KonstructionEditorProps> { props ->
         return@FC
     }
     EditorScreen {
-//        content = currentText
         this.setViewAvailable = props.konstructionModel.setViewAvailable
         this.editorState = props.konstructionModel.editorState
         this.onSave = props.konstructionModel.onSave

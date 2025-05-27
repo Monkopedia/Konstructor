@@ -42,6 +42,7 @@ import react.useMemo
 import web.cssom.Display
 import web.cssom.FlexDirection
 import web.cssom.pct
+import web.cssom.vh
 
 external interface MainScreenProps : Props {
     var workManager: WorkManager
@@ -113,6 +114,7 @@ val MainScreenContentPane = FC<MainScreenPaneProps> { props ->
         css {
             this.display = Display.flex
             this.flexDirection = FlexDirection.column
+            this.height = 100.vh
         }
         MenuComponent {
             workManager = props.workManager

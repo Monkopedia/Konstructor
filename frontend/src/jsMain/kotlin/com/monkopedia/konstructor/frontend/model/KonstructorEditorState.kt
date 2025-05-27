@@ -38,6 +38,7 @@ import dukat.codemirror.view.EditorView
 import dukat.codemirror.view.ViewUpdate
 import dukat.codemirror.view.scrollPastEnd
 import dukat.codemirror.vim.vim
+import js.objects.jso
 import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -56,11 +57,10 @@ import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import styled.getClassSelector
-import js.objects.jso
 
 class KonstructorEditorState(
-    private val model: KonstructionModel,
-    private val coroutineScope: CoroutineScope,
+    model: KonstructionModel,
+    coroutineScope: CoroutineScope
 ) {
     private val heightTheme = EditorView.theme(
         buildExt {
@@ -69,10 +69,10 @@ class KonstructorEditorState(
                 jso {
                     height = "calc(100vh - 64px)"
                     width = "calc(50hw)"
-                },
+                }
             )
             set(".cm-scroller", jso { overflow = "auto" })
-        },
+        }
     )
     var editorState = EditorState.create(
         buildExt {
@@ -87,9 +87,9 @@ class KonstructorEditorState(
                 EditorView.updateListener.of(::onViewUpdate),
                 scrollPastEnd(),
                 heightTheme,
-                history(),
+                history()
             )
-        },
+        }
     )
 
     private val errorClass by lazy {
@@ -122,13 +122,13 @@ class KonstructorEditorState(
             .replace("\t", "")
         desiredRaw != currentRaw
     }
-    val conflictingText = MutableStateFlow<Boolean>(false)
+    val conflictingText = MutableStateFlow(false)
     private val classes = model.messages.map { messages ->
         mapOf(
             errorClass to messages.filter { it.importance == ERROR }
                 .mapNotNull { it.line },
             warningClass to messages.filter { it.importance != ERROR }
-                .mapNotNull { it.line },
+                .mapNotNull { it.line }
         )
     }.stateIn(coroutineScope, SharingStarted.Eagerly, emptyMap())
 
@@ -136,7 +136,7 @@ class KonstructorEditorState(
         val backendText: TextSegment,
         val desiredText: TextSegment,
         val currentText: TextSegment,
-        val classes: Map<String, List<Int>>,
+        val classes: Map<String, List<Int>>
     )
 
     init {
@@ -146,12 +146,17 @@ class KonstructorEditorState(
             desiredText.value = initialText
         }
         currentView.launchCollectLatest(coroutineScope) { view ->
-            combine(backendText, desiredText, currentText, classes) { backend, desired, current, classes ->
+            combine(
+                backendText,
+                desiredText,
+                currentText,
+                classes
+            ) { backend, desired, current, classes ->
                 EditorTextState(
                     TextSegment(backend),
                     TextSegment(desired),
                     TextSegment(current),
-                    classes,
+                    classes
                 )
             }.transform { (backend, desired, current, classes) ->
                 if (backend.raw != desired.raw) {
@@ -204,16 +209,14 @@ class KonstructorEditorState(
         currentPos.value = pos
     }
 
-    fun save(): String {
-        return currentText.value.also {
-            conflictingText.value = false
-        }
+    fun save(): String = currentText.value.also {
+        conflictingText.value = false
     }
 }
 
 fun <T> Flow<T>.launchCollectLatest(
     scope: CoroutineScope,
-    consumer: suspend CoroutineScope.(T) -> Unit,
+    consumer: suspend CoroutineScope.(T) -> Unit
 ) {
     scope.launch {
         collectLatest { value ->
@@ -241,7 +244,7 @@ private fun setMarks(doc: Text, customClasses: Map<String, List<Int>>): Transact
                 Decoration.mark(
                     buildExt {
                         this.`class` = key
-                    },
+                    }
                 ).range(lineInfo.from, max(lineInfo.to.toInt(), lineInfo.from.toInt() + 1))
             }
         }

@@ -33,9 +33,10 @@ open class CoroutineKoinScope(parent: Job? = null) : KoinScopeComponent {
     val coroutineScope = CoroutineScope(
         job + CoroutineExceptionHandler { coroutineContext, throwable ->
             logScope.launch {
-                hauler("CoroutineKoinScope").error("Exception caught in $coroutineContext", throwable)
+                hauler("CoroutineKoinScope")
+                    .error("Exception caught in $coroutineContext", throwable)
             }
-        },
+        }
     )
 
     override val scope: Scope by lazy {

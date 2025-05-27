@@ -34,7 +34,6 @@ import info.laht.threekt.lights.DirectionalLight
 import info.laht.threekt.lights.Light
 import info.laht.threekt.materials.MeshPhongMaterial
 import info.laht.threekt.math.ColorConstants
-import info.laht.threekt.math.Vector3
 import info.laht.threekt.objects.Mesh
 import info.laht.threekt.renderers.WebGLRenderer
 import info.laht.threekt.renderers.WebGLRendererParams
@@ -63,8 +62,6 @@ external interface GLProps : Props {
     var konstructionPath: Map<String, Pair<String, String>>?
     var reload: Int
 }
-
-data class GLState(var currentKonstruction: Konstruction? = null)
 
 private val logger = hauler("GLWindow").async()
 
@@ -267,8 +264,6 @@ object GLWindow {
     fun setElement(element: HTMLElement?) {
         lastElement?.removeChild(renderer.domElement)
         element?.appendChild(renderer.domElement)
-//            element?.appendChild(stats.dom)
-//            stats.dom.asDynamic().style.left = null
         lastElement = element
     }
 
@@ -307,5 +302,3 @@ object GLWindow {
         stats.update()
     }
 }
-
-private fun Vector3.str(): String = "($x $y $z)"
