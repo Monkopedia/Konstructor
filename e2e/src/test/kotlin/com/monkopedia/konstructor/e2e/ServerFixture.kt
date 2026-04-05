@@ -77,11 +77,39 @@ class ServerFixture {
         error("Server did not start within ${timeoutMs}ms")
     }
 
-    fun stop() {
+    /** Stop the server process but keep the data dir for restart. */
+    fun stopProcess() {
         if (::process.isInitialized) {
             process.destroyForcibly()
             process.waitFor()
         }
+    }
+
+    /** Restart the server on the same port and data dir. */
+    fun restart() {
+        stopProcess()
+        val jarPath = System.getProperty("konstructor.jar")
+            ?: error("Set -Dkonstructor.jar to the backend shadow JAR path")
+        val dataDir = File(tempDir, ".konstructor")
+        process = ProcessBuilder(
+            "/usr/lib/jvm/java-21-openjdk/bin/java",
+            "-jar", jarPath,
+            "--http", port.toString(),
+            "--cors",
+            "--websockets"
+        ).apply {
+            environment()["KONSTRUCTOR_HOME"] = dataDir.absolutePath
+        }.redirectErrorStream(true).start()
+        Thread {
+            process.inputStream.bufferedReader().forEachLine {
+                System.err.println("[server] $it")
+            }
+        }.apply { isDaemon = true }.start()
+        waitForServer(timeoutMs = 30_000)
+    }
+
+    fun stop() {
+        stopProcess()
         if (::tempDir.isInitialized) {
             tempDir.deleteRecursively()
         }

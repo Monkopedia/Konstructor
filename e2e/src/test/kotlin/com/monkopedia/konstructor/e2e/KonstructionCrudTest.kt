@@ -19,55 +19,63 @@ import org.junit.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class WorkspaceCrudTest : BaseE2eTest() {
+class KonstructionCrudTest : BaseE2eTest() {
 
     @Test
-    fun testCreateFirstWorkspace() {
+    fun testCreateKonstruction() {
         loadApp()
-        createFirstWorkspaceViaUi("My Test Workspace")
+        createFirstWorkspaceViaUi("TestWs")
+        openNavigationPane()
+        expandWorkspace("TestWs")
+        createKonstructionViaUi("MyCube")
 
-        val bodyText = page.content()
-        assertTrue(
-            bodyText.contains("My Test Workspace") ||
-                !bodyText.contains("First workspace name"),
-            "Should have navigated away from create workspace screen"
-        )
+        val html = page.content()
+        assertTrue(html.contains("MyCube"), "Konstruction should appear")
     }
 
     @Test
-    fun testRenameWorkspace() {
+    fun testRenameKonstruction() {
         loadApp()
-        createFirstWorkspaceViaUi("OriginalWs")
+        createFirstWorkspaceViaUi("RenameWs")
         openNavigationPane()
+        expandWorkspace("RenameWs")
+        createKonstructionViaUi("Original")
 
-        // Click edit button on workspace
-        clickEditButton("OriginalWs")
+        openNavigationPane()
+        expandWorkspace("RenameWs")
 
-        // Dialog "Change workspace name" — fill new name and save
+        clickEditButton("Original")
         val dialogInput = page.waitForSelector(
             ".MuiDialog-root input", waitOpts(5000.0)
         )
         assertNotNull(dialogInput)
-        dialogInput.fill("RenamedWs")
+        dialogInput.fill("Renamed")
         page.locator(".MuiDialog-root button:has-text('Save')").click()
         page.waitForTimeout(2000.0)
 
         val content = page.content()
-        assertTrue(content.contains("RenamedWs"), "Workspace should be renamed")
+        assertTrue(content.contains("Renamed"), "Konstruction should be renamed")
     }
 
     @Test
-    fun testDeleteWorkspace() {
+    fun testDeleteKonstruction() {
         loadApp()
-        createFirstWorkspaceViaUi("ToDeleteWs")
+        createFirstWorkspaceViaUi("DeleteWs")
         openNavigationPane()
+        expandWorkspace("DeleteWs")
+        createKonstructionViaUi("ToDelete")
 
-        clickEditButton("ToDeleteWs")
+        openNavigationPane()
+        expandWorkspace("DeleteWs")
+
+        clickEditButton("ToDelete")
         page.locator(".MuiDialog-root button:has-text('Delete')").click()
         page.waitForTimeout(2000.0)
 
-        // After deleting the only workspace, we should be back at empty state
-        val input = page.waitForSelector("input", waitOpts(10000.0))
-        assertNotNull(input, "Should be back to empty state after deleting only workspace")
+        val content = page.content()
+        assertTrue(
+            !content.contains(">ToDelete<"),
+            "Deleted konstruction should not appear"
+        )
     }
 }
