@@ -50,7 +50,7 @@ fun EditorPane(modifier: Modifier = Modifier) {
     val uiState by konstructionVm.state.collectAsState()
     val messages by konstructionVm.messages.collectAsState()
 
-    val kotlinLang = remember { StreamLanguage.define(kotlin) }
+    val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
     val extensions = remember { basicSetup + oneDark + kotlinLang }
     val session = rememberEditorSession(
         doc = content,

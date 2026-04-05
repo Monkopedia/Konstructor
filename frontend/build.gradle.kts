@@ -38,7 +38,7 @@ kotlin {
         implementation(compose.foundation)
         implementation(compose.material3)
         implementation("org.jetbrains.compose.ui:ui:${libs.versions.compose.multiplatform.get()}")
-        implementation("org.jetbrains.compose.components:components-resources:${libs.versions.compose.multiplatform.get()}")
+        implementation(compose.materialIconsExtended)
 
         // Lifecycle + ViewModel
         implementation(libs.lifecycle.viewmodel.compose)

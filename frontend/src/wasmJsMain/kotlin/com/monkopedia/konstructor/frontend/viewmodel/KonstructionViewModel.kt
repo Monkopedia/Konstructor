@@ -79,7 +79,7 @@ class KonstructionViewModel(
     private suspend fun registerListener(ks: KonstructionService) {
         try {
             val listener = object : KonstructionListener {
-                override suspend fun requestedCallbacks(): List<KonstructionCallbacks> {
+                override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> {
                     return listOf(
                         KonstructionCallbacks.INFO_CHANGE,
                         KonstructionCallbacks.DIRTY_CHANGE,
