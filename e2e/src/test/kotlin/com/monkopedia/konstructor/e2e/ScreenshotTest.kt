@@ -16,8 +16,16 @@
 package com.monkopedia.konstructor.e2e
 
 import com.microsoft.playwright.Page
+import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.konstructor.common.TaskStatus
+import com.monkopedia.ksrpc.ksrpcEnvironment
+import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
+import com.monkopedia.ksrpc.toStub
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
 import java.io.File
 import java.nio.file.Paths
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -188,6 +196,75 @@ class ScreenshotTest : BaseE2eTest() {
             }
         """)
         page.waitForTimeout(500.0)
+    }
+
+    @Test
+    fun captureRenderedModel() {
+        loadApp()
+        createFirstWorkspaceViaUi("Render Workspace")
+        openNavigationPane()
+        expandWorkspace("Render Workspace")
+        createKonstructionViaUi("Rendered Cube")
+
+        // Ensure editor mode and type script
+        ensureEditorMode("Render Workspace", "Rendered Cube")
+        waitForEditor()
+        typeInEditor(DEMO_SCRIPT)
+        saveEditor()
+
+        // Compile and build via ksrpc API
+        runBlocking {
+            val env = ksrpcEnvironment { }
+            val client = HttpClient { install(WebSockets) }
+            val conn = client.asWebsocketConnection(
+                "${server.baseUrl}/konstructor", env
+            )
+            val service = conn.defaultChannel().toStub<Konstructor, String>()
+            val ws = service.list().first()
+            val workspace = service.get(ws.id)
+            val k = workspace.list().first()
+            val ks = service.konstruction(k)
+
+            // Compile
+            val compileResult = ks.compile()
+            assertTrue(
+                compileResult.status == TaskStatus.SUCCESS,
+                "Compile failed: ${compileResult.messages}"
+            )
+
+            // Build both targets
+            ks.konstruct("myCube")
+            ks.konstruct("mySphere")
+        }
+
+        // Reload to pick up the built targets in the UI
+        page.reload()
+        page.waitForSelector(".MuiToolbar-root", waitOpts(15000.0))
+        page.waitForTimeout(2000.0)
+
+        // Switch to selection pane to enable targets
+        page.evaluate("""
+            const btns = document.querySelectorAll('button[aria-label="selection"]');
+            if (btns.length) btns[0].click();
+        """)
+        page.waitForTimeout(2000.0)
+
+        // Toggle ON all the MUI Switch toggles to enable rendering
+        page.evaluate("""
+            document.querySelectorAll('.MuiSwitch-input').forEach(sw => {
+                if (!sw.checked) sw.click();
+            });
+        """)
+        page.waitForTimeout(3000.0)
+        screenshot("13-selection-pane-enabled")
+
+        // Switch back to editor to see the rendered model in the GL pane
+        page.evaluate("""
+            const back = document.querySelector('button[aria-label="back"]');
+            if (back) back.click();
+        """)
+        page.waitForTimeout(5000.0)
+        screenshot("14-rendered-model-with-editor")
     }
 
     companion object {
