@@ -22,37 +22,24 @@ import kotlin.test.assertTrue
 
 class WorkspaceCrudTest : BaseE2eTest() {
 
-    /**
-     * Creates the first workspace via the initial empty-state UI.
-     *
-     * NOTE: This test depends on the React frontend rendering correctly.
-     * If the ThemeProvider or other MUI components have errors, the input
-     * won't render and the test will be skipped via assumption.
-     */
     @Test
     fun testCreateFirstWorkspace() {
-        val consoleErrors = mutableListOf<String>()
-        page.onConsoleMessage { msg ->
-            if (msg.type() == "error") consoleErrors.add(msg.text())
-        }
-
         page.navigate(server.baseUrl)
-        page.waitForTimeout(10000.0)
+        // Wait for React + WebSocket initialization
+        val input = page.waitForSelector(
+            "input",
+            Page.WaitForSelectorOptions().setTimeout(15000.0)
+        )
+        assertNotNull(input, "Should show workspace name input")
 
-        val input = page.querySelector("input")
-        if (input == null) {
-            // Frontend has a rendering error - skip rather than fail
-            org.junit.Assume.assumeTrue(
-                "Frontend failed to render: ${consoleErrors.joinToString("; ").take(200)}",
-                false
-            )
-            return
-        }
-
+        // Type workspace name and submit
         input.fill("My Test Workspace")
         page.locator("button:not([disabled])").last().click()
+
+        // Wait for navigation away from empty state
         page.waitForTimeout(3000.0)
 
+        // Verify we navigated away from create workspace screen
         val bodyText = page.content()
         assertTrue(
             bodyText.contains("My Test Workspace") ||
