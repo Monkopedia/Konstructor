@@ -40,7 +40,7 @@ external interface GlobalDialogsProps : Props {
 val GlobalDialogs = memo(
     FC<GlobalDialogsProps> { props ->
         val pendingPresent = props.dialogModel.hasConflictingState.useCollected(false)
-        val isConnected = props.dialogModel.hasConnection.useCollected(false)
+        val isConnected = props.dialogModel.hasConnection.useCollected(true)
 
         Dialog {
             open = pendingPresent

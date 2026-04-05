@@ -44,7 +44,7 @@ import mui.material.IconButtonEdge.Companion.end
 import mui.material.ListItem
 import mui.material.ListItemButton
 import mui.material.ListItemIcon
-import mui.material.ListItemSecondaryAction
+
 import mui.material.ListItemText
 import mui.material.SvgIcon
 import mui.material.SvgIconColor.Companion.primary
@@ -149,17 +149,15 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                 ExpandMore()
             }
         }
-        ListItemSecondaryAction {
-            IconButton {
-                edge = end
-                ariaLabel = "rename"
-                Edit()
-                onClick = {
-                    props.dialogModel.showEditWorkspace(
-                        props.workspace.id,
-                        props.workspace.name
-                    )
-                }
+        IconButton {
+            edge = end
+            ariaLabel = "rename"
+            Edit()
+            onClick = {
+                props.dialogModel.showEditWorkspace(
+                    props.workspace.id,
+                    props.workspace.name
+                )
             }
         }
     }
@@ -219,18 +217,16 @@ val WorkspaceListItem = FC<WorkspaceListItemProps> { props ->
                             }
                         }
                     }
-                    ListItemSecondaryAction {
-                        IconButton {
-                            edge = end
-                            ariaLabel = "rename"
-                            Edit()
-                            onClick = {
-                                props.dialogModel.showEditKonstruction(
-                                    konstruction.workspaceId,
-                                    konstruction.id,
-                                    konstruction.name
-                                )
-                            }
+                    IconButton {
+                        edge = end
+                        ariaLabel = "rename"
+                        Edit()
+                        onClick = {
+                            props.dialogModel.showEditKonstruction(
+                                konstruction.workspaceId,
+                                konstruction.id,
+                                konstruction.name
+                            )
                         }
                     }
                 }

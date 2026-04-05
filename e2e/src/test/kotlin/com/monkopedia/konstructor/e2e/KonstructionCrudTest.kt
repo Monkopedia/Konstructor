@@ -41,8 +41,9 @@ class KonstructionCrudTest : BaseE2eTest() {
         expandWorkspace("RenameWs")
         createKonstructionViaUi("Original")
 
-        openNavigationPane()
-        expandWorkspace("RenameWs")
+        // After creation, we may have navigated to the editor.
+        // Go back to navigation and ensure workspace is expanded.
+        ensureNavigationWithExpandedWorkspace("RenameWs")
 
         clickEditButton("Original")
         val dialogInput = page.waitForSelector(
@@ -65,8 +66,7 @@ class KonstructionCrudTest : BaseE2eTest() {
         expandWorkspace("DeleteWs")
         createKonstructionViaUi("ToDelete")
 
-        openNavigationPane()
-        expandWorkspace("DeleteWs")
+        ensureNavigationWithExpandedWorkspace("DeleteWs")
 
         clickEditButton("ToDelete")
         page.locator(".MuiDialog-root button:has-text('Delete')").click()
@@ -77,5 +77,31 @@ class KonstructionCrudTest : BaseE2eTest() {
             !content.contains(">ToDelete<"),
             "Deleted konstruction should not appear"
         )
+    }
+
+    /**
+     * Ensure we're in navigation mode with the workspace expanded.
+     * Handles the case where we might already be in navigation mode
+     * after creating a konstruction.
+     */
+    private fun ensureNavigationWithExpandedWorkspace(wsName: String) {
+        page.waitForTimeout(1000.0)
+        // Check if we can see the workspace in a list
+        val wsVisible = page.querySelector(
+            ".MuiListItemButton-root:has-text('$wsName')"
+        )
+        if (wsVisible == null) {
+            // Not in navigation mode — switch to it
+            openNavigationPane()
+            expandWorkspace(wsName)
+        } else {
+            // Already in navigation. Check if workspace is expanded
+            // by looking for "Add new konstruction" visible
+            val addBtn = page.querySelector("text=Add new konstruction")
+            if (addBtn == null) {
+                // Workspace is collapsed — expand it
+                expandWorkspace(wsName)
+            }
+        }
     }
 }

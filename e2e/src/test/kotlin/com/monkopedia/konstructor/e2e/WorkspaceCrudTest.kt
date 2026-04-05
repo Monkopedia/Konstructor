@@ -40,7 +40,6 @@ class WorkspaceCrudTest : BaseE2eTest() {
         createFirstWorkspaceViaUi("OriginalWs")
         openNavigationPane()
 
-        // Click edit button on workspace
         clickEditButton("OriginalWs")
 
         // Dialog "Change workspace name" — fill new name and save

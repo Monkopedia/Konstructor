@@ -45,29 +45,36 @@ class GlobalDialogsModel(
         scopeTracker.konstruction.filterNotNull().flatMapLatest {
             it.get<KonstructionModel>().pendingText
         }
-    val hasConnection: Flow<Boolean> = serviceHolder.service.flatMapLatest {
+    val hasConnection: Flow<Boolean> = serviceHolder.service.flatMapLatest { service ->
         flow {
-            // Give the initial connection time to stabilize
-            delay(10.seconds)
+            // Wait for connection to stabilize before starting ping checks
+            delay(5.seconds)
+            var hasEverConnected = false
             while (true) {
-                val hasConnection = withTimeoutOrNull(5.seconds) {
+                val connected = withTimeoutOrNull(5.seconds) {
                     runCatching {
-                        it.ping()
+                        service.ping()
                         true
                     }.getOrNull()
                 } ?: false
-                emit(hasConnection)
-                if (!hasConnection) {
+                if (connected) {
+                    hasEverConnected = true
+                    emit(true)
+                } else if (hasEverConnected) {
+                    // Only show disconnected after we had a working connection
+                    emit(false)
                     serviceHolder.retryConnect()
                 }
-                delay(10.seconds)
+                // else: never connected yet, don't show dialog
+                delay(5.seconds)
             }
         }
     }.onStart {
         emit(true)
     }.retry {
+        delay(1.seconds)
         true
-    }.shareIn(coroutineScope, SharingStarted.Eagerly, replay = 1)
+    }.stateIn(coroutineScope, SharingStarted.Eagerly, true)
 
     fun overwriteState() {
         val model = konstructionModel.value ?: return
