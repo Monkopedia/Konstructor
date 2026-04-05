@@ -24,6 +24,15 @@ repositories {
 dependencies {
     testImplementation(kotlin("test-junit"))
     testImplementation("com.microsoft.playwright:playwright:1.58.0")
+    testImplementation(project(":protocol"))
+    testImplementation(libs.ksrpc.core)
+    testImplementation(libs.ksrpc.ktor.client)
+    testImplementation(libs.ksrpc.ktor.websocket.client)
+    testImplementation(libs.ktor.client.cio)
+    testImplementation(libs.ktor.client.core)
+    testImplementation(libs.ktor.client.websockets)
+    testImplementation(libs.kotlinx.coroutines.core)
+    testImplementation(libs.kotlinx.serialization.json)
 }
 
 tasks.test {

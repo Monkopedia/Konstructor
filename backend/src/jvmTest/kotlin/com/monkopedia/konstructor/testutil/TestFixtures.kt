@@ -18,15 +18,25 @@ package com.monkopedia.konstructor.testutil
 object TestFixtures {
 
     val SIMPLE_CUBE_SCRIPT = """
-        val cube = cube(xyz(10, 10, 10))
-        export(cube)
+        val simpleCube by primitive {
+            cube {
+                dimensions = xyz(10.0, 10.0, 10.0)
+            }
+        }
+        export("simpleCube")
     """.trimIndent()
 
     val MULTI_TARGET_SCRIPT = """
-        val cube = cube(xyz(10, 10, 10))
-        val sphere = sphere(5.0)
-        export(cube)
-        export(sphere)
+        val myCube by primitive {
+            cube {
+                dimensions = xyz(5.0, 5.0, 5.0)
+            }
+        }
+        val mySphere by primitive {
+            Sphere(radius = 3.0)
+        }
+        export("myCube")
+        export("mySphere")
     """.trimIndent()
 
     val SYNTAX_ERROR_SCRIPT = """
@@ -36,9 +46,9 @@ object TestFixtures {
     val EMPTY_SCRIPT = ""
 
     val RUNTIME_ERROR_SCRIPT = """
-        val failing = cube(xyz(1, 1, 1)).also {
+        val failing by primitive {
             error("intentional failure")
         }
-        export(failing)
+        export("failing")
     """.trimIndent()
 }
