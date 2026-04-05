@@ -79,29 +79,4 @@ class KonstructionCrudTest : BaseE2eTest() {
         )
     }
 
-    /**
-     * Ensure we're in navigation mode with the workspace expanded.
-     * Handles the case where we might already be in navigation mode
-     * after creating a konstruction.
-     */
-    private fun ensureNavigationWithExpandedWorkspace(wsName: String) {
-        page.waitForTimeout(1000.0)
-        // Check if we can see the workspace in a list
-        val wsVisible = page.querySelector(
-            ".MuiListItemButton-root:has-text('$wsName')"
-        )
-        if (wsVisible == null) {
-            // Not in navigation mode — switch to it
-            openNavigationPane()
-            expandWorkspace(wsName)
-        } else {
-            // Already in navigation. Check if workspace is expanded
-            // by looking for "Add new konstruction" visible
-            val addBtn = page.querySelector("text=Add new konstruction")
-            if (addBtn == null) {
-                // Workspace is collapsed — expand it
-                expandWorkspace(wsName)
-            }
-        }
-    }
 }

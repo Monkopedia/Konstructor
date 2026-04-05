@@ -30,31 +30,23 @@ class NavigationTest : BaseE2eTest() {
         openNavigationPane()
         expandWorkspace("NavWs")
         createKonstructionViaUi("First")
+        ensureEditorMode("NavWs", "First")
         val editor1 = waitForEditor()
         assertNotNull(editor1)
-        editor1.click()
-        page.keyboard().type("// first content")
-        page.keyboard().press("Escape")
-        page.waitForTimeout(500.0)
-        page.keyboard().press("Control+s")
-        page.waitForTimeout(2000.0)
+        typeInEditor("// first content")
+        saveEditor()
 
         // Create second konstruction and type different content
-        openNavigationPane()
-        expandWorkspace("NavWs")
+        ensureNavigationWithExpandedWorkspace("NavWs")
         createKonstructionViaUi("Second")
+        ensureEditorMode("NavWs", "Second")
         val editor2 = waitForEditor()
         assertNotNull(editor2)
-        editor2.click()
-        page.keyboard().type("// second content")
-        page.keyboard().press("Escape")
-        page.waitForTimeout(500.0)
-        page.keyboard().press("Control+s")
-        page.waitForTimeout(2000.0)
+        typeInEditor("// second content")
+        saveEditor()
 
         // Navigate to first
-        openNavigationPane()
-        expandWorkspace("NavWs")
+        ensureNavigationWithExpandedWorkspace("NavWs")
         selectKonstruction("First")
         waitForEditor()
         page.waitForTimeout(1000.0)
@@ -62,8 +54,7 @@ class NavigationTest : BaseE2eTest() {
         assertTrue(c1.contains("first content"), "First content expected. Got: ${c1.take(200)}")
 
         // Navigate to second
-        openNavigationPane()
-        expandWorkspace("NavWs")
+        ensureNavigationWithExpandedWorkspace("NavWs")
         selectKonstruction("Second")
         waitForEditor()
         page.waitForTimeout(1000.0)
@@ -79,7 +70,8 @@ class NavigationTest : BaseE2eTest() {
         expandWorkspace("TitleWs")
         createKonstructionViaUi("TitleKon")
 
-        // After selecting konstruction, title should show workspace > konstruction
+        // Ensure we're in editor mode so the title shows "Ws > Kon"
+        ensureEditorMode("TitleWs", "TitleKon")
         page.waitForTimeout(1000.0)
         val titleText = page.locator(".MuiToolbar-root").first().textContent() ?: ""
         assertTrue(

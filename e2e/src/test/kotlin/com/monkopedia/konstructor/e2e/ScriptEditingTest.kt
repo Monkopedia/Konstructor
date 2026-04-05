@@ -29,21 +29,18 @@ class ScriptEditingTest : BaseE2eTest() {
         expandWorkspace("EditWs")
         createKonstructionViaUi("EditTest")
 
-        // After creating, should be in editor mode
+        // After creating, ensure we're in editor mode
+        ensureEditorMode("EditWs", "EditTest")
         val editor = waitForEditor()
         assertNotNull(editor, "CodeMirror editor should appear")
 
-        editor.click()
-        page.keyboard().type("// test marker content")
-        page.keyboard().press("Escape")
-        page.waitForTimeout(500.0)
-        page.keyboard().press("Control+s")
-        page.waitForTimeout(2000.0)
+        typeInEditor("// test marker content")
+        saveEditor()
 
         val content = getEditorContent()
         assertTrue(
             content.contains("test marker content"),
-            "Editor should contain typed text. Got: ${content.take(200)}"
+            "Editor should contain typed text. Got: '${content.take(200)}'"
         )
     }
 
@@ -55,21 +52,14 @@ class ScriptEditingTest : BaseE2eTest() {
         expandWorkspace("PersistWs")
         createKonstructionViaUi("PersistTest")
 
+        ensureEditorMode("PersistWs", "PersistTest")
         val editor = waitForEditor()
         assertNotNull(editor)
-        editor.click()
-        page.keyboard().type("// persist marker")
-        page.keyboard().press("Escape")
-        page.waitForTimeout(500.0)
-        page.keyboard().press("Control+s")
-        page.waitForTimeout(2000.0)
+        typeInEditor("// persist marker")
+        saveEditor()
 
-        // Navigate away
-        openNavigationPane()
-        page.waitForTimeout(1000.0)
-
-        // Navigate back
-        expandWorkspace("PersistWs")
+        // Navigate away and back
+        ensureNavigationWithExpandedWorkspace("PersistWs")
         selectKonstruction("PersistTest")
         waitForEditor()
         page.waitForTimeout(1000.0)

@@ -178,13 +178,77 @@ abstract class BaseE2eTest {
     }
 
     protected fun waitForEditor(): com.microsoft.playwright.ElementHandle? {
-        return page.waitForSelector(".cm-editor .cm-content", waitOpts(10000.0))
+        return page.waitForSelector(".cm-editor", waitOpts(10000.0))
+    }
+
+    /** Type text into the CodeMirror editor. Handles Vim mode. */
+    protected fun typeInEditor(text: String) {
+        // CM6 with Vim: click the content area to focus, then press 'i' to enter
+        // insert mode, then type the text
+        page.click(".cm-editor .cm-content")
+        page.waitForTimeout(200.0)
+        // Enter insert mode (Vim)
+        page.keyboard().press("i")
+        page.waitForTimeout(100.0)
+        // Use insertText which bypasses key event handling and directly inputs text
+        page.keyboard().insertText(text)
+        page.waitForTimeout(500.0)
+    }
+
+    /** Save the current editor content via Vim :w command. */
+    protected fun saveEditor() {
+        // Exit insert mode, then use Vim :w command
+        page.keyboard().press("Escape")
+        page.waitForTimeout(300.0)
+        page.click(".cm-editor .cm-content")
+        page.waitForTimeout(200.0)
+        // Type :w<Enter> as Vim save command
+        page.keyboard().type(":w")
+        page.keyboard().press("Enter")
+        page.waitForTimeout(2000.0)
     }
 
     protected fun getEditorContent(): String {
-        return page.querySelector(".cm-editor .cm-content")?.textContent() ?: ""
+        val text = page.evaluate("""() => {
+            const lines = document.querySelectorAll('.cm-editor .cm-line');
+            return Array.from(lines).map(l => l.textContent).join('\n');
+        }""") as String
+        return text
     }
 
     protected fun waitOpts(timeout: Double) =
         Page.WaitForSelectorOptions().setTimeout(timeout)
+
+    /** Check if we're currently in navigation pane mode. */
+    protected fun isInNavigationMode(): Boolean {
+        val text = page.evaluate("""
+            document.querySelector('.MuiToolbar-root .MuiTypography-root')?.textContent || ''
+        """) as String
+        return text == "Navigation"
+    }
+
+    /** Ensure we're in navigation mode with the workspace expanded. */
+    protected fun ensureNavigationWithExpandedWorkspace(wsName: String) {
+        page.waitForTimeout(1000.0)
+        if (!isInNavigationMode()) {
+            openNavigationPane()
+        }
+        // Check if workspace is expanded by looking for "Add new konstruction"
+        val addBtn = page.querySelector("text=Add new konstruction")
+        if (addBtn == null) {
+            expandWorkspace(wsName)
+        }
+    }
+
+    /**
+     * Ensure we're in editor mode for the given konstruction.
+     * If we're in navigation mode, select the konstruction.
+     */
+    protected fun ensureEditorMode(wsName: String, konName: String) {
+        val editorVisible = page.querySelector(".cm-editor .cm-content")
+        if (editorVisible == null) {
+            ensureNavigationWithExpandedWorkspace(wsName)
+            selectKonstruction(konName)
+        }
+    }
 }

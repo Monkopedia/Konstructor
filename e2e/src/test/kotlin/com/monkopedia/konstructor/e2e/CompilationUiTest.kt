@@ -47,19 +47,12 @@ class CompilationUiTest : BaseE2eTest() {
         expandWorkspace("CompileWs")
         createKonstructionViaUi("CompileTest")
 
-        // Type valid script
+        // Ensure we're in editor mode
+        ensureEditorMode("CompileWs", "CompileTest")
         val editor = waitForEditor()
         assertNotNull(editor)
-        editor.click()
-        // Type line by line to avoid issues with special chars
-        for (line in VALID_SCRIPT.split("\n")) {
-            page.keyboard().type(line)
-            page.keyboard().press("Enter")
-        }
-        page.keyboard().press("Escape")
-        page.waitForTimeout(500.0)
-        page.keyboard().press("Control+s")
-        page.waitForTimeout(2000.0)
+        typeInEditor(VALID_SCRIPT)
+        saveEditor()
 
         // Compile via ksrpc (since compile button requires menu navigation)
         val result = runBlocking {
@@ -89,14 +82,11 @@ class CompilationUiTest : BaseE2eTest() {
         expandWorkspace("ErrorWs")
         createKonstructionViaUi("ErrorTest")
 
+        ensureEditorMode("ErrorWs", "ErrorTest")
         val editor = waitForEditor()
         assertNotNull(editor)
-        editor.click()
-        page.keyboard().type("this is not valid kotlin!!!")
-        page.keyboard().press("Escape")
-        page.waitForTimeout(500.0)
-        page.keyboard().press("Control+s")
-        page.waitForTimeout(2000.0)
+        typeInEditor("this is not valid kotlin!!!")
+        saveEditor()
 
         val result = runBlocking {
             val env = ksrpcEnvironment { }
