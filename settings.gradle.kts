@@ -39,3 +39,4 @@ dependencyResolutionManagement {
     }
 }
 include(":lib")
+include(":e2e")
