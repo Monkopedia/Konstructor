@@ -35,3 +35,4 @@ build
 kotlin-js-store
 
 **/.kotlin
+e2e/build/

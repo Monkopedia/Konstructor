@@ -28,6 +28,9 @@ kotlin {
     js(IR) {
         browser {}
     }
+    wasmJs {
+        browser {}
+    }
     jvm {
     }
     sourceSets["commonMain"].dependencies {
@@ -61,6 +64,9 @@ kotlin {
         implementation(kotlin("test-junit"))
     }
     sourceSets["jsMain"].dependencies {
+        compileOnly(libs.ktor.client.core)
+    }
+    sourceSets["wasmJsMain"].dependencies {
         compileOnly(libs.ktor.client.core)
     }
 }

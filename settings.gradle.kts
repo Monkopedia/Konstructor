@@ -13,6 +13,11 @@ include(":frontend")
 include(":backend")
 
 pluginManagement {
+    repositories {
+        google()
+        gradlePluginPortal()
+        mavenCentral()
+    }
     resolutionStrategy {
         eachPlugin {
             if (requested.id.id == "kotlin-multiplatform") {
@@ -29,13 +34,8 @@ pluginManagement {
 }
 dependencyResolutionManagement {
     repositories {
+        google()
         mavenCentral()
-    }
-    versionCatalogs {
-        create("kotlinWrappers") {
-            val wrappersVersion = extra["kotlin.wrappers.version"]
-            from("org.jetbrains.kotlin-wrappers:kotlin-wrappers-catalog:$wrappersVersion")
-        }
     }
 }
 include(":lib")

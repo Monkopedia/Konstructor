@@ -4,16 +4,18 @@ clikt = "5.0.3"
 hauler = "0.3.0"
 kcsg = "0.4.0"
 ksrpc = "0.11.1"
-koin = "4.1.0"
+koin = "4.2.0"
 ktor = "3.4.2"
 kotlin = "2.3.20"
-kotlin-wrappers-bom = "2025.11.12"
 kotlin-coroutines = "1.10.2"
 kotlin-datetime = "0.7.1"
 kotlin-serialization = "1.10.0"
 slf4j = "2.0.17"
 shadow = "8.3.6"
 javafx = "0.1.0"
+compose-multiplatform = "1.10.3"
+lifecycle = "2.10.0"
+kodemirror = "0.1.0"
 
 
 [libraries]
@@ -28,6 +30,8 @@ ksrpc-ktor-websocket-client = { module = "com.monkopedia.ksrpc:ksrpc-ktor-websoc
 ksrpc-server = { module = "com.monkopedia.ksrpc:ksrpc-server", version.ref = "ksrpc" }
 ksrpc-sockets = { module = "com.monkopedia.ksrpc:ksrpc-sockets", version.ref = "ksrpc" }
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
+koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel", version.ref = "koin" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
@@ -41,18 +45,7 @@ ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", versio
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
 ktor-websocket-serialization = { module = "io.ktor:ktor-websocket-serialization", version.ref = "ktor" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
-kotlin-browser = { module = "org.jetbrains.kotlin-wrappers:kotlin-browser" }
-kotlin-css = { module = "org.jetbrains.kotlin-wrappers:kotlin-css" }
-kotlin-emotion = { module = "org.jetbrains.kotlin-wrappers:kotlin-emotion-react" }
-kotlin-emotion-styled = { module = "org.jetbrains.kotlin-wrappers:kotlin-emotion-styled" }
-kotlin-extensions = { module = "org.jetbrains.kotlin-wrappers:kotlin-extensions" }
-kotlin-mui = { module = "org.jetbrains.kotlin-wrappers:kotlin-mui-base" }
-kotlin-mui-icons = { module = "org.jetbrains.kotlin-wrappers:kotlin-mui-icons-material" }
-kotlin-wrappers-bom = { module = "org.jetbrains.kotlin-wrappers:kotlin-wrappers-bom", version.ref = "kotlin-wrappers-bom" }
-kotlin-react = { module = "org.jetbrains.kotlin-wrappers:kotlin-react" }
-kotlin-react-dom = { module = "org.jetbrains.kotlin-wrappers:kotlin-react-dom" }
-kotlin-react-router = { module = "org.jetbrains.kotlin-wrappers:kotlin-react-router" }
-kotlin-styled-next = { module = "org.jetbrains.kotlin-wrappers:kotlin-styled-next" }
+lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlin-coroutines" }
 kotlinx-coroutines-core-js = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core-js", version.ref = "kotlin-coroutines" }
 kotlinx-coroutines-core-jvm = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm", version.ref = "kotlin-coroutines" }
@@ -70,19 +63,5 @@ ksrpc = { module = "com.monkopedia.ksrpc:ksrpc-gradle-plugin", version.ref = "ks
 autostyle = { id = "com.github.autostyle", version = "3.2" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 javafx = { id = "org.openjfx.javafxplugin", version.ref = "javafx" }
-
-#material-ui-color-picker, 3.5.1
-#@material-ui/core, 4.12.4
-#@codemirror/commands, 6.1.1
-#@codemirror/language, 6.2.1
-#@codemirror/legacy-modes, 6.1.0
-#@codemirror/theme-one-dark, 6.1.0
-#bootstrap, ^4.4.1
-#codemirror, 6.0.1
-#crypto, 1.0.1
-#crypto-browserify, 3.12.0
-#css-loader, 3.5.2
-#file-loader, 6.2.0
-#@replit/codemirror-vim, 6.0.3
-#style-loader, 1.1.3
-#three, 0.133.1
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

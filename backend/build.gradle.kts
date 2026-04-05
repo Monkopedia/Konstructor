@@ -78,15 +78,8 @@ val browser = rootProject.findProject(":frontend")!!
 val browserBuildDir = browser.layout.buildDirectory
 val buildDir = layout.buildDirectory
 
-val debugFrontend = properties["release"] == null
 val copy = tasks.register<Copy>("copyJsBundleToKtor") {
-    val webpackDir = if (debugFrontend) {
-        "kotlin-webpack/js/developmentExecutable"
-    } else {
-        "kotlin-webpack/js/productionExecutable"
-    }
-    from(browserBuildDir.dir(webpackDir))
-    from(browserBuildDir.dir("processedResources/js/main"))
+    from(browserBuildDir.dir("dist/wasmJs/productionExecutable"))
     into(buildDir.dir("importedResources/web"))
 }
 val lib = rootProject.findProject(":lib")!!
@@ -101,13 +94,8 @@ val copyLib = tasks.register<Copy>("copyLibToKtor") {
 afterEvaluate {
 
     tasks.named("copyJsBundleToKtor") {
-        if (debugFrontend) {
-            dependsOn(browser.tasks["jsBrowserDevelopmentWebpack"])
-            mustRunAfter(browser.tasks["jsBrowserDevelopmentWebpack"])
-        } else {
-            dependsOn(browser.tasks["jsBrowserDistribution"])
-            mustRunAfter(browser.tasks["jsBrowserDistribution"])
-        }
+        dependsOn(browser.tasks["wasmJsBrowserDistribution"])
+        mustRunAfter(browser.tasks["wasmJsBrowserDistribution"])
     }
     tasks.named("copyLibToKtor") {
         dependsOn(lib.tasks["shadowJar"])
