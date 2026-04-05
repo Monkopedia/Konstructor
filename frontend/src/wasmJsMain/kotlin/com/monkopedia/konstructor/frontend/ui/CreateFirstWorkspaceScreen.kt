@@ -35,6 +35,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
 import kotlinx.coroutines.launch
@@ -59,9 +62,12 @@ fun CreateFirstWorkspaceScreen() {
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Workspace name") },
-                singleLine = true
+                singleLine = true,
+                modifier = Modifier.testTag("workspace-name-input")
+                    .semantics { contentDescription = "Workspace name" }
             )
             IconButton(
+                modifier = Modifier.testTag("create-workspace-button"),
                 onClick = {
                     if (name.isNotBlank()) {
                         scope.launch {

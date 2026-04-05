@@ -29,57 +29,72 @@ class ComposeDebugTest : BaseE2eTest() {
                 .setFullPage(true)
         )
 
-        // Check body children specifically
-        val bodyChildren = page.evaluate("""() => {
-            return Array.from(document.body.children).map(el =>
-                el.tagName + ' id=' + (el.id || '') +
-                ' class=' + (el.className || '').toString().substring(0, 80) +
-                ' outerHTML=' + el.outerHTML.substring(0, 200)
-            ).join('\n');
-        }""") as String
-        System.err.println("=== BODY CHILDREN ===")
-        System.err.println(bodyChildren)
-
-        // Dump DOM structure
-        val domInfo = page.evaluate("""() => {
-            const result = [];
+        // Check shadow DOM for a11y elements
+        val shadowInfo = page.evaluate("""() => {
+            const results = [];
             const walk = (el, depth) => {
-                const tag = el.tagName || 'text';
-                const role = el.getAttribute && el.getAttribute('role') || '';
-                const ariaLabel = el.getAttribute && el.getAttribute('aria-label') || '';
-                const testId = el.getAttribute && el.getAttribute('data-testid') || '';
-                const classes = el.className || '';
-                if (depth < 5) {
-                    result.push('  '.repeat(depth) + tag +
-                        (role ? ' role=' + role : '') +
-                        (ariaLabel ? ' aria-label=' + ariaLabel : '') +
-                        (testId ? ' data-testid=' + testId : '') +
-                        (classes && typeof classes === 'string' ? ' class=' + classes.substring(0,50) : ''));
+                if (depth > 8) return;
+                const tag = el.tagName || '#text';
+                const role = el.getAttribute ? el.getAttribute('role') : '';
+                const id = el.id || '';
+                const ariaLabel = el.getAttribute ? el.getAttribute('aria-label') : '';
+                const text = (el.innerText || '').substring(0, 50).replace(/\\n/g, ' ');
+                const info = '  '.repeat(depth) + tag +
+                    (id ? ' id=' + id : '') +
+                    (role ? ' role=' + role : '') +
+                    (ariaLabel ? ' aria=' + ariaLabel : '') +
+                    (text && !el.children?.length ? ' text=' + text : '');
+                results.push(info);
+                if (el.shadowRoot) {
+                    results.push('  '.repeat(depth+1) + '#shadow-root');
+                    Array.from(el.shadowRoot.children).forEach(c => walk(c, depth+2));
                 }
                 if (el.children) {
-                    for (let i = 0; i < el.children.length && i < 20; i++) {
-                        walk(el.children[i], depth + 1);
-                    }
+                    Array.from(el.children).slice(0, 30).forEach(c => walk(c, depth+1));
                 }
             };
             walk(document.body, 0);
-            return result.join('\n');
+            return results.join('\n');
         }""") as String
-        System.err.println("=== DOM STRUCTURE ===")
-        System.err.println(domInfo)
+        System.err.println("=== SHADOW DOM STRUCTURE ===")
+        System.err.println(shadowInfo)
 
-        // Check for any input elements
-        val inputs = page.querySelectorAll("input")
-        System.err.println("Input elements: ${inputs.size}")
-
-        // Check for any elements with role
-        val roles = page.evaluate("""() => {
-            return Array.from(document.querySelectorAll('[role]'))
-                .map(el => el.tagName + ' role=' + el.getAttribute('role') + ' text=' + (el.textContent || '').substring(0, 50))
-                .join('\\n');
+        // Search for cmp_a11y_root anywhere in the DOM tree, including shadow roots
+        val a11yInfo = page.evaluate("""() => {
+            const results = [];
+            function findA11y(root, path) {
+                if (!root) return;
+                // Check shadow root
+                if (root.shadowRoot) {
+                    results.push(path + ' -> #shadow-root');
+                    findA11y(root.shadowRoot, path + '/#shadow');
+                }
+                // Check children
+                const children = root.children || root.childNodes;
+                if (children) {
+                    for (let i = 0; i < children.length && i < 50; i++) {
+                        const child = children[i];
+                        if (!child.tagName) continue;
+                        const id = child.id || '';
+                        const tag = child.tagName;
+                        const role = child.getAttribute ? child.getAttribute('role') : '';
+                        const childPath = path + '/' + tag + (id ? '#' + id : '') + (role ? '[' + role + ']' : '');
+                        results.push(childPath);
+                        findA11y(child, childPath);
+                    }
+                }
+            }
+            findA11y(document.body, 'body');
+            return results.join('\n');
         }""") as String
-        System.err.println("=== ROLE ELEMENTS ===")
-        System.err.println(roles)
+        System.err.println("=== FULL DOM TREE ===")
+        System.err.println(a11yInfo)
+
+        // Try Playwright shadow-piercing selectors
+        val byRole = page.getByRole(com.microsoft.playwright.options.AriaRole.TEXTBOX).all()
+        System.err.println("Textbox roles found: ${byRole.size}")
+        val byText = page.getByText("Workspace").all()
+        System.err.println("'Workspace' text found: ${byText.size}")
 
         assertTrue(true)
     }
