@@ -55,6 +55,8 @@ kotlin {
     }
     sourceSets["jvmTest"].dependencies {
         implementation(kotlin("test-junit"))
+        implementation(libs.kotlinx.coroutines.test)
+        implementation(libs.kotlinx.serialization.json)
     }
 }
 

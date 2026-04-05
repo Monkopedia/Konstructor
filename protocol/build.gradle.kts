@@ -52,6 +52,14 @@ kotlin {
         implementation(libs.kotlinx.serialization.json)
         implementation(libs.logback.classic)
     }
+    sourceSets["commonTest"].dependencies {
+        implementation(kotlin("test"))
+        implementation(libs.kotlinx.coroutines.test)
+        implementation(libs.kotlinx.serialization.json)
+    }
+    sourceSets["jvmTest"].dependencies {
+        implementation(kotlin("test-junit"))
+    }
     sourceSets["jsMain"].dependencies {
         compileOnly(libs.ktor.client.core)
     }

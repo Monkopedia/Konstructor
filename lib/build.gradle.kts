@@ -43,4 +43,6 @@ dependencies {
     api(libs.kcsg.dsl)
     api(libs.kcsg)
     api(libs.hauler)
+    testImplementation(kotlin("test-junit"))
+    testImplementation(libs.kotlinx.coroutines.test)
 }
