@@ -22,7 +22,10 @@ import kotlin.time.Duration.Companion.minutes
 import kotlinx.serialization.json.Json
 
 class Config(
-    dataDirFile: File = File(File(System.getenv("HOME")), ".konstructor")
+    dataDirFile: File = File(
+        System.getenv("KONSTRUCTOR_HOME")
+            ?: File(System.getenv("HOME"), ".konstructor").path
+    )
 ) {
 
     val executeTimeout: Duration
