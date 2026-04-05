@@ -94,12 +94,9 @@ class ServiceHolder(scope: CoroutineScope) {
                 } else {
                     HttpClient().asConnection(url, env)
                 }
-            emit(
-                conn.defaultChannel().toStub<Konstructor, String>().also {
-                    logger.info("Connected to $useWs $hostname $port")
-                    it.getGlobalShipper().requestDockPickup().attach(scope)
-                }
-            )
+            val stub = conn.defaultChannel().toStub<Konstructor, String>()
+            logger.info("Connected to $useWs $hostname $port")
+            emit(stub)
             resetRetryCount()
         }
     }.shareIn(scope, SharingStarted.Lazily, replay = 1)

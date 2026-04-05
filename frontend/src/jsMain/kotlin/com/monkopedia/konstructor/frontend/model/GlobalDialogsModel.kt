@@ -47,6 +47,8 @@ class GlobalDialogsModel(
         }
     val hasConnection: Flow<Boolean> = serviceHolder.service.flatMapLatest {
         flow {
+            // Give the initial connection time to stabilize
+            delay(10.seconds)
             while (true) {
                 val hasConnection = withTimeoutOrNull(5.seconds) {
                     runCatching {
@@ -58,11 +60,11 @@ class GlobalDialogsModel(
                 if (!hasConnection) {
                     serviceHolder.retryConnect()
                 }
-                delay(5.seconds)
+                delay(10.seconds)
             }
         }
     }.onStart {
-        emit(false)
+        emit(true)
     }.retry {
         true
     }.shareIn(coroutineScope, SharingStarted.Eagerly, replay = 1)
