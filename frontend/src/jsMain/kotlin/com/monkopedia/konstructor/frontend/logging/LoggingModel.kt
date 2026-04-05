@@ -40,8 +40,8 @@ class LoggingModel(scope: CoroutineScope, serviceHolder: ServiceHolder) {
         val lines = mutableListOf<String>()
         val collection = launch {
             serviceHolder.service.flatMapLatest { service ->
-                service.getGlobalShipper().deliveries().withDeliveryDay()
-            }.transform(LogFormatter::invoke).collect { message ->
+                service.getGlobalShipper().deliveries().withDeliveryDay(this@callbackFlow)
+            }.transform(LogFormatter).collect { message ->
                 lines += message
                 send(lines.toTypedArray())
             }

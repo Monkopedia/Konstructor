@@ -25,11 +25,8 @@ repositories {
     mavenCentral()
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
-    kotlinOptions {
-        freeCompilerArgs += "-Xskip-prerelease-check"
-        freeCompilerArgs += "-Xno-param-assertions"
-    }
+kotlin.compilerOptions {
+    freeCompilerArgs.addAll("-Xskip-prerelease-check", "-Xno-param-assertions")
 }
 
 dependencies {

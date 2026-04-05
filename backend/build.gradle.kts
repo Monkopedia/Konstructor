@@ -15,7 +15,6 @@
  */
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
-    application
     id("com.monkopedia.ksrpc.plugin")
     id("com.gradleup.shadow")
 }
@@ -25,9 +24,16 @@ repositories {
     mavenLocal()
 }
 
+@OptIn(
+    org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class
+)
 kotlin {
     jvm {
-        withJava()
+        binaries {
+            executable {
+                mainClass.set("com.monkopedia.konstructor.AppKt")
+            }
+        }
     }
     sourceSets["jvmMain"].dependencies {
         implementation(libs.ksrpc.server)
@@ -52,41 +58,40 @@ kotlin {
     }
 }
 
-dependencies {
-    implementation(project(":lib"))
+kotlin.compilerOptions {
+    freeCompilerArgs.add("-Xskip-prerelease-check")
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += "-Xskip-prerelease-check"
+tasks.withType<
+    org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+>().configureEach {
+    compilerOptions {
+        jvmTarget.set(
+            org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        )
     }
-}
-
-application {
-    mainClass.set("com.monkopedia.konstructor.AppKt")
 }
 
 val browser = rootProject.findProject(":frontend")!!
+val browserBuildDir = browser.layout.buildDirectory
+val buildDir = layout.buildDirectory
 
 val debugFrontend = properties["release"] == null
 val copy = tasks.register<Copy>("copyJsBundleToKtor") {
-    if (debugFrontend) {
-        from("${browser.buildDir}/kotlin-webpack/js/developmentExecutable")
+    val webpackDir = if (debugFrontend) {
+        "kotlin-webpack/js/developmentExecutable"
     } else {
-        from("${browser.buildDir}/kotlin-webpack/js/productionExecutable")
+        "kotlin-webpack/js/productionExecutable"
     }
-    from("${browser.buildDir}/processedResources/js/main")
-    into("$buildDir/importedResources/web")
+    from(browserBuildDir.dir(webpackDir))
+    from(browserBuildDir.dir("processedResources/js/main"))
+    into(buildDir.dir("importedResources/web"))
 }
 val lib = rootProject.findProject(":lib")!!
+val libBuildDir = lib.layout.buildDirectory
 val copyLib = tasks.register<Copy>("copyLibToKtor") {
-    from("${lib.buildDir}/libs/lib-all.jar")
-    into("$buildDir/importedResources")
+    from(libBuildDir.file("libs/lib-all.jar"))
+    into(buildDir.dir("importedResources"))
     rename { fileName: String ->
         fileName.replace(".jar", ".raj")
     }
@@ -107,7 +112,18 @@ afterEvaluate {
         mustRunAfter(lib.tasks["shadowJar"])
     }
 
-    tasks.named("shadowJar") {
+    val jvmJar = tasks.named<Jar>("jvmJar")
+    tasks.register<
+        com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+    >("shadowJar") {
+        from(jvmJar.map { it.outputs })
+        val cp = project.configurations.getByName("jvmRuntimeClasspath")
+        configurations = listOf(cp)
+        archiveClassifier.set("all")
+        manifest {
+            attributes["Main-Class"] = "com.monkopedia.konstructor.AppKt"
+        }
+        mergeServiceFiles()
         mustRunAfter("copyJsBundleToKtor")
         mustRunAfter("copyLibToKtor")
     }
@@ -120,17 +136,5 @@ afterEvaluate {
     }
 }
 
-sourceSets {
-    main {
-        afterEvaluate {
-            tasks.named(processResourcesTaskName) {
-                dependsOn(copy)
-                dependsOn(copyLib)
-            }
-        }
-        resources {
-            srcDir("$buildDir/importedResources")
-            compiledBy(copy, copyLib)
-        }
-    }
-}
+kotlin.sourceSets["jvmMain"].resources
+    .srcDir(layout.buildDirectory.dir("importedResources"))

@@ -58,7 +58,7 @@ kotlin {
         implementation(libs.koin.core)
         implementation(kotlin("stdlib-js"))
         compileOnly(libs.ktor.client.core)
-        implementation(platform("org.jetbrains.kotlin-wrappers:kotlin-wrappers-bom:${libs.versions.kotlin.wrappers.bom.get()}"))
+        implementation(project.dependencies.platform("org.jetbrains.kotlin-wrappers:kotlin-wrappers-bom:${libs.versions.kotlin.wrappers.bom.get()}"))
         implementation(libs.kotlin.emotion)
         implementation(libs.kotlin.emotion.styled)
         implementation(libs.kotlin.css)
@@ -97,9 +97,6 @@ kotlin {
 dependencies {
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
-    kotlinOptions {
-        freeCompilerArgs += "-Xskip-prerelease-check"
-        freeCompilerArgs += "-Xno-param-assertions"
-    }
+kotlin.compilerOptions {
+    freeCompilerArgs.addAll("-Xskip-prerelease-check", "-Xno-param-assertions")
 }

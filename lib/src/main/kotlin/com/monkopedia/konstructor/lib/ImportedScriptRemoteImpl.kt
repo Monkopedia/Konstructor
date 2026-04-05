@@ -21,6 +21,7 @@ import com.monkopedia.kcsg.STL
 import com.monkopedia.konstructor.lib.TargetStatus.BUILT
 import com.monkopedia.konstructor.lib.TargetStatus.ERROR
 import java.io.File
+import kotlinx.io.files.Path
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 
@@ -46,7 +47,7 @@ internal class ImportedScriptRemoteImpl(
         }
         val file = File(path)
         if (!file.exists()) error("Could not resolve result of $name properly")
-        return STL.file(file.toPath())
+        return STL.file(Path(file.absolutePath))
     }
 }
 

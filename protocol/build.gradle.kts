@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 plugins {
-    java
     kotlin("multiplatform")
     kotlin("plugin.serialization")
     id("com.monkopedia.ksrpc.plugin")
@@ -23,9 +22,6 @@ plugins {
 repositories {
     mavenCentral()
     mavenLocal()
-    maven(url = "https://dl.bintray.com/kotlin/kotlin-dev/")
-    maven(url = "https://dl.bintray.com/kotlin/kotlin-eap/")
-    maven(url = "https://kotlinx.bintray.com/kotlinx/")
 }
 
 kotlin {
@@ -33,7 +29,6 @@ kotlin {
         browser {}
     }
     jvm {
-        withJava()
     }
     sourceSets["commonMain"].dependencies {
         api(libs.ksrpc.core)
@@ -62,9 +57,6 @@ kotlin {
     }
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().all {
-    kotlinOptions {
-        freeCompilerArgs += "-Xskip-prerelease-check"
-        freeCompilerArgs += "-Xno-param-assertions"
-    }
+kotlin.compilerOptions {
+    freeCompilerArgs.addAll("-Xskip-prerelease-check", "-Xno-param-assertions")
 }

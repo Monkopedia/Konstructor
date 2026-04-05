@@ -15,13 +15,18 @@
  */
 package com.monkopedia.konstructor.logging
 
+import com.monkopedia.hauler.DeliveryRates
 import com.monkopedia.hauler.DeliveryService
 import com.monkopedia.hauler.DropBox
 import com.monkopedia.hauler.LoadingDock
 import com.monkopedia.hauler.Shipper
 import com.monkopedia.hauler.Warehouse
 
-class WarehouseWrapper private constructor(private val warehouse: Warehouse = Warehouse()) :
+class WarehouseWrapper private constructor(
+    private val warehouse: Warehouse = Warehouse(
+        DeliveryRates(onDeliveryError = { it.printStackTrace() })
+    )
+) :
     Shipper {
 
     fun getScoped(tagPrefix: String, name: String): Shipper {

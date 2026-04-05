@@ -38,7 +38,7 @@ import dukat.codemirror.view.EditorView
 import dukat.codemirror.view.ViewUpdate
 import dukat.codemirror.view.scrollPastEnd
 import dukat.codemirror.vim.vim
-import js.objects.jso
+import com.monkopedia.konstructor.frontend.utils.jso
 import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -66,12 +66,9 @@ class KonstructorEditorState(
         buildExt {
             set(
                 "&",
-                jso {
-                    height = "calc(100vh - 64px)"
-                    width = "calc(50hw)"
-                }
+                js("({height: 'calc(100vh - 64px)', width: 'calc(50hw)'})")
             )
-            set(".cm-scroller", jso { overflow = "auto" })
+            set(".cm-scroller", js("({overflow: 'auto'})"))
         }
     )
     var editorState = EditorState.create(

@@ -60,7 +60,7 @@ class KonstructorImpl(private val config: Config) : Konstructor, LoggingService 
             warehouse.requestPickup().attach(scope)
             warehouse.writeBinary(File(config.dataDir, "log.bin"))
             warehouse.writeText(File(config.dataDir, "log.txt"))
-            warehouse.deliveries().deliveries().route(Flatbed, LogFormatter)
+            warehouse.deliveries().deliveries(scope).route(Flatbed, LogFormatter)
         }
     }
 

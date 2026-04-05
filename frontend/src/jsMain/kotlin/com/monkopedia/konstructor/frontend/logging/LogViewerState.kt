@@ -32,7 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import js.objects.jso
+import com.monkopedia.konstructor.frontend.utils.jso
 
 class LogViewerState(
 //    private val model: KonstructionModel,
@@ -47,7 +47,7 @@ class LogViewerState(
 //                    width = "calc(50hw)"
 //                }
 //            )
-            set(".cm-scroller", jso { overflow = "auto" })
+            set(".cm-scroller", js("({overflow: 'auto'})"))
         }
     )
     var editorState = EditorState.create(

@@ -44,7 +44,7 @@ fun fileDelivery(
     override suspend fun onLogs(event: Palette) {
         val oldLines = file.readLines()
         val newLines = flow {
-            event.unpack().sortedBy { it.timestamp }.forEach { formatter(it) }
+            event.unpack().sortedBy { it.timestamp }.forEach { formatter.invoke(this, it) }
         }.toCollection(mutableListOf())
 
         val lines = sequence {

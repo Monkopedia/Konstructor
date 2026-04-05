@@ -30,7 +30,7 @@ data class ScriptConfiguration(
     val outputDirectory: String,
     val eagerExport: Boolean = false,
     val loggingDeliveryRates: SerializableDeliveryRates = SerializableDeliveryRates.from(
-        DeliveryRates()
+        DeliveryRates(onDeliveryError = { it.printStackTrace() })
     )
 )
 
@@ -44,7 +44,8 @@ data class SerializableDeliveryRates(
         get() = DeliveryRates(
             defaultBoxRetention,
             defaultPaletteSize,
-            defaultPaletteInterval.milliseconds
+            defaultPaletteInterval.milliseconds,
+            onDeliveryError = { it.printStackTrace() }
         )
 
     companion object {

@@ -20,7 +20,7 @@ import com.monkopedia.kcsg.ImportedScript
 import com.monkopedia.kcsg.KcsgHost
 import com.monkopedia.kcsg.STL
 import java.io.File
-import java.nio.file.Path
+import kotlinx.io.files.Path
 
 internal class KcsgRemoteHostImpl(
     private val hostService: HostService,
@@ -38,7 +38,7 @@ internal class KcsgRemoteHostImpl(
         } ?: return null
         val file = File(path)
         if (!file.exists()) return null
-        return STL.file(file.toPath())
+        return STL.file(Path(file.absolutePath))
     }
 
     override fun findScript(csgsName: String): ImportedScript {
@@ -60,7 +60,7 @@ internal class KcsgRemoteHostImpl(
         }
         f.copyTo(stlLocation)
         System.err.println("Loading stl $stlName $stlLocation")
-        return stlLocation.toPath()
+        return Path(stlLocation.absolutePath)
     }
 
     override fun storeCached(hash: String, csg: CSG) {

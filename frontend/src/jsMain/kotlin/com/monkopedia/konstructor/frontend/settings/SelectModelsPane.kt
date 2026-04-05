@@ -146,7 +146,7 @@ val ScopedSelectModelsPane = FC<ScopedSelectModelsProps> { props ->
             }
         }
         Popover {
-            id = targetPicker?.second?.name
+            id = targetPicker?.second?.name?.unsafeCast<web.dom.ElementId>()
             open = targetPicker != null
             anchorEl = targetPicker?.first
             anchorOrigin = buildExt<PopoverOrigin> {

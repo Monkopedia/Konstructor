@@ -24,7 +24,7 @@ import mui.material.styles.ThemeOptions
 import mui.material.styles.TypeText
 import mui.material.styles.createTheme
 import web.cssom.Color
-import js.objects.jso
+import com.monkopedia.konstructor.frontend.utils.jso
 
 private val themeOptions: ThemeOptions = buildExt {
     typography = buildExt {
