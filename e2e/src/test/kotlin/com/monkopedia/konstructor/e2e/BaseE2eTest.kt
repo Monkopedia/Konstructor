@@ -37,7 +37,13 @@ abstract class BaseE2eTest {
         if (playwright == null) {
             playwright = Playwright.create()
             browser = playwright!!.chromium().launch(
-                BrowserType.LaunchOptions().setHeadless(true)
+                BrowserType.LaunchOptions()
+                    .setHeadless(true)
+                    .setArgs(listOf(
+                        "--use-gl=angle",
+                        "--use-angle=swiftshader",
+                        "--enable-webgl"
+                    ))
             )
         }
         page = browser!!.newPage()
