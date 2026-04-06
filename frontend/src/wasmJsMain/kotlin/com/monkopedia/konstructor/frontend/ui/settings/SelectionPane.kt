@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.monkopedia.konstructor.common.KonstructionTarget
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @Composable
@@ -79,6 +81,8 @@ fun SelectionPane(modifier: Modifier = Modifier) {
 
 @Composable
 private fun RenderTargetRow(target: KonstructionTarget) {
+    val konstructionVm = koinInject<KonstructionViewModel>()
+    val scope = rememberCoroutineScope()
     var enabled by remember(target.name) { mutableStateOf(true) }
 
     Row(
@@ -95,7 +99,18 @@ private fun RenderTargetRow(target: KonstructionTarget) {
             modifier = Modifier.weight(1f)
         )
         IconButton(onClick = {
-            kotlinx.browser.window.alert("Download for '${target.name}' will trigger a build and download the STL output.")
+            scope.launch {
+                try {
+                    val path = konstructionVm.getKonstructedPath(target.name)
+                    if (path != null) {
+                        kotlinx.browser.window.open(
+                            "${kotlinx.browser.window.location.origin}/$path",
+                            "_blank"
+                        )
+                    }
+                } catch (_: Exception) {
+                }
+            }
         }) {
             Icon(
                 imageVector = Icons.Filled.Download,

@@ -172,6 +172,10 @@ class KonstructionViewModel(
         }
     }
 
+    suspend fun getKonstructedPath(target: String): String? {
+        return konstructionService?.konstructed(target)
+    }
+
     override fun onCleared() {
         super.onCleared()
         val ks = konstructionService

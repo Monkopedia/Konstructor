@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,11 +39,13 @@ import com.monkopedia.kodemirror.legacy.modes.kotlin
 import com.monkopedia.kodemirror.state.plus
 import com.monkopedia.kodemirror.themonedark.oneDark
 import com.monkopedia.kodemirror.view.KodeMirror
-import com.monkopedia.kodemirror.view.rememberEditorSession
 import com.monkopedia.kodemirror.state.asDoc
+import com.monkopedia.kodemirror.view.KeyBinding
+import com.monkopedia.kodemirror.view.keymapOf
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.UiState
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @Composable
@@ -105,13 +108,28 @@ private fun EditorContent(
     konstructionVm: KonstructionViewModel,
     selectedKonId: String
 ) {
+    val scope = rememberCoroutineScope()
     val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
     val vimExt = remember { com.monkopedia.kodemirror.vim.vim() }
-    val extensions = remember { basicSetup + oneDark + kotlinLang + vimExt }
 
     // Key the session on the konstruction ID AND the content hash
     // so it recreates when content loads or when switching konstructions
     val session = remember(selectedKonId, content) {
+        // Ctrl+S save keymap — also serves as the save action for vim :w
+        val saveKeymap = keymapOf(
+            KeyBinding(
+                key = "Mod-s",
+                run = { editorSession ->
+                    val text = editorSession.state.doc.toString()
+                    scope.launch {
+                        konstructionVm.save(text)
+                    }
+                    true
+                },
+                preventDefault = true
+            )
+        )
+        val extensions = basicSetup + oneDark + kotlinLang + vimExt + saveKeymap
         val config = com.monkopedia.kodemirror.state.EditorStateConfig(
             doc = content.asDoc(),
             extensions = extensions

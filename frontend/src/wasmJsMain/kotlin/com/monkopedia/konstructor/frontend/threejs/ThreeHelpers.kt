@@ -48,6 +48,7 @@ external fun getElementById(id: String): JsAny?
         canvas.style.top = '0';
         canvas.style.left = '0';
         canvas.style.pointerEvents = 'auto';
+        canvas.style.zIndex = '10';
         document.body.appendChild(canvas);
     }
     return canvas;
