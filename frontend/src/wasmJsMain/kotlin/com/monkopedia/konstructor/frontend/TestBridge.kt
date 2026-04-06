@@ -300,11 +300,35 @@ object TestBridge {
         serviceHolder: ServiceHolder,
         spaceListVm: SpaceListViewModel
     ) {
-        // Trigger a refresh of the combine flow
+        // Directly update the state snapshot with current konstruction list
         spaceListVm.refreshWorkspaces()
-        // Wait a moment for server state to settle
-        kotlinx.coroutines.delay(200)
-        refreshTriggerRef?.value = (refreshTriggerRef?.value ?: 0) + 1
+        kotlinx.coroutines.delay(500)
+        try {
+            val service = serviceHolder.service.value
+            val wsId = spaceListVm.selectedWorkspaceId.value
+            if (service != null && wsId != null) {
+                val ws = service.get(wsId)
+                val kons = ws.list()
+                val workspaces = spaceListVm.workspaces.value
+                val snapshot = AppStateSnapshot(
+                    ready = true,
+                    connected = serviceHolder.connected.value,
+                    workspaceCount = workspaces?.size ?: 0,
+                    workspaceNames = workspaces?.map { it.name } ?: emptyList(),
+                    workspaceIds = workspaces?.map { it.id } ?: emptyList(),
+                    selectedWorkspaceId = wsId,
+                    codePaneMode = "EDITOR",
+                    screen = "main",
+                    konstructionCount = kons.size,
+                    konstructionNames = kons.map { it.name }
+                )
+                val stateJson = json.encodeToString(AppStateSnapshot.serializer(), snapshot)
+                setState(stateJson)
+            }
+        } catch (e: Exception) {
+            setError("refreshKonstructions state update failed: ${e.message}")
+        }
+        incrementVersion()
     }
 
     @Serializable
