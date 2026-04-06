@@ -106,7 +106,8 @@ private fun EditorContent(
     selectedKonId: String
 ) {
     val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
-    val extensions = remember { basicSetup + oneDark + kotlinLang }
+    val vimExt = remember { com.monkopedia.kodemirror.vim.vim() }
+    val extensions = remember { basicSetup + oneDark + kotlinLang + vimExt }
 
     // Key the session on the konstruction ID AND the content hash
     // so it recreates when content loads or when switching konstructions
