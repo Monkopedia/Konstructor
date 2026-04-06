@@ -43,28 +43,30 @@ class ScreenshotTest : BaseE2eTest() {
 
         // Create a workspace via bridge
         bridgeAction("createWorkspace", "Screenshot Workspace")
+        // Reload so Compose starts fresh with the workspace already existing
+        page.reload()
+        waitForBridge()
         page.waitForFunction(
             "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )
-        // Force rendering frames and wait
-        forceRenderAndWait()
+        page.waitForTimeout(3000.0)
         screenshot("02-main-screen-with-workspace")
 
         // Switch to navigation mode
         bridgeAction("setCodePaneMode", "NAVIGATION")
-        forceRenderAndWait()
+        page.waitForTimeout(3000.0)
         screenshot("03-navigation-mode")
 
         // Switch to editor mode
         bridgeAction("setCodePaneMode", "EDITOR")
-        forceRenderAndWait()
+        page.waitForTimeout(3000.0)
         screenshot("04-editor-mode")
 
         // Switch to settings mode
         bridgeAction("setCodePaneMode", "SETTINGS")
-        forceRenderAndWait()
+        page.waitForTimeout(3000.0)
         screenshot("05-settings-mode")
     }
 }

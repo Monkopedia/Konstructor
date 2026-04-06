@@ -46,17 +46,11 @@ abstract class BaseE2eTest {
         server.start()
         if (playwright == null) {
             playwright = Playwright.create()
-            val headless = System.getenv("DISPLAY") == null
+            // Compose/Skiko needs a real display for WebGL rendering.
+            // Use headed mode (Xvfb provides a virtual display in CI).
             browser = playwright!!.chromium().launch(
                 BrowserType.LaunchOptions()
-                    .setHeadless(headless)
-                    .setArgs(
-                        if (headless) listOf(
-                            "--use-gl=angle",
-                            "--use-angle=swiftshader",
-                            "--enable-webgl"
-                        ) else emptyList()
-                    )
+                    .setHeadless(false)
             )
         }
         page = browser!!.newPage()
