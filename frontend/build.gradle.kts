@@ -72,6 +72,9 @@ kotlin {
         implementation(libs.kotlinx.serialization.core)
         implementation(libs.kotlinx.serialization.json)
 
+        // Three.js 3D rendering
+        implementation(npm("three", "^0.170.0"))
+
         // Protocol
         implementation(project(":protocol"))
     }

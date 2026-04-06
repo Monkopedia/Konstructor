@@ -56,12 +56,16 @@ class KonstructionViewModel(
     private val _messages = MutableStateFlow<List<TaskMessage>>(emptyList())
     val messages: StateFlow<List<TaskMessage>> = _messages.asStateFlow()
 
+    private val _renderPath = MutableStateFlow<String?>(null)
+    val renderPath: StateFlow<String?> = _renderPath.asStateFlow()
+
     private var konstructionService: KonstructionService? = null
     private var listenerKey: String? = null
 
     fun loadKonstruction(konstruction: Konstruction) {
         viewModelScope.launch {
             _state.value = UiState.LOADING
+            _renderPath.value = null
             val service = serviceHolder.service.value ?: return@launch
             try {
                 val ks = service.konstruction(konstruction)
@@ -104,7 +108,7 @@ class KonstructionViewModel(
                 }
 
                 override suspend fun onRenderChanged(render: KonstructionRender) {
-                    // Phase 2: 3D rendering
+                    _renderPath.value = render.renderPath
                 }
 
                 override suspend fun onContentChange(u: Unit) {
