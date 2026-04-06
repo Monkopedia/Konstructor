@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -38,7 +39,7 @@ import com.monkopedia.kodemirror.state.plus
 import com.monkopedia.kodemirror.themonedark.oneDark
 import com.monkopedia.kodemirror.view.KodeMirror
 import com.monkopedia.kodemirror.view.rememberEditorSession
-import com.monkopedia.kodemirror.view.setDoc
+import com.monkopedia.kodemirror.state.asDoc
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.UiState
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
@@ -62,22 +63,6 @@ fun EditorPane(modifier: Modifier = Modifier) {
         }
     }
 
-    val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
-    val extensions = remember { basicSetup + oneDark + kotlinLang }
-
-    val session = rememberEditorSession(
-        doc = content,
-        extensions = extensions
-    )
-
-    // Update editor when content changes from server
-    // Also re-check periodically in case the initial LaunchedEffect missed the change
-    LaunchedEffect(content, selectedKonId) {
-        if (content.isNotEmpty()) {
-            session.setDoc(content)
-        }
-    }
-
     Column(modifier = modifier) {
         // Status bar
         when (uiState) {
@@ -95,13 +80,52 @@ fun EditorPane(modifier: Modifier = Modifier) {
             }
         }
 
-        // Editor
-        Box(modifier = Modifier.fillMaxSize()) {
-            KodeMirror(
-                session = session,
-                modifier = Modifier.fillMaxSize()
+        // Only render editor when we have a selected konstruction
+        // Use key() to force recreation when switching konstructions
+        if (selectedKonId != null) {
+            EditorContent(
+                content = content,
+                konstructionVm = konstructionVm,
+                selectedKonId = selectedKonId!!
             )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Select a konstruction to edit", color = Color.Gray)
+            }
         }
+    }
+}
+
+@Composable
+private fun EditorContent(
+    content: String,
+    konstructionVm: KonstructionViewModel,
+    selectedKonId: String
+) {
+    val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
+    val extensions = remember { basicSetup + oneDark + kotlinLang }
+
+    // Key the session on the konstruction ID AND the content hash
+    // so it recreates when content loads or when switching konstructions
+    val session = remember(selectedKonId, content) {
+        val config = com.monkopedia.kodemirror.state.EditorStateConfig(
+            doc = content.asDoc(),
+            extensions = extensions
+        )
+        com.monkopedia.kodemirror.view.EditorSession(
+            com.monkopedia.kodemirror.state.EditorState.create(config)
+        )
+    }
+
+    // Editor
+    Box(modifier = Modifier.fillMaxSize()) {
+        KodeMirror(
+            session = session,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
