@@ -46,14 +46,17 @@ abstract class BaseE2eTest {
         server.start()
         if (playwright == null) {
             playwright = Playwright.create()
+            val headless = System.getenv("DISPLAY") == null
             browser = playwright!!.chromium().launch(
                 BrowserType.LaunchOptions()
-                    .setHeadless(true)
-                    .setArgs(listOf(
-                        "--use-gl=angle",
-                        "--use-angle=swiftshader",
-                        "--enable-webgl"
-                    ))
+                    .setHeadless(headless)
+                    .setArgs(
+                        if (headless) listOf(
+                            "--use-gl=angle",
+                            "--use-angle=swiftshader",
+                            "--enable-webgl"
+                        ) else emptyList()
+                    )
             )
         }
         page = browser!!.newPage()
@@ -174,6 +177,29 @@ abstract class BaseE2eTest {
     protected fun bridgeLastResultObject(): JsonObject {
         val raw = bridgeLastResult()
         return json.decodeFromString<JsonObject>(raw)
+    }
+
+    /**
+     * Force Compose to render frames by triggering requestAnimationFrame
+     * callbacks and waiting. Needed in headless mode where rAF may not fire.
+     */
+    protected fun forceRenderAndWait(frameCount: Int = 10, waitMs: Long = 3000) {
+        // Trigger multiple animation frames to force Compose to recompose
+        page.evaluate("""(count) => {
+            return new Promise(resolve => {
+                let remaining = count;
+                function frame() {
+                    remaining--;
+                    if (remaining > 0) {
+                        requestAnimationFrame(frame);
+                    } else {
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(frame);
+            });
+        }""", frameCount)
+        page.waitForTimeout(waitMs.toDouble())
     }
 
     /** Take a screenshot and save to build/screenshots/. */

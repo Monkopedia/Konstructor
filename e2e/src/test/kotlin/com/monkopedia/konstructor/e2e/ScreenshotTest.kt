@@ -48,22 +48,23 @@ class ScreenshotTest : BaseE2eTest() {
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )
-        page.waitForTimeout(1000.0)
+        // Force rendering frames and wait
+        forceRenderAndWait()
         screenshot("02-main-screen-with-workspace")
 
         // Switch to navigation mode
         bridgeAction("setCodePaneMode", "NAVIGATION")
-        page.waitForTimeout(1000.0)
+        forceRenderAndWait()
         screenshot("03-navigation-mode")
 
         // Switch to editor mode
         bridgeAction("setCodePaneMode", "EDITOR")
-        page.waitForTimeout(1000.0)
+        forceRenderAndWait()
         screenshot("04-editor-mode")
 
         // Switch to settings mode
         bridgeAction("setCodePaneMode", "SETTINGS")
-        page.waitForTimeout(1000.0)
+        forceRenderAndWait()
         screenshot("05-settings-mode")
     }
 }
