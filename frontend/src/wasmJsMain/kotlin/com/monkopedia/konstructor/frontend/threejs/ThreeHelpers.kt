@@ -94,7 +94,7 @@ external fun getElementLeft(el: JsAny): Double
 @JsFun("(el) => el.getBoundingClientRect().top")
 external fun getElementTop(el: JsAny): Double
 
-@JsFun("() => ({ color: 0x44aa88, specular: 0x111111, shininess: 200 })")
+@JsFun("() => ({ color: 0xff5722, specular: 0x111111, shininess: 200 })")
 external fun createPhongMaterialParams(): JsAny
 
 @JsFun("(msg) => console.log(msg)")

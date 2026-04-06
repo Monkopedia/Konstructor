@@ -43,15 +43,19 @@ class ThreeJsRenderer(private val canvasId: String) {
         camera.position.set(0.0, 50.0, 100.0)
 
         controls = OrbitControls(camera, renderer.domElement)
-        controls.enableDamping = true
-        controls.dampingFactor = 0.05
 
-        ambientLight = AmbientLight(0x404040, 1.0)
+        // Matching old app lighting: white ambient at 0.5, white directional at 0.5
+        ambientLight = AmbientLight(0xffffff, 0.5)
         scene.add(ambientLight)
 
-        directionalLight = DirectionalLight(0xffffff, 1.0)
-        directionalLight.position.set(50.0, 50.0, 50.0)
+        directionalLight = DirectionalLight(0xffffff, 0.5)
+        directionalLight.position.set(1.0, 1.0, -1.0)
         scene.add(directionalLight)
+
+        // Add a second light from the opposite side for better visibility
+        val fillLight = DirectionalLight(0xffffff, 0.3)
+        fillLight.position.set(-1.0, -1.0, 1.0)
+        scene.add(fillLight)
 
         startAnimationLoop()
     }
