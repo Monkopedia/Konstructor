@@ -16,16 +16,15 @@
 package com.monkopedia.konstructor.e2e
 
 import com.monkopedia.konstructor.common.Konstructor
-import com.monkopedia.konstructor.common.TaskStatus
 import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
 import com.monkopedia.ksrpc.toStub
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class CompilationUiTest : BaseE2eTest() {
@@ -39,69 +38,75 @@ class CompilationUiTest : BaseE2eTest() {
         "export(\"simpleCube\")"
     ).joinToString("\n")
 
-    @Test
-    fun testSuccessfulCompilation() {
-        loadApp()
-        createFirstWorkspaceViaUi("CompileWs")
-        openNavigationPane()
-        expandWorkspace("CompileWs")
-        createKonstructionViaUi("CompileTest")
+    private fun createWsAndKon(wsName: String, konName: String): Pair<String, String> {
+        bridgeAction("createWorkspace", wsName)
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount >= 1",
+            null,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+        )
+        val wsId = bridgeStateStringList("workspaceIds").first()
+        bridgeAction("selectWorkspace", wsId)
 
-        // Ensure we're in editor mode
-        ensureEditorMode("CompileWs", "CompileTest")
-        val editor = waitForEditor()
-        assertNotNull(editor)
-        typeInEditor(VALID_SCRIPT)
-        saveEditor()
+        val createArg = """{"name":"$konName","workspaceId":"$wsId"}"""
+        bridgeAction("createKonstruction", createArg)
 
-        // Compile via ksrpc (since compile button requires menu navigation)
-        val result = runBlocking {
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.konstructionCount >= 1",
+            null,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+        )
+
+        val konId = runBlocking {
             val env = ksrpcEnvironment { }
             val client = HttpClient { install(WebSockets) }
-            val conn = client.asWebsocketConnection(
-                "${server.baseUrl}/konstructor", env
-            )
-            val service = conn.defaultChannel()
-                .toStub<Konstructor, String>()
-            val ws = service.list().first()
-            val workspace = service.get(ws.id)
-            val k = workspace.list().first()
-            service.konstruction(k).compile()
+            val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
+            val service = conn.defaultChannel().toStub<Konstructor, String>()
+            val ws = service.get(wsId)
+            ws.list().first().id
         }
-        assertEquals(
-            TaskStatus.SUCCESS, result.status,
-            "Should compile successfully: ${result.messages}"
-        )
+        return wsId to konId
     }
 
     @Test
-    fun testCompilationErrorReported() {
+    fun testSuccessfulCompilation() {
         loadApp()
-        createFirstWorkspaceViaUi("ErrorWs")
-        openNavigationPane()
-        expandWorkspace("ErrorWs")
-        createKonstructionViaUi("ErrorTest")
+        waitForBridge()
 
-        ensureEditorMode("ErrorWs", "ErrorTest")
-        val editor = waitForEditor()
-        assertNotNull(editor)
-        typeInEditor("this is not valid kotlin!!!")
-        saveEditor()
+        val (wsId, konId) = createWsAndKon("CompileWs", "CompileTest")
 
-        val result = runBlocking {
-            val env = ksrpcEnvironment { }
-            val client = HttpClient { install(WebSockets) }
-            val conn = client.asWebsocketConnection(
-                "${server.baseUrl}/konstructor", env
-            )
-            val service = conn.defaultChannel()
-                .toStub<Konstructor, String>()
-            val ws = service.list().first()
-            val workspace = service.get(ws.id)
-            val k = workspace.list().first()
-            service.konstruction(k).compile()
-        }
-        assertEquals(TaskStatus.FAILURE, result.status)
-        assertTrue(result.messages.isNotEmpty(), "Should have error messages")
+        // Set content via bridge
+        val setArg = """{"wsId":"$wsId","konId":"$konId","content":${jsonString(VALID_SCRIPT)}}"""
+        bridgeAction("setContent", setArg)
+
+        // Compile via bridge
+        val compileArg = """{"wsId":"$wsId","konId":"$konId"}"""
+        bridgeAction("compile", compileArg)
+
+        val result = bridgeLastResultObject()
+        val status = result["status"]?.jsonPrimitive?.content ?: ""
+        assertEquals("SUCCESS", status, "Should compile successfully. Result: $result")
+    }
+
+    @Test
+    fun testCompilationError() {
+        loadApp()
+        waitForBridge()
+
+        val (wsId, konId) = createWsAndKon("ErrorWs", "ErrorTest")
+
+        // Set invalid content
+        val setArg = """{"wsId":"$wsId","konId":"$konId","content":"this is not valid kotlin!!!"}"""
+        bridgeAction("setContent", setArg)
+
+        // Compile
+        val compileArg = """{"wsId":"$wsId","konId":"$konId"}"""
+        bridgeAction("compile", compileArg)
+
+        val result = bridgeLastResultObject()
+        val status = result["status"]?.jsonPrimitive?.content ?: ""
+        assertEquals("FAILURE", status, "Invalid code should fail compilation. Result: $result")
+        val messages = result["messages"]?.toString() ?: "[]"
+        assertTrue(messages.length > 2, "Should have error messages. Got: $messages")
     }
 }

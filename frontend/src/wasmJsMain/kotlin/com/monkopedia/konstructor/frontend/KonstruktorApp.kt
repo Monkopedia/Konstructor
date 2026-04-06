@@ -15,10 +15,13 @@
  */
 package com.monkopedia.konstructor.frontend
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
 import com.monkopedia.konstructor.frontend.di.appModule
 import com.monkopedia.konstructor.frontend.ui.Initializer
 import org.koin.compose.KoinApplication
@@ -33,7 +36,12 @@ fun KonstruktorApp() {
         InstallTestBridge()
 
         MaterialTheme(colorScheme = KonstruktorColorScheme) {
-            Initializer()
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                Initializer()
+            }
         }
     }
 }

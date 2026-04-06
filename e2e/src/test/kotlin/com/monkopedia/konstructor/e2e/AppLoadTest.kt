@@ -16,7 +16,7 @@
 package com.monkopedia.konstructor.e2e
 
 import org.junit.Test
-import kotlin.test.assertNotNull
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AppLoadTest : BaseE2eTest() {
@@ -24,14 +24,27 @@ class AppLoadTest : BaseE2eTest() {
     @Test
     fun testAppLoads() {
         loadApp()
-        val body = page.querySelector("body")
-        assertNotNull(body, "Page body should exist")
+        waitForBridge()
+        val screen = bridgeStateString("screen")
+        assertTrue(
+            screen == "empty" || screen == "loading",
+            "Bridge screen should be 'empty' or 'loading', got: $screen"
+        )
     }
 
     @Test
-    fun testEmptyStateShowsCreateWorkspacePrompt() {
+    fun testEmptyStateScreen() {
         loadApp()
-        val input = page.waitForSelector("input", waitOpts(15000.0))
-        assertNotNull(input, "Should show workspace name input")
+        waitForBridge()
+        // Wait a moment for the service to connect and load the workspace list
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen !== 'loading'",
+            null,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(15000.0)
+        )
+        val screen = bridgeStateString("screen")
+        assertEquals("empty", screen, "Fresh server should show empty screen")
+        val wsCount = bridgeStateInt("workspaceCount")
+        assertEquals(0, wsCount, "Fresh server should have 0 workspaces")
     }
 }

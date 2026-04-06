@@ -15,88 +15,14 @@
  */
 package com.monkopedia.konstructor.e2e
 
-import java.nio.file.Files
+import org.junit.Ignore
 import org.junit.Test
-import kotlin.test.assertTrue
 
+@Ignore("STL upload tests need more bridge work for file input interaction")
 class StlUploadTest : BaseE2eTest() {
 
-    companion object {
-        val MINIMAL_STL = """
-            solid test
-            facet normal 0 0 1
-              outer loop
-                vertex 0 0 0
-                vertex 1 0 0
-                vertex 0 1 0
-              endloop
-            endfacet
-            endsolid test
-        """.trimIndent()
-    }
-
     @Test
-    @org.junit.Ignore("Upload STL dialog interaction needs further investigation")
     fun testUploadStlFile() {
-        loadApp()
-        createFirstWorkspaceViaUi("UploadWs")
-        ensureNavigationWithExpandedWorkspace("UploadWs")
-
-        // Click "Upload STL" text via JS (onClick is on ListItemText, not ListItemButton)
-        page.evaluate("""
-            const texts = document.querySelectorAll('.MuiListItemText-root');
-            for (const text of texts) {
-                if (text.textContent && text.textContent.includes('Upload STL')) {
-                    text.click();
-                    break;
-                }
-            }
-        """)
-        page.waitForTimeout(1000.0)
-
-        // Wait for upload dialog to open
-        page.waitForTimeout(1000.0)
-
-        // Create temp STL file
-        val stlFile = Files.createTempFile("test-", ".stl").toFile()
-        stlFile.writeText(MINIMAL_STL)
-        stlFile.deleteOnExit()
-
-        // Set file via input[type=file] — use JS to find the visible dialog's file input
-        page.evaluate("""(path) => {
-            const dialogs = document.querySelectorAll('.MuiDialog-root');
-            for (const dialog of dialogs) {
-                if (getComputedStyle(dialog).display !== 'none') {
-                    const input = dialog.querySelector('input[type="file"]');
-                    if (input) return true;
-                }
-            }
-            return false;
-        }""", stlFile.absolutePath)
-
-        // Use Playwright's setInputFiles on the file input
-        val fileInput = page.locator("input[type='file']")
-        fileInput.setInputFiles(stlFile.toPath())
-        page.waitForTimeout(500.0)
-
-        // Fill the name input (the non-file input in the dialog)
-        val nameInput = page.locator(
-            ".MuiDialog-root:not([style*='display: none']) input:not([type='file'])"
-        )
-        nameInput.fill("UploadedMesh")
-        page.waitForTimeout(200.0)
-
-        // Click Upload button
-        page.locator("button:has-text('Upload')").click()
-        page.waitForTimeout(3000.0)
-
-        // Verify the uploaded konstruction appears
-        ensureNavigationWithExpandedWorkspace("UploadWs")
-        page.waitForTimeout(1000.0)
-        val content = page.content()
-        assertTrue(
-            content.contains("UploadedMesh"),
-            "Uploaded STL should appear in navigation"
-        )
+        // Placeholder - needs file input bridge support
     }
 }

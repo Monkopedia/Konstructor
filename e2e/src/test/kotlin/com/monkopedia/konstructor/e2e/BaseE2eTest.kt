@@ -19,9 +19,17 @@ import com.microsoft.playwright.Browser
 import com.microsoft.playwright.BrowserType
 import com.microsoft.playwright.Page
 import com.microsoft.playwright.Playwright
+import java.io.File
+import java.nio.file.Paths
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Base class for e2e tests. Each test gets a fresh server and browser page.
+ * Base class for e2e tests using the TestBridge pattern.
+ * All UI interaction goes through globalThis.__konstructor instead of DOM selectors.
  */
 abstract class BaseE2eTest {
     protected lateinit var server: ServerFixture
@@ -29,6 +37,8 @@ abstract class BaseE2eTest {
 
     private var playwright: Playwright? = null
     private var browser: Browser? = null
+
+    protected val json = Json { ignoreUnknownKeys = true }
 
     @org.junit.Before
     fun setUpBase() {
@@ -69,192 +79,133 @@ abstract class BaseE2eTest {
         playwright?.close()
     }
 
-    // ── UI Helper Methods ──────────────────────────────────────────
+    // -- Bridge helpers -------------------------------------------------------
 
     protected fun loadApp() {
         page.navigate(server.baseUrl)
         page.waitForSelector("body", waitOpts(10000.0))
     }
 
-    protected fun createFirstWorkspaceViaUi(name: String) {
-        val input = page.waitForSelector("input", waitOpts(15000.0))
-        input.fill(name)
-        page.locator("button:not([disabled])").last().click()
-        page.waitForTimeout(3000.0)
-        // Reload to ensure fresh connection state after component swap
-        page.reload()
-        // Wait for the main screen to fully render (toolbar appears)
-        page.waitForSelector(
-            ".MuiToolbar-root",
-            waitOpts(15000.0)
+    /** Wait for the TestBridge to expose state with a truthy screen value. */
+    protected fun waitForBridge(timeoutMs: Double = 30000.0) {
+        page.waitForFunction(
+            "() => globalThis.__konstructor && globalThis.__konstructor.state && globalThis.__konstructor.state.screen",
+            null,
+            Page.WaitForFunctionOptions().setTimeout(timeoutMs)
         )
-        page.waitForTimeout(1000.0)
     }
 
-    protected fun openNavigationPane() {
-        // The title div has onClick that switches to NAVIGATION mode
-        // Use evaluate to click it directly via JS to avoid visibility issues
-        page.evaluate("""
-            document.querySelector('.MuiToolbar-root .MuiTypography-root')?.click()
-        """)
-        page.waitForTimeout(2000.0)
+    /** Return the current bridge state as a parsed JsonObject. */
+    protected fun bridgeState(): JsonObject {
+        val raw = page.evaluate("() => JSON.stringify(globalThis.__konstructor.state)")
+            ?.toString() ?: "{}"
+        return json.decodeFromString<JsonObject>(raw)
     }
 
-    /** Wait for any VISIBLE blocking dialogs to disappear. */
-    protected fun waitForDialogsToClear(timeoutMs: Long = 5000) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            val visible = page.evaluate("""() => {
-                return Array.from(document.querySelectorAll('.MuiDialog-root'))
-                    .some(el => getComputedStyle(el).display !== 'none');
-            }""") as Boolean
-            if (!visible) return
-            page.waitForTimeout(500.0)
-        }
+    /** Return a single string field from bridge state. */
+    protected fun bridgeStateString(field: String): String {
+        val state = bridgeState()
+        return state[field]?.jsonPrimitive?.content ?: ""
     }
 
-    protected fun clickListItemButton(text: String) {
-
-        page.locator(".MuiListItemButton-root:has-text('$text')").first().click()
-        page.waitForTimeout(1500.0)
+    /** Return a single int field from bridge state. */
+    protected fun bridgeStateInt(field: String): Int {
+        val state = bridgeState()
+        return state[field]?.jsonPrimitive?.int ?: -1
     }
 
-    protected fun expandWorkspace(name: String) {
-
-        val wsButton = page.waitForSelector(
-            ".MuiListItemButton-root:has-text('$name')",
-            waitOpts(10000.0)
-        ) ?: error("Workspace '$name' not found in navigation pane")
-        wsButton.scrollIntoViewIfNeeded()
-        wsButton.click()
-        page.waitForTimeout(2000.0)
+    /** Return a list-of-string field from bridge state. */
+    protected fun bridgeStateStringList(field: String): List<String> {
+        val state = bridgeState()
+        return state[field]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
     }
 
-    protected fun selectKonstruction(name: String) {
-
-        clickListItemButton(name)
-        page.waitForTimeout(500.0) // extra wait for editor to mount
+    /** Get the current version counter. */
+    protected fun getVersion(): Int {
+        return (page.evaluate("() => globalThis.__konstructor.version") as? Number)?.toInt() ?: 0
     }
 
-    protected fun createKonstructionViaUi(name: String) {
-
-        page.locator("text=Add new konstruction").first().click()
-        page.waitForTimeout(1000.0)
-        val dialogInput = page.waitForSelector(
-            ".MuiDialog-root input", waitOpts(5000.0)
+    /**
+     * Call a bridge action and wait for the version counter to change.
+     * [arg] is the single string argument passed to the action callback.
+     */
+    protected fun bridgeAction(name: String, arg: String = "", timeoutMs: Long = 30000) {
+        val vBefore = getVersion()
+        page.evaluate(
+            "(a) => globalThis.__konstructor.actions[a.name](a.arg)",
+            mapOf("name" to name, "arg" to arg)
         )
-        dialogInput.fill(name)
-        page.locator(".MuiDialog-root button:has-text('Set')").click()
-        page.waitForTimeout(2000.0)
+        page.waitForFunction(
+            "(v) => globalThis.__konstructor.version > v",
+            vBefore,
+            Page.WaitForFunctionOptions().setTimeout(timeoutMs.toDouble())
+        )
     }
 
-    protected fun clickEditButton(itemName: String) {
-        // Wait for the item to appear in the DOM first
-        page.waitForSelector(
-            ".MuiListItem-root:has-text('$itemName')",
-            waitOpts(10000.0)
+    /**
+     * Call a bridge action but do NOT wait for version change.
+     * Useful when the action itself calls incrementVersion asynchronously.
+     */
+    protected fun bridgeActionNoWait(name: String, arg: String = "") {
+        page.evaluate(
+            "(a) => globalThis.__konstructor.actions[a.name](a.arg)",
+            mapOf("name" to name, "arg" to arg)
         )
-        // Use JS click to bypass hover/visibility requirements on the edit button
-        val clicked = page.evaluate("""(name) => {
-            const items = document.querySelectorAll('.MuiListItem-root');
-            for (const item of items) {
-                if (item.textContent && item.textContent.includes(name)) {
-                    const btn = item.querySelector('button[aria-label="rename"]');
-                    if (btn) { btn.click(); return true; }
+    }
+
+    /**
+     * Wait for the version to exceed [fromVersion].
+     */
+    protected fun waitForVersionChange(fromVersion: Int, timeoutMs: Long = 10000) {
+        page.waitForFunction(
+            "(v) => globalThis.__konstructor && globalThis.__konstructor.version > v",
+            fromVersion,
+            Page.WaitForFunctionOptions().setTimeout(timeoutMs.toDouble())
+        )
+    }
+
+    /** Read lastResult from the bridge as a raw JSON string. */
+    protected fun bridgeLastResult(): String {
+        return page.evaluate("() => JSON.stringify(globalThis.__konstructor.lastResult)")
+            ?.toString() ?: "null"
+    }
+
+    /** Read lastResult parsed as a JsonObject. */
+    protected fun bridgeLastResultObject(): JsonObject {
+        val raw = bridgeLastResult()
+        return json.decodeFromString<JsonObject>(raw)
+    }
+
+    /** Take a screenshot and save to build/screenshots/. */
+    protected fun screenshot(name: String) {
+        val dir = File(System.getProperty("user.dir"), "build/screenshots")
+        dir.mkdirs()
+        page.screenshot(
+            Page.ScreenshotOptions()
+                .setPath(Paths.get(dir.absolutePath, "$name.png"))
+                .setFullPage(true)
+        )
+        System.err.println("Screenshot saved: $name.png")
+    }
+
+    /** Encode a string as a JSON string literal (with quotes and escaping). */
+    protected fun jsonString(value: String): String {
+        return buildString {
+            append('"')
+            for (ch in value) {
+                when (ch) {
+                    '"' -> append("\\\"")
+                    '\\' -> append("\\\\")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(ch)
                 }
             }
-            return false;
-        }""", itemName) as Boolean
-        if (!clicked) {
-            // Debug: dump the item's HTML
-            val itemHtml = page.evaluate("""(name) => {
-                const items = document.querySelectorAll('.MuiListItem-root');
-                for (const item of items) {
-                    if (item.textContent && item.textContent.includes(name)) {
-                        const secondary = item.querySelector('.MuiListItemSecondaryAction-root');
-                        const btns = item.querySelectorAll('button');
-                        return 'secondary: ' + (secondary ? secondary.outerHTML.substring(0,500) : 'null') + ' buttons: ' + btns.length;
-                    }
-                }
-                return 'not found';
-            }""", itemName) as String
-            error("Edit button not found for '$itemName'. Item HTML: $itemHtml")
+            append('"')
         }
-        page.waitForTimeout(500.0)
-    }
-
-    protected fun waitForEditor(): com.microsoft.playwright.ElementHandle? {
-        return page.waitForSelector(".cm-editor", waitOpts(10000.0))
-    }
-
-    /** Type text into the CodeMirror editor. Handles Vim mode. */
-    protected fun typeInEditor(text: String) {
-        // CM6 with Vim: click the content area to focus, then press 'i' to enter
-        // insert mode, then type the text
-        page.click(".cm-editor .cm-content")
-        page.waitForTimeout(200.0)
-        // Enter insert mode (Vim)
-        page.keyboard().press("i")
-        page.waitForTimeout(100.0)
-        // Use insertText which bypasses key event handling and directly inputs text
-        page.keyboard().insertText(text)
-        page.waitForTimeout(500.0)
-    }
-
-    /** Save the current editor content via Vim :w command. */
-    protected fun saveEditor() {
-        // Exit insert mode, then use Vim :w command
-        page.keyboard().press("Escape")
-        page.waitForTimeout(300.0)
-        page.click(".cm-editor .cm-content")
-        page.waitForTimeout(200.0)
-        // Type :w<Enter> as Vim save command
-        page.keyboard().type(":w")
-        page.keyboard().press("Enter")
-        page.waitForTimeout(2000.0)
-    }
-
-    protected fun getEditorContent(): String {
-        val text = page.evaluate("""() => {
-            const lines = document.querySelectorAll('.cm-editor .cm-line');
-            return Array.from(lines).map(l => l.textContent).join('\n');
-        }""") as String
-        return text
     }
 
     protected fun waitOpts(timeout: Double) =
         Page.WaitForSelectorOptions().setTimeout(timeout)
-
-    /** Check if we're currently in navigation pane mode. */
-    protected fun isInNavigationMode(): Boolean {
-        val text = page.evaluate("""
-            document.querySelector('.MuiToolbar-root .MuiTypography-root')?.textContent || ''
-        """) as String
-        return text == "Navigation"
-    }
-
-    /** Ensure we're in navigation mode with the workspace expanded. */
-    protected fun ensureNavigationWithExpandedWorkspace(wsName: String) {
-        page.waitForTimeout(1000.0)
-        if (!isInNavigationMode()) {
-            openNavigationPane()
-        }
-        // Check if workspace is expanded by looking for "Add new konstruction"
-        val addBtn = page.querySelector("text=Add new konstruction")
-        if (addBtn == null) {
-            expandWorkspace(wsName)
-        }
-    }
-
-    /**
-     * Ensure we're in editor mode for the given konstruction.
-     * If we're in navigation mode, select the konstruction.
-     */
-    protected fun ensureEditorMode(wsName: String, konName: String) {
-        val editorVisible = page.querySelector(".cm-editor .cm-content")
-        if (editorVisible == null) {
-            ensureNavigationWithExpandedWorkspace(wsName)
-            selectKonstruction(konName)
-        }
-    }
 }

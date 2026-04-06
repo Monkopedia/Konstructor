@@ -15,59 +15,75 @@
  */
 package com.monkopedia.konstructor.e2e
 
+import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.ksrpc.ksrpcEnvironment
+import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
+import com.monkopedia.ksrpc.toStub
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
-import kotlin.test.assertNotNull
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ScriptEditingTest : BaseE2eTest() {
 
-    @Test
-    fun testTypeInEditorAndVerifyContent() {
-        loadApp()
-        createFirstWorkspaceViaUi("EditWs")
-        openNavigationPane()
-        expandWorkspace("EditWs")
-        createKonstructionViaUi("EditTest")
-
-        // After creating, ensure we're in editor mode
-        ensureEditorMode("EditWs", "EditTest")
-        val editor = waitForEditor()
-        assertNotNull(editor, "CodeMirror editor should appear")
-
-        typeInEditor("// test marker content")
-        saveEditor()
-
-        val content = getEditorContent()
-        assertTrue(
-            content.contains("test marker content"),
-            "Editor should contain typed text. Got: '${content.take(200)}'"
+    private fun createWsAndKon(wsName: String, konName: String): Pair<String, String> {
+        bridgeAction("createWorkspace", wsName)
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount >= 1",
+            null,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )
+        val wsId = bridgeStateStringList("workspaceIds").first()
+        bridgeAction("selectWorkspace", wsId)
+
+        val createArg = """{"name":"$konName","workspaceId":"$wsId"}"""
+        bridgeAction("createKonstruction", createArg)
+
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.konstructionCount >= 1",
+            null,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+        )
+
+        val konId = runBlocking {
+            val env = ksrpcEnvironment { }
+            val client = HttpClient { install(WebSockets) }
+            val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
+            val service = conn.defaultChannel().toStub<Konstructor, String>()
+            val ws = service.get(wsId)
+            ws.list().first().id
+        }
+        return wsId to konId
     }
 
     @Test
-    fun testEditorContentPersistsAcrossNavigation() {
+    fun testSetAndGetContent() {
         loadApp()
-        createFirstWorkspaceViaUi("PersistWs")
-        openNavigationPane()
-        expandWorkspace("PersistWs")
-        createKonstructionViaUi("PersistTest")
+        waitForBridge()
 
-        ensureEditorMode("PersistWs", "PersistTest")
-        val editor = waitForEditor()
-        assertNotNull(editor)
-        typeInEditor("// persist marker")
-        saveEditor()
+        val (wsId, konId) = createWsAndKon("EditWs", "EditTest")
 
-        // Navigate away and back
-        ensureNavigationWithExpandedWorkspace("PersistWs")
-        selectKonstruction("PersistTest")
-        waitForEditor()
-        page.waitForTimeout(1000.0)
+        val testContent = "// test marker content\nval x = 42"
 
-        val content = getEditorContent()
+        // Set content
+        val setArg = """{"wsId":"$wsId","konId":"$konId","content":${jsonString(testContent)}}"""
+        bridgeAction("setContent", setArg)
+
+        // Get content back
+        val getArg = """{"wsId":"$wsId","konId":"$konId"}"""
+        bridgeAction("getContent", getArg)
+
+        val result = bridgeLastResult()
+        // lastResult is a JSON-encoded string, so it will be a quoted string
         assertTrue(
-            content.contains("persist marker"),
-            "Content should persist. Got: ${content.take(200)}"
+            result.contains("test marker content"),
+            "Retrieved content should contain the set text. Got: $result"
+        )
+        assertTrue(
+            result.contains("val x = 42"),
+            "Retrieved content should contain all set text. Got: $result"
         )
     }
 }

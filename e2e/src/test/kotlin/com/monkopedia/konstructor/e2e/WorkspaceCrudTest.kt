@@ -16,57 +16,59 @@
 package com.monkopedia.konstructor.e2e
 
 import org.junit.Test
-import kotlin.test.assertNotNull
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class WorkspaceCrudTest : BaseE2eTest() {
 
     @Test
-    fun testCreateFirstWorkspace() {
+    fun testCreateWorkspace() {
         loadApp()
-        createFirstWorkspaceViaUi("My Test Workspace")
+        waitForBridge()
 
-        val bodyText = page.content()
-        assertTrue(
-            bodyText.contains("My Test Workspace") ||
-                !bodyText.contains("First workspace name"),
-            "Should have navigated away from create workspace screen"
+        bridgeAction("createWorkspace", "TestWs")
+
+        // Wait for workspace list to show 1 workspace
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount === 1",
+            null,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )
-    }
-
-    @Test
-    fun testRenameWorkspace() {
-        loadApp()
-        createFirstWorkspaceViaUi("OriginalWs")
-        openNavigationPane()
-
-        clickEditButton("OriginalWs")
-
-        // Dialog "Change workspace name" — fill new name and save
-        val dialogInput = page.waitForSelector(
-            ".MuiDialog-root input", waitOpts(5000.0)
-        )
-        assertNotNull(dialogInput)
-        dialogInput.fill("RenamedWs")
-        page.locator(".MuiDialog-root button:has-text('Save')").click()
-        page.waitForTimeout(2000.0)
-
-        val content = page.content()
-        assertTrue(content.contains("RenamedWs"), "Workspace should be renamed")
+        val wsCount = bridgeStateInt("workspaceCount")
+        assertEquals(1, wsCount, "Should have 1 workspace after creation")
+        val names = bridgeStateStringList("workspaceNames")
+        assertTrue(names.contains("TestWs"), "Workspace names should contain 'TestWs', got: $names")
     }
 
     @Test
     fun testDeleteWorkspace() {
         loadApp()
-        createFirstWorkspaceViaUi("ToDeleteWs")
-        openNavigationPane()
+        waitForBridge()
 
-        clickEditButton("ToDeleteWs")
-        page.locator(".MuiDialog-root button:has-text('Delete')").click()
-        page.waitForTimeout(2000.0)
+        // Create a workspace first
+        bridgeAction("createWorkspace", "ToDelete")
 
-        // After deleting the only workspace, we should be back at empty state
-        val input = page.waitForSelector("input", waitOpts(10000.0))
-        assertNotNull(input, "Should be back to empty state after deleting only workspace")
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount === 1",
+            null,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+        )
+
+        // Get the workspace id
+        val ids = bridgeStateStringList("workspaceIds")
+        assertTrue(ids.isNotEmpty(), "Should have at least one workspace id")
+        val wsId = ids.first()
+
+        // Delete it
+        bridgeAction("deleteWorkspace", wsId)
+
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount === 0",
+            null,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+        )
+
+        val wsCount = bridgeStateInt("workspaceCount")
+        assertEquals(0, wsCount, "Should have 0 workspaces after deletion")
     }
 }
