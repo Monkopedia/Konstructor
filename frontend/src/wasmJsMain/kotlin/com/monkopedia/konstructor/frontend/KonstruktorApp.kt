@@ -17,17 +17,36 @@ package com.monkopedia.konstructor.frontend
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import com.monkopedia.konstructor.frontend.di.appModule
 import com.monkopedia.konstructor.frontend.ui.Initializer
 import org.koin.compose.KoinApplication
+import org.koin.compose.koinInject
 
 @Composable
 fun KonstruktorApp() {
     KoinApplication(application = {
         modules(appModule)
     }) {
+        // Install the test bridge for Playwright e2e testing
+        InstallTestBridge()
+
         MaterialTheme(colorScheme = KonstruktorColorScheme) {
             Initializer()
         }
+    }
+}
+
+@Composable
+private fun InstallTestBridge() {
+    val scope = rememberCoroutineScope()
+    // Inject dependencies to initialize TestBridge
+    val serviceHolder = koinInject<com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder>()
+    val spaceListVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel>()
+    val settingsVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel>()
+
+    LaunchedEffect(Unit) {
+        TestBridge.install(scope, serviceHolder, spaceListVm, settingsVm)
     }
 }

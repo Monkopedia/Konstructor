@@ -4,98 +4,126 @@ import com.microsoft.playwright.Page
 import java.io.File
 import java.nio.file.Paths
 import org.junit.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ComposeDebugTest : BaseE2eTest() {
-    @Test
-    fun inspectComposeDom() {
-        loadApp()
-        page.waitForTimeout(15000.0)
 
-        // Check full HTML
-        val html = page.content()
-        System.err.println("=== HTML LENGTH: ${html.length} ===")
-        System.err.println("=== Contains 'role': ${html.contains("role")} ===")
-        System.err.println("=== Contains 'aria': ${html.contains("aria")} ===")
-        System.err.println("=== Contains 'input': ${html.contains("input")} ===")
-        System.err.println("=== Contains 'canvas': ${html.contains("canvas")} ===")
+    private fun waitForBridge() {
+        page.waitForFunction(
+            "() => globalThis.__konstructor && globalThis.__konstructor.state && globalThis.__konstructor.state.screen",
+            null,
+            Page.WaitForFunctionOptions().setTimeout(30000.0)
+        )
+    }
 
-        // Screenshot
+    private fun focusCanvas() {
+        page.evaluate("""() => {
+            const sr = document.body.shadowRoot;
+            if (sr) {
+                const canvas = sr.querySelector('canvas');
+                if (canvas) canvas.focus();
+            }
+        }""")
+        page.waitForTimeout(100.0)
+    }
+
+    private fun getVersion(): Int {
+        return (page.evaluate("() => globalThis.__konstructor.version") as? Number)?.toInt() ?: 0
+    }
+
+    private fun waitForVersionChange(fromVersion: Int, timeoutMs: Long = 5000) {
+        page.waitForFunction(
+            "(v) => globalThis.__konstructor && globalThis.__konstructor.version > v",
+            fromVersion,
+            Page.WaitForFunctionOptions().setTimeout(timeoutMs.toDouble())
+        )
+    }
+
+    private fun screenshot(name: String) {
         val dir = File(System.getProperty("user.dir"), "build/screenshots")
         dir.mkdirs()
         page.screenshot(
             Page.ScreenshotOptions()
-                .setPath(Paths.get(dir.absolutePath, "compose-empty-state.png"))
+                .setPath(Paths.get(dir.absolutePath, "$name.png"))
                 .setFullPage(true)
         )
+    }
 
-        // Check shadow DOM for a11y elements
-        val shadowInfo = page.evaluate("""() => {
-            const results = [];
-            const walk = (el, depth) => {
-                if (depth > 8) return;
-                const tag = el.tagName || '#text';
-                const role = el.getAttribute ? el.getAttribute('role') : '';
-                const id = el.id || '';
-                const ariaLabel = el.getAttribute ? el.getAttribute('aria-label') : '';
-                const text = (el.innerText || '').substring(0, 50).replace(/\\n/g, ' ');
-                const info = '  '.repeat(depth) + tag +
-                    (id ? ' id=' + id : '') +
-                    (role ? ' role=' + role : '') +
-                    (ariaLabel ? ' aria=' + ariaLabel : '') +
-                    (text && !el.children?.length ? ' text=' + text : '');
-                results.push(info);
-                if (el.shadowRoot) {
-                    results.push('  '.repeat(depth+1) + '#shadow-root');
-                    Array.from(el.shadowRoot.children).forEach(c => walk(c, depth+2));
-                }
-                if (el.children) {
-                    Array.from(el.children).slice(0, 30).forEach(c => walk(c, depth+1));
-                }
-            };
-            walk(document.body, 0);
-            return results.join('\n');
-        }""") as String
-        System.err.println("=== SHADOW DOM STRUCTURE ===")
-        System.err.println(shadowInfo)
+    private fun getState(): String {
+        return page.evaluate("() => JSON.stringify(globalThis.__konstructor.state)")?.toString() ?: "{}"
+    }
 
-        // Search for cmp_a11y_root anywhere in the DOM tree, including shadow roots
-        val a11yInfo = page.evaluate("""() => {
-            const results = [];
-            function findA11y(root, path) {
-                if (!root) return;
-                // Check shadow root
-                if (root.shadowRoot) {
-                    results.push(path + ' -> #shadow-root');
-                    findA11y(root.shadowRoot, path + '/#shadow');
-                }
-                // Check children
-                const children = root.children || root.childNodes;
-                if (children) {
-                    for (let i = 0; i < children.length && i < 50; i++) {
-                        const child = children[i];
-                        if (!child.tagName) continue;
-                        const id = child.id || '';
-                        const tag = child.tagName;
-                        const role = child.getAttribute ? child.getAttribute('role') : '';
-                        const childPath = path + '/' + tag + (id ? '#' + id : '') + (role ? '[' + role + ']' : '');
-                        results.push(childPath);
-                        findA11y(child, childPath);
-                    }
-                }
-            }
-            findA11y(document.body, 'body');
-            return results.join('\n');
-        }""") as String
-        System.err.println("=== FULL DOM TREE ===")
-        System.err.println(a11yInfo)
+    @Test
+    fun testBridgeExposesState() {
+        loadApp()
+        waitForBridge()
 
-        // Try Playwright shadow-piercing selectors
-        val byRole = page.getByRole(com.microsoft.playwright.options.AriaRole.TEXTBOX).all()
-        System.err.println("Textbox roles found: ${byRole.size}")
-        val byText = page.getByText("Workspace").all()
-        System.err.println("'Workspace' text found: ${byText.size}")
+        val state = getState()
+        System.err.println("=== STATE: $state ===")
+        assertTrue(state.contains("\"screen\":\"empty\""))
+    }
 
-        assertTrue(true)
+    @Test
+    fun testCanClickTextFieldAndType() {
+        loadApp()
+        waitForBridge()
+
+        // Click on the text field area
+        val viewport = page.viewportSize()
+        val cx = (viewport?.width ?: 1280) / 2 - 50
+        val cy = (viewport?.height ?: 720) / 2
+        page.mouse().click(cx.toDouble(), cy.toDouble())
+        page.waitForTimeout(300.0)
+
+        // Focus canvas for key events
+        focusCanvas()
+
+        // Type character by character via keyboard
+        for (ch in "TestWs") {
+            page.keyboard().press(ch.toString())
+            page.waitForTimeout(30.0)
+        }
+        page.waitForTimeout(500.0)
+
+        screenshot("compose-text-typed")
+
+        // Check the hidden input has the text
+        val inputVal = page.evaluate("""() => {
+            const sr = document.body.shadowRoot;
+            const input = sr ? sr.querySelector('input') : null;
+            return input ? input.value : '';
+        }""")?.toString() ?: ""
+        System.err.println("=== INPUT VALUE: '$inputVal' ===")
+        assertTrue(inputVal.isNotEmpty(), "Hidden input should have text")
+    }
+
+    @Test
+    fun testCreateWorkspaceViaAction() {
+        loadApp()
+        waitForBridge()
+
+        // Use the test bridge action to create a workspace
+        val versionBefore = getVersion()
+        page.evaluate("""() => {
+            globalThis.__konstructor.actions.createWorkspace('E2eTestWs');
+        }""")
+
+        // Wait for state to update
+        page.waitForFunction(
+            "(v) => globalThis.__konstructor.version > v",
+            versionBefore,
+            Page.WaitForFunctionOptions().setTimeout(10000.0)
+        )
+        page.waitForTimeout(2000.0)
+
+        val state = getState()
+        System.err.println("=== STATE AFTER CREATE: $state ===")
+        screenshot("compose-after-create-action")
+
+        assertTrue(
+            state.contains("\"workspaceCount\":1") || state.contains("\"screen\":\"main\""),
+            "Workspace should be created. State: $state"
+        )
     }
 }
