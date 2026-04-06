@@ -24,13 +24,13 @@ import androidx.compose.runtime.getValue
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun SyncConflictDialog() {
-    val dialogVm = koinViewModel<NavigationDialogViewModel>()
-    val konstructionVm = koinViewModel<KonstructionViewModel>()
-    val workspaceVm = koinViewModel<WorkspaceViewModel>()
+    val dialogVm = koinInject<NavigationDialogViewModel>()
+    val konstructionVm = koinInject<KonstructionViewModel>()
+    val workspaceVm = koinInject<WorkspaceViewModel>()
     val konstructions by workspaceVm.konstructions.collectAsState()
     val selectedKonId by workspaceVm.selectedKonstructionId.collectAsState()
 

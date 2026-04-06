@@ -30,12 +30,12 @@ import com.monkopedia.konstructor.frontend.ui.dialogs.SyncConflictDialog
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun MainScreen() {
     val settingsVm = koinInject<SettingsViewModel>()
-    val dialogVm = koinViewModel<NavigationDialogViewModel>()
+    val dialogVm = koinInject<NavigationDialogViewModel>()
     val showCodeLeft by settingsVm.showCodeLeft.collectAsState()
     val dialogState by dialogVm.dialogState.collectAsState()
 

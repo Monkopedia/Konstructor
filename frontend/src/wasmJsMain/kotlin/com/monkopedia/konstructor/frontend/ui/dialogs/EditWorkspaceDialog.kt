@@ -29,11 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun EditWorkspaceDialog(space: Space) {
-    val dialogVm = koinViewModel<NavigationDialogViewModel>()
+    val dialogVm = koinInject<NavigationDialogViewModel>()
     var name by remember { mutableStateOf(space.name) }
 
     AlertDialog(

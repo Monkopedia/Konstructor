@@ -36,11 +36,11 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import com.monkopedia.konstructor.frontend.threejs.ThreeJsRenderer
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun GlPlaceholder(modifier: Modifier = Modifier) {
-    val konstructionVm = koinViewModel<KonstructionViewModel>()
+    val konstructionVm = koinInject<KonstructionViewModel>()
     val renderPath by konstructionVm.renderPath.collectAsState()
     val density = LocalDensity.current
 

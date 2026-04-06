@@ -41,11 +41,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
 import kotlinx.coroutines.launch
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun CreateFirstWorkspaceScreen() {
-    val spaceListVm = koinViewModel<SpaceListViewModel>()
+    val spaceListVm = koinInject<SpaceListViewModel>()
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
 

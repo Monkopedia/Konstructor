@@ -21,15 +21,14 @@ import com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
-import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
 val appModule = module {
     single { ServiceHolder() }
     single { SettingsViewModel() }
 
-    viewModelOf(::SpaceListViewModel)
-    viewModelOf(::WorkspaceViewModel)
-    viewModelOf(::KonstructionViewModel)
-    viewModelOf(::NavigationDialogViewModel)
+    single { SpaceListViewModel(get()) }
+    single { WorkspaceViewModel(get()) }
+    single { KonstructionViewModel(get()) }
+    single { NavigationDialogViewModel(get()) }
 }

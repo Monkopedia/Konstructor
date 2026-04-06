@@ -40,11 +40,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.monkopedia.konstructor.common.KonstructionTarget
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun SelectionPane(modifier: Modifier = Modifier) {
-    val konstructionVm = koinViewModel<KonstructionViewModel>()
+    val konstructionVm = koinInject<KonstructionViewModel>()
     val info by konstructionVm.info.collectAsState()
     val targets = info?.targets ?: emptyList()
 

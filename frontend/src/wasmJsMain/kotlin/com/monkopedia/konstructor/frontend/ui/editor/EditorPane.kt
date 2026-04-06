@@ -42,12 +42,12 @@ import com.monkopedia.kodemirror.view.setDoc
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.UiState
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun EditorPane(modifier: Modifier = Modifier) {
-    val konstructionVm = koinViewModel<KonstructionViewModel>()
-    val workspaceVm = koinViewModel<WorkspaceViewModel>()
+    val konstructionVm = koinInject<KonstructionViewModel>()
+    val workspaceVm = koinInject<WorkspaceViewModel>()
     val selectedKonId by workspaceVm.selectedKonstructionId.collectAsState()
     val konstructions by workspaceVm.konstructions.collectAsState()
     val content by konstructionVm.content.collectAsState()
@@ -64,15 +64,16 @@ fun EditorPane(modifier: Modifier = Modifier) {
 
     val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
     val extensions = remember { basicSetup + oneDark + kotlinLang }
+
     val session = rememberEditorSession(
         doc = content,
         extensions = extensions
     )
 
     // Update editor when content changes from server
-    LaunchedEffect(content) {
-        val currentDoc = session.state.doc.toString()
-        if (currentDoc != content) {
+    // Also re-check periodically in case the initial LaunchedEffect missed the change
+    LaunchedEffect(content, selectedKonId) {
+        if (content.isNotEmpty()) {
             session.setDoc(content)
         }
     }

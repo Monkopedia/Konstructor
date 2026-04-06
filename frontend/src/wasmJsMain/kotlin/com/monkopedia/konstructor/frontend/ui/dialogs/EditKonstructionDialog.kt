@@ -30,11 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun EditKonstructionDialog(konstruction: Konstruction) {
-    val dialogVm = koinViewModel<NavigationDialogViewModel>()
+    val dialogVm = koinInject<NavigationDialogViewModel>()
     var name by remember { mutableStateOf(konstruction.name) }
 
     AlertDialog(

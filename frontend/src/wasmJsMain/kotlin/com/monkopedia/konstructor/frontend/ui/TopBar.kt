@@ -36,13 +36,13 @@ import com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar() {
     val settingsVm = koinInject<SettingsViewModel>()
-    val workspaceVm = koinViewModel<WorkspaceViewModel>()
+    val workspaceVm = koinInject<WorkspaceViewModel>()
     val codePaneMode by settingsVm.codePaneMode.collectAsState()
     val workspaceName by workspaceVm.workspaceName.collectAsState()
     val selectedKonstructionId by workspaceVm.selectedKonstructionId.collectAsState()

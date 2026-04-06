@@ -23,13 +23,13 @@ import com.monkopedia.konstructor.frontend.ui.dialogs.ConnectionLostDialog
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun Initializer() {
-    val spaceListVm = koinViewModel<SpaceListViewModel>()
-    val workspaceVm = koinViewModel<WorkspaceViewModel>()
-    val dialogVm = koinViewModel<NavigationDialogViewModel>()
+    val spaceListVm = koinInject<SpaceListViewModel>()
+    val workspaceVm = koinInject<WorkspaceViewModel>()
+    val dialogVm = koinInject<NavigationDialogViewModel>()
     val workspaces by spaceListVm.workspaces.collectAsState()
     val selectedWorkspaceId by spaceListVm.selectedWorkspaceId.collectAsState()
     val konstructions by workspaceVm.konstructions.collectAsState()
