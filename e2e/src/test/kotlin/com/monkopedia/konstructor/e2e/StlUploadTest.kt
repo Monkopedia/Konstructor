@@ -15,14 +15,61 @@
  */
 package com.monkopedia.konstructor.e2e
 
-import org.junit.Ignore
+import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.KonstructionType
+import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.konstructor.common.Space
+import com.monkopedia.ksrpc.ksrpcEnvironment
+import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
+import com.monkopedia.ksrpc.toStub
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.utils.io.ByteReadChannel
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
-@Ignore("STL upload tests need more bridge work for file input interaction")
 class StlUploadTest : BaseE2eTest() {
 
+    private fun connectService(): Konstructor = runBlocking {
+        val env = ksrpcEnvironment { }
+        val client = HttpClient { install(WebSockets) }
+        val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
+        conn.defaultChannel().toStub<Konstructor, String>()
+    }
+
     @Test
-    fun testUploadStlFile() {
-        // Placeholder - needs file input bridge support
+    fun testCreateStlKonstruction() = runBlocking {
+        val service = connectService()
+        val ws = service.create(Space(id = "", name = "StlWs"))
+        val workspace = service.get(ws.id)
+
+        // Create an STL type konstruction
+        val kon = workspace.create(
+            Konstruction(name = "Mesh", workspaceId = ws.id, id = "", type = KonstructionType.STL)
+        )
+        assertEquals(KonstructionType.STL, kon.type)
+        assertEquals("Mesh", kon.name)
+
+        // Set STL content as text
+        val ks = service.konstruction(kon)
+        val stlContent = """
+            solid test
+            facet normal 0 0 1
+              outer loop
+                vertex 0 0 0
+                vertex 1 0 0
+                vertex 0 1 0
+              endloop
+            endfacet
+            endsolid test
+        """.trimIndent()
+        ks.set(stlContent)
+
+        // Verify content persists
+        val fetched = ks.fetch()
+        assertTrue(fetched.contains("solid test"), "STL content should persist")
+        Unit
     }
 }

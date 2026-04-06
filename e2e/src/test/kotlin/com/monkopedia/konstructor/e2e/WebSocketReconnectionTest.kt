@@ -15,14 +15,44 @@
  */
 package com.monkopedia.konstructor.e2e
 
-import org.junit.Ignore
+import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.konstructor.common.Space
+import com.monkopedia.ksrpc.ksrpcEnvironment
+import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
+import com.monkopedia.ksrpc.toStub
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
-@Ignore("WebSocket reconnection tests need more bridge work for connection state testing")
 class WebSocketReconnectionTest : BaseE2eTest() {
 
+    private fun connectService(): Konstructor = runBlocking {
+        val env = ksrpcEnvironment { }
+        val client = HttpClient { install(WebSockets) }
+        val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
+        conn.defaultChannel().toStub<Konstructor, String>()
+    }
+
     @Test
-    fun testReconnectsAfterServerRestart() {
-        // Placeholder - needs bridge support for connection monitoring
+    fun testDataPersistsAcrossServerRestart() = runBlocking {
+        // Create workspace
+        val service1 = connectService()
+        val ws = service1.create(Space(id = "", name = "PersistWs"))
+        assertTrue(ws.id.isNotEmpty())
+
+        // Stop and restart server (same data dir)
+        server.stopProcess()
+        Thread.sleep(1000)
+        server.restart()
+
+        // Connect again and verify data persists
+        val service2 = connectService()
+        val workspaces = service2.list()
+        assertEquals(1, workspaces.size)
+        assertEquals("PersistWs", workspaces[0].name)
+        Unit
     }
 }

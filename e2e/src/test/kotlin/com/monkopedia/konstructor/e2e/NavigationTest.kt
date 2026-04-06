@@ -15,19 +15,63 @@
  */
 package com.monkopedia.konstructor.e2e
 
-import org.junit.Ignore
+import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.konstructor.common.Space
+import com.monkopedia.ksrpc.ksrpcEnvironment
+import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
+import com.monkopedia.ksrpc.toStub
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
-@Ignore("Navigation tests need more bridge work for canvas-specific interaction")
 class NavigationTest : BaseE2eTest() {
 
-    @Test
-    fun testNavigateBetweenKonstructions() {
-        // Placeholder - needs canvas-specific testing support
+    private fun connectService(): Konstructor = runBlocking {
+        val env = ksrpcEnvironment { }
+        val client = HttpClient { install(WebSockets) }
+        val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
+        conn.defaultChannel().toStub<Konstructor, String>()
     }
 
     @Test
-    fun testWorkspaceNameInTitleBar() {
-        // Placeholder - needs canvas-specific testing support
+    fun testMultipleWorkspacesAndKonstructions() = runBlocking {
+        val service = connectService()
+        val ws1 = service.create(Space(id = "", name = "Workspace A"))
+        val ws2 = service.create(Space(id = "", name = "Workspace B"))
+
+        val workspace1 = service.get(ws1.id)
+        workspace1.create(Konstruction(name = "Cube", workspaceId = ws1.id, id = ""))
+        workspace1.create(Konstruction(name = "Sphere", workspaceId = ws1.id, id = ""))
+
+        val workspace2 = service.get(ws2.id)
+        workspace2.create(Konstruction(name = "Cylinder", workspaceId = ws2.id, id = ""))
+
+        val allWorkspaces = service.list()
+        assertEquals(2, allWorkspaces.size)
+        assertEquals(2, workspace1.list().size)
+        assertEquals(1, workspace2.list().size)
+        Unit
+    }
+
+    @Test
+    fun testWorkspaceAndKonstructionRename() = runBlocking {
+        val service = connectService()
+        val ws = service.create(Space(id = "", name = "NameTestWs"))
+        val workspace = service.get(ws.id)
+        assertEquals("NameTestWs", workspace.getName())
+
+        workspace.setName("RenamedWs")
+        assertEquals("RenamedWs", workspace.getName())
+
+        val kon = workspace.create(Konstruction(name = "Original", workspaceId = ws.id, id = ""))
+        val ks = service.konstruction(kon)
+        assertEquals("Original", ks.getName())
+        ks.setName("Renamed")
+        assertEquals("Renamed", ks.getName())
+        Unit
     }
 }
