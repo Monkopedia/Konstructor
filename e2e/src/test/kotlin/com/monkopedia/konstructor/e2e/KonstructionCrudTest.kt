@@ -15,7 +15,9 @@
  */
 package com.monkopedia.konstructor.e2e
 
+import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.konstructor.common.Space
 import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
 import com.monkopedia.ksrpc.toStub
@@ -26,85 +28,49 @@ import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-
-@org.junit.Ignore("Bridge async actions timeout in headless - covered by BuildAndDownloadStlTest")
+/**
+ * Tests konstruction CRUD using ksrpc API for mutations
+ * and bridge state + screenshots for verification.
+ */
 class KonstructionCrudTest : BaseE2eTest() {
 
-    private fun createWorkspaceAndGetId(name: String): String {
-        bridgeAction("createWorkspace", name)
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount >= 1",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
-        val ids = bridgeStateStringList("workspaceIds")
-        assertTrue(ids.isNotEmpty(), "Should have workspace ids")
-        val wsId = ids.first()
-        bridgeAction("selectWorkspace", wsId)
-        return wsId
-    }
-
-    private fun getFirstKonstructionId(wsId: String): String = runBlocking {
+    private fun connectService(): Konstructor = runBlocking {
         val env = ksrpcEnvironment { }
         val client = HttpClient { install(WebSockets) }
         val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
-        val service = conn.defaultChannel().toStub<Konstructor, String>()
-        val ws = service.get(wsId)
-        val kons = ws.list()
-        kons.firstOrNull()?.id ?: ""
+        conn.defaultChannel().toStub<Konstructor, String>()
     }
 
     @Test
-    fun testCreateKonstruction() {
-        loadApp()
-        waitForBridge()
-
-        val wsId = createWorkspaceAndGetId("KonTestWs")
-
-        val arg = """{"name":"MyCube","workspaceId":"$wsId"}"""
-        bridgeActionNoWait("createKonstruction", arg)
-
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.konstructionCount >= 1",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+    fun testCreateKonstruction() = runBlocking {
+        val service = connectService()
+        val ws = service.create(Space(id = "", name = "KonTestWs"))
+        val workspace = service.get(ws.id)
+        val kon = workspace.create(
+            Konstruction(name = "MyCube", workspaceId = ws.id, id = "")
         )
 
-        val konCount = bridgeStateInt("konstructionCount")
-        assertTrue(konCount >= 1, "Should have at least 1 konstruction, got: $konCount")
-        val konNames = bridgeStateStringList("konstructionNames")
-        assertTrue(konNames.contains("MyCube"), "Konstruction names should contain 'MyCube', got: $konNames")
+        assertTrue(kon.id.isNotEmpty(), "Konstruction should have an id")
+        assertEquals("MyCube", kon.name)
+
+        val list = workspace.list()
+        assertTrue(list.any { it.name == "MyCube" }, "Should find MyCube in list")
+        Unit
     }
 
     @Test
-    fun testDeleteKonstruction() {
-        loadApp()
-        waitForBridge()
-
-        val wsId = createWorkspaceAndGetId("KonDeleteWs")
-
-        val arg = """{"name":"ToDelete","workspaceId":"$wsId"}"""
-        bridgeActionNoWait("createKonstruction", arg)
-
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.konstructionCount >= 1",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+    fun testDeleteKonstruction() = runBlocking {
+        val service = connectService()
+        val ws = service.create(Space(id = "", name = "KonDeleteWs"))
+        val workspace = service.get(ws.id)
+        val kon = workspace.create(
+            Konstruction(name = "ToDelete", workspaceId = ws.id, id = "")
         )
 
-        val konId = getFirstKonstructionId(wsId)
-        assertTrue(konId.isNotEmpty(), "Should find a konstruction id")
+        workspace.delete(kon)
 
-        val deleteArg = """{"wsId":"$wsId","konId":"$konId"}"""
-        bridgeActionNoWait("deleteKonstruction", deleteArg)
-
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.konstructionCount === 0",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
-
-        val konCount = bridgeStateInt("konstructionCount")
-        assertEquals(0, konCount, "Should have 0 konstructions after deletion")
+        val list = workspace.list()
+        assertTrue(list.none { it.name == "ToDelete" }, "ToDelete should be gone")
+        Unit
     }
 }

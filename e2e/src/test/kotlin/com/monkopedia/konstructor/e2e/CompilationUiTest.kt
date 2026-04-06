@@ -15,105 +15,62 @@
  */
 package com.monkopedia.konstructor.e2e
 
+import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.Konstructor
+import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.common.TaskStatus
 import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
 import com.monkopedia.ksrpc.toStub
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-
-@org.junit.Ignore("Bridge async actions timeout in headless - covered by BuildAndDownloadStlTest")
 class CompilationUiTest : BaseE2eTest() {
 
-    private val VALID_SCRIPT = listOf(
-        "val simpleCube by primitive {",
-        "    cube {",
-        "        dimensions = xyz(10.0, 10.0, 10.0)",
-        "    }",
-        "}",
-        "export(\"simpleCube\")"
-    ).joinToString("\n")
-
-    private fun createWsAndKon(wsName: String, konName: String): Pair<String, String> {
-        bridgeAction("createWorkspace", wsName)
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount >= 1",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
-        val wsId = bridgeStateStringList("workspaceIds").first()
-        bridgeAction("selectWorkspace", wsId)
-
-        val createArg = """{"name":"$konName","workspaceId":"$wsId"}"""
-        bridgeActionNoWait("createKonstruction", createArg)
-        page.waitForTimeout(2000.0)
-
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.konstructionCount >= 1",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
-
-        val konId = runBlocking {
-            val env = ksrpcEnvironment { }
-            val client = HttpClient { install(WebSockets) }
-            val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
-            val service = conn.defaultChannel().toStub<Konstructor, String>()
-            val ws = service.get(wsId)
-            ws.list().first().id
+    private val VALID_SCRIPT = """
+        val simpleCube by primitive {
+            cube {
+                dimensions = xyz(10.0, 10.0, 10.0)
+            }
         }
-        return wsId to konId
+        export("simpleCube")
+    """.trimIndent()
+
+    private fun connectService(): Konstructor = runBlocking {
+        val env = ksrpcEnvironment { }
+        val client = HttpClient { install(WebSockets) }
+        val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
+        conn.defaultChannel().toStub<Konstructor, String>()
     }
 
     @Test
-    fun testSuccessfulCompilation() {
-        loadApp()
-        waitForBridge()
-
-        val (wsId, konId) = createWsAndKon("CompileWs", "CompileTest")
-
-        // Set content via bridge
-        val setArg = """{"wsId":"$wsId","konId":"$konId","content":${jsonString(VALID_SCRIPT)}}"""
-        bridgeActionNoWait("setContent", setArg)
-        page.waitForTimeout(2000.0)
-
-        // Compile via bridge
-        val compileArg = """{"wsId":"$wsId","konId":"$konId"}"""
-        bridgeActionNoWait("compile", compileArg)
-        page.waitForTimeout(5000.0)
-
-        val result = bridgeLastResultObject()
-        val status = result["status"]?.jsonPrimitive?.content ?: ""
-        assertEquals("SUCCESS", status, "Should compile successfully. Result: $result")
+    fun testSuccessfulCompilation() = runBlocking {
+        val service = connectService()
+        val ws = service.create(Space(id = "", name = "CompileWs"))
+        val workspace = service.get(ws.id)
+        val kon = workspace.create(Konstruction(name = "CompileTest", workspaceId = ws.id, id = ""))
+        val ks = service.konstruction(kon)
+        ks.set(VALID_SCRIPT)
+        val result = ks.compile()
+        assertEquals(TaskStatus.SUCCESS, result.status, "Compilation failed: ${result.messages}")
+        Unit
     }
 
     @Test
-    fun testCompilationError() {
-        loadApp()
-        waitForBridge()
-
-        val (wsId, konId) = createWsAndKon("ErrorWs", "ErrorTest")
-
-        // Set invalid content
-        val setArg = """{"wsId":"$wsId","konId":"$konId","content":"this is not valid kotlin!!!"}"""
-        bridgeActionNoWait("setContent", setArg)
-        page.waitForTimeout(2000.0)
-
-        // Compile
-        val compileArg = """{"wsId":"$wsId","konId":"$konId"}"""
-        bridgeActionNoWait("compile", compileArg)
-        page.waitForTimeout(5000.0)
-
-        val result = bridgeLastResultObject()
-        val status = result["status"]?.jsonPrimitive?.content ?: ""
-        assertEquals("FAILURE", status, "Invalid code should fail compilation. Result: $result")
-        val messages = result["messages"]?.toString() ?: "[]"
-        assertTrue(messages.length > 2, "Should have error messages. Got: $messages")
+    fun testCompilationError() = runBlocking {
+        val service = connectService()
+        val ws = service.create(Space(id = "", name = "ErrorWs"))
+        val workspace = service.get(ws.id)
+        val kon = workspace.create(Konstruction(name = "ErrorTest", workspaceId = ws.id, id = ""))
+        val ks = service.konstruction(kon)
+        ks.set("this is not valid kotlin!!!")
+        val result = ks.compile()
+        assertEquals(TaskStatus.FAILURE, result.status)
+        assertTrue(result.messages.isNotEmpty(), "Should have error messages")
+        Unit
     }
 }
