@@ -74,7 +74,22 @@ class KonstructionViewModel(
                 _info.value = ks.getInfo()
                 _state.value = UiState.DEFAULT
                 registerListener(ks)
+                // Auto-compile and build on load (matching old behavior)
+                autoCompileAndBuild(ks)
             } catch (e: Exception) {
+                _state.value = UiState.DEFAULT
+            }
+        }
+    }
+
+    private fun autoCompileAndBuild(ks: KonstructionService) {
+        viewModelScope.launch {
+            try {
+                _state.value = UiState.COMPILING
+                ks.requestCompile()
+                // requestCompile is async on server — the listener will get
+                // task complete and info change callbacks
+            } catch (_: Exception) {
                 _state.value = UiState.DEFAULT
             }
         }
@@ -88,23 +103,49 @@ class KonstructionViewModel(
                         KonstructionCallbacks.INFO_CHANGE,
                         KonstructionCallbacks.DIRTY_CHANGE,
                         KonstructionCallbacks.CONTENT_CHANGE,
-                        KonstructionCallbacks.TASK_COMPLETE
+                        KonstructionCallbacks.TASK_COMPLETE,
+                        KonstructionCallbacks.RENDER_CHANGE
                     )
                 }
 
                 override suspend fun onInfoChanged(info: KonstructionInfo) {
                     _info.value = info
+                    // Auto-build when compile succeeds and targets need execution
+                    if (info.dirtyState == com.monkopedia.konstructor.common.DirtyState.NEEDS_EXEC) {
+                        _state.value = UiState.EXECUTING
+                        try {
+                            ks.requestKonstructs(info.targets.map { it.name })
+                        } catch (_: Exception) {
+                            _state.value = UiState.DEFAULT
+                        }
+                    } else if (info.dirtyState == com.monkopedia.konstructor.common.DirtyState.CLEAN) {
+                        _state.value = UiState.DEFAULT
+                        // Update render paths for clean targets
+                        info.targets.filter {
+                            it.state == com.monkopedia.konstructor.common.DirtyState.CLEAN
+                        }.forEach { target ->
+                            try {
+                                val path = ks.konstructed(target.name)
+                                if (path != null) {
+                                    _renderPath.value = path
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
                 }
 
                 override suspend fun onDirtyStateChanged(
                     state: com.monkopedia.konstructor.common.DirtyState
                 ) {
-                    // Update info with new dirty state
                     _info.value = _info.value?.copy(dirtyState = state)
                 }
 
                 override suspend fun onTargetChanged(target: KonstructionTarget) {
-                    // Update info targets
+                    val info = _info.value ?: return
+                    val newTargets = info.targets.map {
+                        if (it.name == target.name) target else it
+                    }
+                    _info.value = info.copy(targets = newTargets)
                 }
 
                 override suspend fun onRenderChanged(render: KonstructionRender) {
@@ -128,6 +169,10 @@ class KonstructionViewModel(
         }
     }
 
+    /**
+     * Save content, then auto-compile and auto-build (matching old behavior).
+     * Flow: save → compile → build all exports → update renders
+     */
     fun save(text: String) {
         viewModelScope.launch {
             val ks = konstructionService ?: return@launch
@@ -135,7 +180,40 @@ class KonstructionViewModel(
             try {
                 ks.set(text)
                 _content.value = text
+            } catch (_: Exception) {
                 _state.value = UiState.DEFAULT
+                return@launch
+            }
+
+            // Auto-compile after save
+            _state.value = UiState.COMPILING
+            _messages.value = emptyList()
+            try {
+                val compileResult = ks.compile()
+                _messages.value = compileResult.messages
+                if (compileResult.status != TaskStatus.SUCCESS) {
+                    _state.value = UiState.DEFAULT
+                    return@launch
+                }
+                _info.value = ks.getInfo()
+            } catch (_: Exception) {
+                _state.value = UiState.DEFAULT
+                return@launch
+            }
+
+            // Auto-build all export targets after successful compile
+            _state.value = UiState.EXECUTING
+            try {
+                val info = _info.value
+                val targets = info?.targets?.map { it.name } ?: emptyList()
+                if (targets.isNotEmpty()) {
+                    ks.requestKonstructs(targets)
+                } else {
+                    // No known targets — request build with empty list
+                    // which builds all exports
+                    ks.requestKonstructs(emptyList())
+                }
+                // Don't set DEFAULT here — onTaskComplete callback will do it
             } catch (_: Exception) {
                 _state.value = UiState.DEFAULT
             }
