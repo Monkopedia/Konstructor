@@ -55,7 +55,7 @@ abstract class BaseE2eTest {
         }
         page = browser!!.newPage()
         page.onConsoleMessage { msg ->
-            if (msg.type() == "error" || msg.type() == "warning") {
+            if (msg.type() == "error" || msg.type() == "warning" || msg.type() == "log") {
                 System.err.println("[browser:${msg.type()}] ${msg.text()}")
             }
         }
