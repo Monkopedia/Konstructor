@@ -21,8 +21,8 @@ import kotlinx.browser.document
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    val body = document.body ?: return
-    ComposeViewport(body) {
+    val composePane = document.getElementById("compose-pane") ?: document.body ?: return
+    ComposeViewport(composePane) {
         KonstruktorApp()
     }
 }

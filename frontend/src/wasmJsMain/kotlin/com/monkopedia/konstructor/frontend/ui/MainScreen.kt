@@ -15,8 +15,6 @@
  */
 package com.monkopedia.konstructor.frontend.ui
 
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -56,14 +54,10 @@ fun MainScreen() {
         SyncConflictDialog()
     }
 
-    // Main layout: 50/50 split
-    Row(modifier = Modifier.fillMaxSize()) {
-        if (showCodeLeft) {
-            ContentPane(modifier = Modifier.weight(1f).fillMaxHeight())
-            GlPlaceholder(modifier = Modifier.weight(1f).fillMaxHeight())
-        } else {
-            GlPlaceholder(modifier = Modifier.weight(1f).fillMaxHeight())
-            ContentPane(modifier = Modifier.weight(1f).fillMaxHeight())
-        }
-    }
+    // Three.js renders in a separate HTML div (#gl-pane)
+    // Compose only renders the content pane
+    ContentPane(modifier = Modifier.fillMaxSize())
+
+    // Initialize the Three.js renderer for the GL pane
+    InitGlRenderer()
 }

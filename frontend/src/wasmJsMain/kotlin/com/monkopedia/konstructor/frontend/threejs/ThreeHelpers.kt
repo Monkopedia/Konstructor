@@ -44,12 +44,15 @@ external fun getElementById(id: String): JsAny?
     if (!canvas) {
         canvas = document.createElement('canvas');
         canvas.id = id;
-        canvas.style.position = 'absolute';
-        canvas.style.top = '0';
-        canvas.style.left = '0';
-        canvas.style.pointerEvents = 'auto';
-        canvas.style.zIndex = '10';
-        document.body.appendChild(canvas);
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.display = 'block';
+        var glPane = document.getElementById('gl-pane');
+        if (glPane) {
+            glPane.appendChild(canvas);
+        } else {
+            document.body.appendChild(canvas);
+        }
     }
     return canvas;
 }"""
@@ -99,3 +102,9 @@ external fun consoleLog(msg: String)
 
 @JsFun("(msg) => console.error(msg)")
 external fun consoleError(msg: String)
+
+@JsFun("(id) => { var el = document.getElementById(id); return el ? el.clientWidth : 0; }")
+external fun getContainerWidth(id: String): Int
+
+@JsFun("(id) => { var el = document.getElementById(id); return el ? el.clientHeight : 0; }")
+external fun getContainerHeight(id: String): Int
