@@ -31,8 +31,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -68,13 +70,21 @@ fun NavigationPane(modifier: Modifier = Modifier) {
     LazyColumn(modifier = modifier.padding(8.dp)) {
         val spaceList = workspaces ?: emptyList()
         items(spaceList, key = { it.id }) { space ->
+            var isExpanded by remember(space.id) {
+                mutableStateOf(space.id == selectedWorkspaceId)
+            }
             WorkspaceItem(
                 space = space,
-                isExpanded = space.id == selectedWorkspaceId,
+                isExpanded = isExpanded,
                 konstructions = if (space.id == selectedWorkspaceId) konstructions else emptyList(),
                 onExpand = {
-                    spaceListVm.selectWorkspace(space.id)
-                    workspaceVm.loadWorkspace(space.id)
+                    if (space.id != selectedWorkspaceId) {
+                        spaceListVm.selectWorkspace(space.id)
+                        workspaceVm.loadWorkspace(space.id)
+                        isExpanded = true
+                    } else {
+                        isExpanded = !isExpanded
+                    }
                 },
                 onEditSpace = { dialogVm.showEditWorkspaceDialog(space) },
                 onSelectKonstruction = { k ->
@@ -83,7 +93,11 @@ fun NavigationPane(modifier: Modifier = Modifier) {
                 },
                 onEditKonstruction = { k -> dialogVm.showEditKonstructionDialog(k) },
                 onAddKonstruction = { dialogVm.showCreateKonstructionDialog(space.id) },
-                onUploadStl = { /* Phase 2: file picker */ }
+                onUploadStl = {
+                    kotlinx.browser.window.alert(
+                        "STL upload is not yet available. Use 'Add new konstruction' to create script-based models."
+                    )
+                }
             )
         }
 
@@ -134,9 +148,14 @@ private fun WorkspaceItem(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
-                imageVector = if (isExpanded) Icons.Filled.Menu else Icons.Filled.Home,
+                imageVector = Icons.Filled.Folder,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 text = space.name,
@@ -194,7 +213,7 @@ private fun WorkspaceItem(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Add,
+                    imageVector = Icons.Filled.Upload,
                     contentDescription = "Upload STL",
                     tint = MaterialTheme.colorScheme.secondary
                 )

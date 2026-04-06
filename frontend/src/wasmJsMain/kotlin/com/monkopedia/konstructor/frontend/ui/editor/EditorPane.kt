@@ -41,14 +41,26 @@ import com.monkopedia.kodemirror.view.rememberEditorSession
 import com.monkopedia.kodemirror.view.setDoc
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.UiState
+import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun EditorPane(modifier: Modifier = Modifier) {
     val konstructionVm = koinViewModel<KonstructionViewModel>()
+    val workspaceVm = koinViewModel<WorkspaceViewModel>()
+    val selectedKonId by workspaceVm.selectedKonstructionId.collectAsState()
+    val konstructions by workspaceVm.konstructions.collectAsState()
     val content by konstructionVm.content.collectAsState()
     val uiState by konstructionVm.state.collectAsState()
     val messages by konstructionVm.messages.collectAsState()
+
+    // Load konstruction content when selection changes
+    LaunchedEffect(selectedKonId, konstructions) {
+        val k = konstructions.firstOrNull { it.id == selectedKonId }
+        if (k != null) {
+            konstructionVm.loadKonstruction(k)
+        }
+    }
 
     val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
     val extensions = remember { basicSetup + oneDark + kotlinLang }

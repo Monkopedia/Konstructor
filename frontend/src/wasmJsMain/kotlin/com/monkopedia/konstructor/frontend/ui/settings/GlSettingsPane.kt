@@ -59,7 +59,27 @@ fun GlSettingsPane(modifier: Modifier = Modifier) {
         )
 
         Text(
-            text = "Directional lights will be configurable in Phase 2.",
+            text = "Directional Lights",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Default 3-point lighting active",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "Key light: front-right (intensity 0.8)",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "Fill light: front-left (intensity 0.4)",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "Back light: rear-top (intensity 0.3)",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

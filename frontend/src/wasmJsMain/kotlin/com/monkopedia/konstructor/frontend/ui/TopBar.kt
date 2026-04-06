@@ -25,9 +25,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -95,7 +95,7 @@ fun TopBar() {
                 settingsVm.setCodePaneMode(CodePaneMode.SELECTION)
             }) {
                 Icon(
-                    imageVector = Icons.Filled.Check,
+                    imageVector = Icons.Filled.Checklist,
                     contentDescription = "Selection"
                 )
             }
@@ -103,7 +103,7 @@ fun TopBar() {
                 settingsVm.setCodePaneMode(CodePaneMode.GL_SETTINGS)
             }) {
                 Icon(
-                    imageVector = Icons.Filled.Star,
+                    imageVector = Icons.Filled.WbSunny,
                     contentDescription = "Lighting"
                 )
             }

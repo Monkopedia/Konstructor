@@ -27,12 +27,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.monkopedia.konstructor.common.KonstructionTarget
@@ -76,6 +79,8 @@ fun SelectionPane(modifier: Modifier = Modifier) {
 
 @Composable
 private fun RenderTargetRow(target: KonstructionTarget) {
+    var enabled by remember(target.name) { mutableStateOf(true) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -89,23 +94,27 @@ private fun RenderTargetRow(target: KonstructionTarget) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
-        IconButton(onClick = { /* Phase 2: download STL */ }) {
+        IconButton(onClick = {
+            kotlinx.browser.window.alert("Download for '${target.name}' will trigger a build and download the STL output.")
+        }) {
             Icon(
-                imageVector = Icons.Filled.Info,
+                imageVector = Icons.Filled.Download,
                 contentDescription = "Download ${target.name}",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        IconButton(onClick = { /* Phase 2: color picker */ }) {
+        IconButton(onClick = {
+            kotlinx.browser.window.alert("Color picker for '${target.name}' is not yet available.")
+        }) {
             Icon(
-                imageVector = Icons.Filled.Star,
+                imageVector = Icons.Filled.ColorLens,
                 contentDescription = "Color for ${target.name}",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Switch(
-            checked = true,
-            onCheckedChange = { /* Phase 2: enable/disable render target */ }
+            checked = enabled,
+            onCheckedChange = { enabled = it }
         )
     }
 }

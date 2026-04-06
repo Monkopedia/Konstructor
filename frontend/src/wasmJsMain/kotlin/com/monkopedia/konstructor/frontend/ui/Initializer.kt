@@ -31,6 +31,9 @@ fun Initializer() {
     val workspaceVm = koinViewModel<WorkspaceViewModel>()
     val dialogVm = koinViewModel<NavigationDialogViewModel>()
     val workspaces by spaceListVm.workspaces.collectAsState()
+    val selectedWorkspaceId by spaceListVm.selectedWorkspaceId.collectAsState()
+    val konstructions by workspaceVm.konstructions.collectAsState()
+    val selectedKonstructionId by workspaceVm.selectedKonstructionId.collectAsState()
     val dialogState by dialogVm.dialogState.collectAsState()
 
     // Wire up mutation callback so dialogs can trigger list refreshes
@@ -38,6 +41,23 @@ fun Initializer() {
         dialogVm.onMutation = {
             spaceListVm.refreshWorkspaces()
             workspaceVm.refreshKonstructions()
+        }
+    }
+
+    // Auto-select first workspace on startup
+    LaunchedEffect(workspaces) {
+        val ws = workspaces
+        if (ws != null && ws.isNotEmpty() && selectedWorkspaceId == null) {
+            val firstWs = ws.first()
+            spaceListVm.selectWorkspace(firstWs.id)
+            workspaceVm.loadWorkspace(firstWs.id)
+        }
+    }
+
+    // Auto-select first konstruction when workspace loads
+    LaunchedEffect(konstructions) {
+        if (konstructions.isNotEmpty() && selectedKonstructionId == null) {
+            workspaceVm.selectKonstruction(konstructions.first().id)
         }
     }
 
