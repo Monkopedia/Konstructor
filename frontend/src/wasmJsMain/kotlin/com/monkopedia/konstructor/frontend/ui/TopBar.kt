@@ -52,15 +52,21 @@ fun TopBar() {
         .firstOrNull { it.id == selectedKonstructionId }
         ?.name ?: ""
 
-    val titleText = buildString {
-        if (workspaceName.isNotEmpty()) {
-            append(workspaceName)
-            if (konstructionName.isNotEmpty()) {
-                append(" > ")
-                append(konstructionName)
+    val titleText = when (codePaneMode) {
+        CodePaneMode.NAVIGATION -> "Select konstruction"
+        CodePaneMode.SETTINGS -> "Settings"
+        CodePaneMode.GL_SETTINGS -> "Lights"
+        CodePaneMode.SELECTION -> "Targets"
+        CodePaneMode.EDITOR -> buildString {
+            if (workspaceName.isNotEmpty()) {
+                append(workspaceName)
+                if (konstructionName.isNotEmpty()) {
+                    append(" > ")
+                    append(konstructionName)
+                }
+            } else {
+                append("Konstructor")
             }
-        } else {
-            append("Konstructor")
         }
     }
 

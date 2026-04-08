@@ -53,8 +53,10 @@ private fun InstallTestBridge() {
     val serviceHolder = koinInject<com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder>()
     val spaceListVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel>()
     val settingsVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel>()
+    val konstructionVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel>()
+    val workspaceVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel>()
 
     LaunchedEffect(Unit) {
-        TestBridge.install(scope, serviceHolder, spaceListVm, settingsVm)
+        TestBridge.install(scope, serviceHolder, spaceListVm, settingsVm, konstructionVm, workspaceVm)
     }
 }

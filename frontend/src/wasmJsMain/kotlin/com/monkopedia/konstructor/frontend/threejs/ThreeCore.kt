@@ -111,3 +111,7 @@ external class WebGLRenderer(
     fun setPixelRatio(ratio: Double)
     fun dispose()
 }
+
+external class AxesHelper(
+    size: Double = definedExternally
+) : Object3D

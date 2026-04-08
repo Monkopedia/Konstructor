@@ -54,6 +54,14 @@ fun Initializer() {
         }
     }
 
+    // Load workspace when selection changes (e.g., from bridge or navigation)
+    LaunchedEffect(selectedWorkspaceId) {
+        val wsId = selectedWorkspaceId
+        if (wsId != null) {
+            workspaceVm.loadWorkspace(wsId)
+        }
+    }
+
     // Auto-select first konstruction when workspace loads
     LaunchedEffect(konstructions) {
         if (konstructions.isNotEmpty() && selectedKonstructionId == null) {

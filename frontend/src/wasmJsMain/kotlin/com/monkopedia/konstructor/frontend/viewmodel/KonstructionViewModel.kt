@@ -63,20 +63,65 @@ class KonstructionViewModel(
     private var listenerKey: String? = null
 
     fun loadKonstruction(konstruction: Konstruction) {
+        com.monkopedia.konstructor.frontend.threejs.consoleLog(
+            "loadKonstruction(${konstruction.name}) serviceHolder.service.value=${serviceHolder.service.value != null}"
+        )
         viewModelScope.launch {
             _state.value = UiState.LOADING
             _renderPath.value = null
-            val service = serviceHolder.service.value ?: return@launch
+            val service = serviceHolder.service.value
+            if (service == null) {
+                com.monkopedia.konstructor.frontend.threejs.consoleError(
+                    "loadKonstruction failed: service is null"
+                )
+                _state.value = UiState.DEFAULT
+                return@launch
+            }
             try {
+                com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: getting service...")
                 val ks = service.konstruction(konstruction)
                 konstructionService = ks
+
+                // STL files: show directly in 3D pane, no editor content
+                if (konstruction.type == com.monkopedia.konstructor.common.KonstructionType.STL) {
+                    _content.value = ""
+                    _info.value = null
+                    _state.value = UiState.DEFAULT
+                    val stlPath = "model/${konstruction.workspaceId}/${konstruction.id}/content.csgs"
+                    com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: STL file, renderPath=$stlPath")
+                    _renderPath.value = stlPath
+                    return@launch
+                }
+
+                com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: fetching content...")
                 _content.value = ks.fetch()
+                com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: content length=${_content.value.length}")
                 _info.value = ks.getInfo()
+                com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: got info, dirtyState=${_info.value?.dirtyState}")
                 _state.value = UiState.DEFAULT
                 registerListener(ks)
-                // Auto-compile and build on load (matching old behavior)
-                autoCompileAndBuild(ks)
+                com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: listener registered")
+                // If already CLEAN with targets, fetch existing render paths
+                val info = _info.value
+                if (info != null && info.dirtyState == com.monkopedia.konstructor.common.DirtyState.CLEAN) {
+                    for (target in info.targets) {
+                        if (target.state == com.monkopedia.konstructor.common.DirtyState.CLEAN) {
+                            try {
+                                val path = ks.konstructed(target.name)
+                                if (path != null) {
+                                    com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: found existing render: $path")
+                                    _renderPath.value = path
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
+                } else {
+                    // Not clean — trigger compile/build
+                    com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: starting auto-compile")
+                    autoCompileAndBuild(ks)
+                }
             } catch (e: Exception) {
+                com.monkopedia.konstructor.frontend.threejs.consoleError("loadKonstruction failed: ${e.message}")
                 _state.value = UiState.DEFAULT
             }
         }
@@ -174,13 +219,25 @@ class KonstructionViewModel(
      * Flow: save → compile → build all exports → update renders
      */
     fun save(text: String) {
+        com.monkopedia.konstructor.frontend.threejs.consoleLog(
+            "KonstructionViewModel.save() called, konstructionService=${konstructionService != null}, text.length=${text.length}"
+        )
         viewModelScope.launch {
-            val ks = konstructionService ?: return@launch
+            val ks = konstructionService
+            if (ks == null) {
+                com.monkopedia.konstructor.frontend.threejs.consoleError(
+                    "KonstructionViewModel.save() failed: konstructionService is null"
+                )
+                return@launch
+            }
+            com.monkopedia.konstructor.frontend.threejs.consoleLog("save: setting content...")
             _state.value = UiState.SAVING
             try {
                 ks.set(text)
                 _content.value = text
-            } catch (_: Exception) {
+                com.monkopedia.konstructor.frontend.threejs.consoleLog("save: content set, compiling...")
+            } catch (e: Exception) {
+                com.monkopedia.konstructor.frontend.threejs.consoleError("save: set failed: ${e.message}")
                 _state.value = UiState.DEFAULT
                 return@launch
             }
@@ -191,30 +248,29 @@ class KonstructionViewModel(
             try {
                 val compileResult = ks.compile()
                 _messages.value = compileResult.messages
+                com.monkopedia.konstructor.frontend.threejs.consoleLog("save: compile result=${compileResult.status}, messages=${compileResult.messages.size}")
                 if (compileResult.status != TaskStatus.SUCCESS) {
                     _state.value = UiState.DEFAULT
                     return@launch
                 }
                 _info.value = ks.getInfo()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                com.monkopedia.konstructor.frontend.threejs.consoleError("save: compile failed: ${e.message}")
                 _state.value = UiState.DEFAULT
                 return@launch
             }
 
             // Auto-build all export targets after successful compile
             _state.value = UiState.EXECUTING
+            com.monkopedia.konstructor.frontend.threejs.consoleLog("save: building targets...")
             try {
                 val info = _info.value
                 val targets = info?.targets?.map { it.name } ?: emptyList()
-                if (targets.isNotEmpty()) {
-                    ks.requestKonstructs(targets)
-                } else {
-                    // No known targets — request build with empty list
-                    // which builds all exports
-                    ks.requestKonstructs(emptyList())
-                }
+                ks.requestKonstructs(targets)
+                com.monkopedia.konstructor.frontend.threejs.consoleLog("save: build requested for ${targets.size} targets")
                 // Don't set DEFAULT here — onTaskComplete callback will do it
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                com.monkopedia.konstructor.frontend.threejs.consoleError("save: build failed: ${e.message}")
                 _state.value = UiState.DEFAULT
             }
         }

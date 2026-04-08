@@ -37,14 +37,22 @@ import com.monkopedia.kodemirror.basicsetup.basicSetup
 import com.monkopedia.kodemirror.language.StreamLanguage
 import com.monkopedia.kodemirror.legacy.modes.kotlin
 import com.monkopedia.kodemirror.state.plus
-import com.monkopedia.kodemirror.themonedark.oneDark
+import com.monkopedia.kodemirror.themedracula.dracula
+import com.monkopedia.kodemirror.view.editorContentStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import konstructor.frontend.generated.resources.JetBrainsMono_Regular
+import konstructor.frontend.generated.resources.Res
+import org.jetbrains.compose.resources.Font
 import com.monkopedia.kodemirror.view.KodeMirror
 import com.monkopedia.kodemirror.state.asDoc
+import com.monkopedia.kodemirror.state.asInsert
 import com.monkopedia.kodemirror.view.KeyBinding
 import com.monkopedia.kodemirror.view.keymapOf
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.UiState
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
+import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -84,19 +92,34 @@ fun EditorPane(modifier: Modifier = Modifier) {
         }
 
         // Only render editor when we have a selected konstruction
-        // Use key() to force recreation when switching konstructions
-        if (selectedKonId != null) {
-            EditorContent(
-                content = content,
-                konstructionVm = konstructionVm,
-                selectedKonId = selectedKonId!!
-            )
-        } else {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Select a konstruction to edit", color = Color.Gray)
+        val selectedKonstruction = konstructions.firstOrNull { it.id == selectedKonId }
+        when {
+            selectedKonId == null -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Select a konstruction to edit", color = Color.Gray)
+                }
+            }
+            selectedKonstruction?.type == com.monkopedia.konstructor.common.KonstructionType.STL -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "STL file — view in 3D pane",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+            else -> {
+                EditorContent(
+                    content = content,
+                    konstructionVm = konstructionVm,
+                    selectedKonId = selectedKonId!!
+                )
             }
         }
     }
@@ -112,10 +135,12 @@ private fun EditorContent(
     val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
     val vimExt = remember { com.monkopedia.kodemirror.vim.vim() }
 
-    // Key the session on the konstruction ID AND the content hash
-    // so it recreates when content loads or when switching konstructions
-    val session = remember(selectedKonId, content) {
-        // Ctrl+S save keymap — also serves as the save action for vim :w
+    // Font must be loaded in composable context (not inside remember)
+    val monoFont = FontFamily(Font(Res.font.JetBrainsMono_Regular))
+    val fontExt = editorContentStyle.of(TextStyle(fontFamily = monoFont))
+
+    // Only recreate the session when switching to a different konstruction
+    val session = remember(selectedKonId, monoFont) {
         val saveKeymap = keymapOf(
             KeyBinding(
                 key = "Mod-s",
@@ -129,7 +154,7 @@ private fun EditorContent(
                 preventDefault = true
             )
         )
-        val extensions = basicSetup + oneDark + kotlinLang + vimExt + saveKeymap
+        val extensions = basicSetup + dracula + fontExt + kotlinLang + vimExt + saveKeymap
         val config = com.monkopedia.kodemirror.state.EditorStateConfig(
             doc = content.asDoc(),
             extensions = extensions
@@ -139,6 +164,39 @@ private fun EditorContent(
         )
     }
 
+    // When content changes externally (server load, not user save), update
+    // the editor document without recreating the session — preserves undo history.
+    LaunchedEffect(content) {
+        val currentDoc = session.state.doc.toString()
+        if (currentDoc != content && content.isNotEmpty()) {
+            session.dispatch(
+                com.monkopedia.kodemirror.state.TransactionSpec(
+                    changes = com.monkopedia.kodemirror.state.ChangeSpec.Single(
+                        from = com.monkopedia.kodemirror.state.DocPos.ZERO,
+                        to = com.monkopedia.kodemirror.state.DocPos(session.state.doc.length),
+                        insert = content.asInsert()
+                    )
+                )
+            )
+        }
+    }
+
+    // Global Ctrl+S fallback — updates callback when session changes
+    DisposableEffect(session) {
+        com.monkopedia.konstructor.frontend.threejs.setGlobalSaveCallback {
+            com.monkopedia.konstructor.frontend.threejs.consoleLog(
+                "Global save callback fired!"
+            )
+            val text = session.state.doc.toString()
+            scope.launch {
+                konstructionVm.save(text)
+            }
+        }
+        onDispose {
+            com.monkopedia.konstructor.frontend.threejs.clearGlobalSaveCallback()
+        }
+    }
+
     // Editor
     Box(modifier = Modifier.fillMaxSize()) {
         KodeMirror(
@@ -146,6 +204,8 @@ private fun EditorContent(
             modifier = Modifier.fillMaxSize()
         )
     }
+
+    // TODO: vim :w save support blocked on Monkopedia/kodemirror#12
 }
 
 @Composable

@@ -32,6 +32,9 @@ kotlin {
         browser()
         binaries.executable()
     }
+    sourceSets["commonMain"].dependencies {
+        implementation(compose.components.resources)
+    }
     sourceSets["wasmJsMain"].dependencies {
         // Compose
         implementation(compose.runtime)
@@ -54,10 +57,12 @@ kotlin {
         implementation("com.monkopedia.kodemirror:state")
         implementation("com.monkopedia.kodemirror:basic-setup")
         implementation("com.monkopedia.kodemirror:theme-one-dark")
+        implementation("com.monkopedia.kodemirror:theme-dracula")
         implementation("com.monkopedia.kodemirror:legacy-modes")
         implementation("com.monkopedia.kodemirror:vim:${libs.versions.kodemirror.get()}")
         implementation("com.monkopedia.kodemirror:commands")
         implementation("com.monkopedia.kodemirror:language")
+        implementation("com.monkopedia.kodemirror:lezer-highlight")
 
         // Network / RPC
         implementation(libs.ksrpc.ktor.client)

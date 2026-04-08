@@ -108,3 +108,68 @@ external fun getContainerWidth(id: String): Int
 
 @JsFun("(id) => { var el = document.getElementById(id); return el ? el.clientHeight : 0; }")
 external fun getContainerHeight(id: String): Int
+
+// Global Ctrl+S interceptor — installed once at startup, calls globalThis.__konstructor_save
+@JsFun(
+    """() => {
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[save-interceptor] Ctrl+S caught, callback=' +
+                (typeof globalThis.__konstructor_save));
+            if (globalThis.__konstructor_save) globalThis.__konstructor_save();
+        }
+    }, true);
+}"""
+)
+external fun installCtrlSListener()
+
+// FPS overlay — simple DOM element in #gl-pane
+@JsFun(
+    """(fps) => {
+    var el = document.getElementById('konstructor-fps');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'konstructor-fps';
+        el.style.cssText = 'position:absolute;top:4px;left:4px;color:#0f0;font:12px monospace;z-index:100;pointer-events:none;background:rgba(0,0,0,0.5);padding:2px 6px;border-radius:3px;';
+        var gl = document.getElementById('gl-pane');
+        if (gl) { gl.style.position = 'relative'; gl.appendChild(el); }
+    }
+    el.textContent = fps + ' FPS';
+}"""
+)
+external fun updateFpsOverlay(fps: Int)
+
+@JsFun(
+    """() => {
+    var el = document.getElementById('konstructor-fps');
+    if (el) el.remove();
+}"""
+)
+external fun hideFpsOverlay()
+
+
+@JsFun("(cb) => { globalThis.__konstructor_save = cb; }")
+external fun setGlobalSaveCallback(callback: () -> Unit)
+
+@JsFun("() => { globalThis.__konstructor_save = null; }")
+external fun clearGlobalSaveCallback()
+
+// Swap the flex order of gl-pane and compose-pane for "show code on left"
+@JsFun(
+    """(codeOnLeft) => {
+    var gl = document.getElementById('gl-pane');
+    var compose = document.getElementById('compose-pane');
+    if (gl && compose) {
+        if (codeOnLeft) {
+            compose.style.order = '0';
+            gl.style.order = '1';
+        } else {
+            gl.style.order = '0';
+            compose.style.order = '1';
+        }
+    }
+}"""
+)
+external fun setCodeOnLeft(codeOnLeft: Boolean)

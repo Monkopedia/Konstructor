@@ -49,7 +49,9 @@ object TestBridge {
         scope: CoroutineScope,
         serviceHolder: ServiceHolder,
         spaceListVm: SpaceListViewModel,
-        settingsVm: SettingsViewModel
+        settingsVm: SettingsViewModel,
+        konstructionVm: com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel? = null,
+        workspaceVm: com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel? = null
     ) {
         initBridge()
 
@@ -234,6 +236,23 @@ object TestBridge {
             settingsVm.setCodePaneMode(
                 com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode.valueOf(mode)
             )
+        }
+        exposeAction("selectKonstruction") { konId ->
+            workspaceVm?.selectKonstruction(konId)
+        }
+        exposeAction("triggerSave") { _ ->
+            scope.launch {
+                try {
+                    val content = konstructionVm?.content?.value ?: ""
+                    com.monkopedia.konstructor.frontend.threejs.consoleLog(
+                        "triggerSave bridge action: content.length=${content.length}"
+                    )
+                    konstructionVm?.save(content)
+                    incrementVersion()
+                } catch (e: Exception) {
+                    setError("triggerSave failed: ${e.message}")
+                }
+            }
         }
 
         val refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)

@@ -28,7 +28,7 @@ val KonstruktorColorScheme = darkColorScheme(
     surface = Color(0xFF1E1E1E),
     onSurface = Color.White,
     surfaceVariant = Color(0xFF2C2C2C),
-    onSurfaceVariant = Color(0xFFBBBBBB),
+    onSurfaceVariant = Color(0xFFFAFAFA),
     error = Color(0xFFCF6679),
     onError = Color.Black
 )

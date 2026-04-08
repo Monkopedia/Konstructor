@@ -28,11 +28,16 @@ class ThreeJsRenderer(private val canvasId: String) {
     private val directionalLight: DirectionalLight
 
     private var currentMesh: Mesh? = null
+    private var axesHelper: AxesHelper? = null
     private var animationFrameId: Int = 0
     private var disposed = false
 
     private var viewWidth = 1
     private var viewHeight = 1
+    private var showFps = false
+    private var lastFrameTime = 0.0
+    private var frameCount = 0
+    private var currentFps = 0
 
     init {
         renderer = WebGLRenderer(createRendererParamsWithCanvas(canvas))
@@ -127,12 +132,41 @@ class ThreeJsRenderer(private val canvasId: String) {
         }
     }
 
+    fun setShowFps(show: Boolean) {
+        showFps = show
+        if (!show) {
+            hideFpsOverlay()
+        }
+    }
+
+    fun setShowAxesHelper(show: Boolean) {
+        if (show && axesHelper == null) {
+            val helper = AxesHelper(50.0)
+            axesHelper = helper
+            scene.add(helper)
+        } else if (!show && axesHelper != null) {
+            scene.remove(axesHelper!!)
+            axesHelper = null
+        }
+    }
+
     private fun startAnimationLoop() {
         fun animate(time: Double) {
             if (disposed) return
             animationFrameId = requestAnimationFrame(::animate)
             controls.update()
             renderer.render(scene, camera)
+
+            if (showFps) {
+                frameCount++
+                val elapsed = time - lastFrameTime
+                if (elapsed >= 1000.0) {
+                    currentFps = (frameCount * 1000.0 / elapsed).toInt()
+                    frameCount = 0
+                    lastFrameTime = time
+                    updateFpsOverlay(currentFps)
+                }
+            }
         }
         animationFrameId = requestAnimationFrame(::animate)
     }
@@ -143,6 +177,8 @@ class ThreeJsRenderer(private val canvasId: String) {
             cancelAnimationFrame(animationFrameId)
         }
         clearModelInternal()
+        setShowAxesHelper(false)
+        hideFpsOverlay()
         controls.dispose()
         renderer.dispose()
         removeCanvas(canvas)

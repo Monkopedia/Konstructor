@@ -36,7 +36,11 @@ import org.koin.compose.koinInject
 @Composable
 fun InitGlRenderer() {
     val konstructionVm = koinInject<KonstructionViewModel>()
+    val settingsVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel>()
     val renderPath by konstructionVm.renderPath.collectAsState()
+    val showFps by settingsVm.showFps.collectAsState()
+    val showCameraWidget by settingsVm.showCameraWidget.collectAsState()
+    val showCodeLeft by settingsVm.showCodeLeft.collectAsState()
 
     var renderer by remember { mutableStateOf<ThreeJsRenderer?>(null) }
 
@@ -44,7 +48,6 @@ fun InitGlRenderer() {
         consoleLog("InitGlRenderer: creating ThreeJsRenderer")
         val r = ThreeJsRenderer("konstructor-gl-canvas")
         renderer = r
-        // Size to fill the gl-pane div
         r.fillContainer("gl-pane")
         onDispose {
             r.dispose()
@@ -61,5 +64,16 @@ fun InitGlRenderer() {
         } else if (r != null && path == null) {
             r.clearModel()
         }
+    }
+
+    // Wire settings to renderer
+    LaunchedEffect(renderer, showFps) {
+        renderer?.setShowFps(showFps)
+    }
+    LaunchedEffect(renderer, showCameraWidget) {
+        renderer?.setShowAxesHelper(showCameraWidget)
+    }
+    LaunchedEffect(showCodeLeft) {
+        com.monkopedia.konstructor.frontend.threejs.setCodeOnLeft(showCodeLeft)
     }
 }

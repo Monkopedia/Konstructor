@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.ViewInAr
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -239,13 +241,17 @@ private fun KonstructionItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(start = 40.dp, top = 4.dp, bottom = 4.dp, end = 12.dp),
+            .padding(start = 40.dp, top = 8.dp, bottom = 8.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(
-            imageVector = Icons.Filled.Edit,
-            contentDescription = null,
+            imageVector = if (konstruction.type == KonstructionType.STL) {
+                Icons.Filled.ViewInAr
+            } else {
+                Icons.Filled.Widgets
+            },
+            contentDescription = if (konstruction.type == KonstructionType.STL) "STL file" else "Script",
             tint = if (konstruction.type == KonstructionType.STL) {
                 MaterialTheme.colorScheme.secondary
             } else {
