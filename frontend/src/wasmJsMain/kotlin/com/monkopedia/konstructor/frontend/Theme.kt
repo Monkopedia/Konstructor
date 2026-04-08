@@ -15,10 +15,12 @@
  */
 package com.monkopedia.konstructor.frontend
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
-val KonstruktorColorScheme = darkColorScheme(
+val KonstruktorDarkColorScheme = darkColorScheme(
     primary = Color(0xFFFF5722),
     onPrimary = Color.White,
     secondary = Color(0xFFEEEEEE),
@@ -32,3 +34,21 @@ val KonstruktorColorScheme = darkColorScheme(
     error = Color(0xFFCF6679),
     onError = Color.Black
 )
+
+val KonstruktorLightColorScheme = lightColorScheme(
+    primary = Color(0xFFD84315),
+    onPrimary = Color.White,
+    secondary = Color(0xFF424242),
+    onSecondary = Color.White,
+    background = Color(0xFFFAFAFA),
+    onBackground = Color(0xFF1B1B1B),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF1B1B1B),
+    surfaceVariant = Color(0xFFF0F0F0),
+    onSurfaceVariant = Color(0xFF444444),
+    error = Color(0xFFB00020),
+    onError = Color.White
+)
+
+fun colorSchemeForDark(isDark: Boolean): ColorScheme =
+    if (isDark) KonstruktorDarkColorScheme else KonstruktorLightColorScheme

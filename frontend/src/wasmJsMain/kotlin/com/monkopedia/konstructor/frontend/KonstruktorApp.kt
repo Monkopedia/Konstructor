@@ -20,10 +20,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.monkopedia.konstructor.frontend.di.appModule
 import com.monkopedia.konstructor.frontend.ui.Initializer
+import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
+import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
 
@@ -35,7 +39,16 @@ fun KonstruktorApp() {
         // Install the test bridge for Playwright e2e testing
         InstallTestBridge()
 
-        MaterialTheme(colorScheme = KonstruktorColorScheme) {
+        val settingsVm = koinInject<SettingsViewModel>()
+        val editorTheme by settingsVm.editorTheme.collectAsState()
+
+        // Material theme follows the editor theme's light/dark preference
+        val isDark = when (editorTheme) {
+            EditorThemeName.MATERIAL -> true // Material auto defaults to dark
+            else -> editorTheme.isDark
+        }
+
+        MaterialTheme(colorScheme = colorSchemeForDark(isDark)) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background
@@ -49,10 +62,9 @@ fun KonstruktorApp() {
 @Composable
 private fun InstallTestBridge() {
     val scope = rememberCoroutineScope()
-    // Inject dependencies to initialize TestBridge
     val serviceHolder = koinInject<com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder>()
     val spaceListVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel>()
-    val settingsVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel>()
+    val settingsVm = koinInject<SettingsViewModel>()
     val konstructionVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel>()
     val workspaceVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel>()
 

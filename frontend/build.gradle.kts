@@ -58,6 +58,8 @@ kotlin {
         implementation("com.monkopedia.kodemirror:basic-setup")
         implementation("com.monkopedia.kodemirror:theme-one-dark")
         implementation("com.monkopedia.kodemirror:theme-dracula")
+        implementation("com.monkopedia.kodemirror:theme-github-light")
+        implementation("com.monkopedia.kodemirror:material-theme")
         implementation("com.monkopedia.kodemirror:legacy-modes")
         implementation("com.monkopedia.kodemirror:vim:${libs.versions.kodemirror.get()}")
         implementation("com.monkopedia.kodemirror:commands")

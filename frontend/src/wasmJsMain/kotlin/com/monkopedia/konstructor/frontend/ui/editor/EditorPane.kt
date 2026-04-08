@@ -33,27 +33,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.monkopedia.kodemirror.basicsetup.basicSetup
-import com.monkopedia.kodemirror.language.StreamLanguage
-import com.monkopedia.kodemirror.legacy.modes.kotlin
-import com.monkopedia.kodemirror.state.plus
-import com.monkopedia.kodemirror.themedracula.dracula
-import com.monkopedia.kodemirror.view.editorContentStyle
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import konstructor.frontend.generated.resources.JetBrainsMono_Regular
-import konstructor.frontend.generated.resources.Res
-import org.jetbrains.compose.resources.Font
-import com.monkopedia.kodemirror.view.KodeMirror
+import com.monkopedia.kodemirror.basicsetup.basicSetup
+import com.monkopedia.kodemirror.commands.emacsStyleKeymap
+import com.monkopedia.kodemirror.language.StreamLanguage
+import com.monkopedia.kodemirror.legacy.modes.kotlin
+import com.monkopedia.kodemirror.materialtheme.rememberMaterialEditorTheme
+import com.monkopedia.kodemirror.state.Extension
 import com.monkopedia.kodemirror.state.asDoc
 import com.monkopedia.kodemirror.state.asInsert
+import com.monkopedia.kodemirror.state.extensionListOf
+import com.monkopedia.kodemirror.state.plus
+import com.monkopedia.kodemirror.themedracula.dracula
+import com.monkopedia.kodemirror.themegithublight.gitHubLight
+import com.monkopedia.kodemirror.themonedark.oneDark
+import com.monkopedia.kodemirror.view.KodeMirror
 import com.monkopedia.kodemirror.view.KeyBinding
+import com.monkopedia.kodemirror.view.editorContentStyle
 import com.monkopedia.kodemirror.view.keymapOf
+import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
+import com.monkopedia.konstructor.frontend.viewmodel.KeymapName
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
+import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.UiState
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
-import androidx.compose.runtime.DisposableEffect
+import konstructor.frontend.generated.resources.JetBrainsMono_Regular
+import konstructor.frontend.generated.resources.Res
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.Font
 import org.koin.compose.koinInject
 
 @Composable
@@ -132,15 +141,34 @@ private fun EditorContent(
     selectedKonId: String
 ) {
     val scope = rememberCoroutineScope()
-    val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
-    val vimExt = remember { com.monkopedia.kodemirror.vim.vim() }
+    val settingsVm = koinInject<SettingsViewModel>()
+    val themeName by settingsVm.editorTheme.collectAsState()
+    val keymapName by settingsVm.keymap.collectAsState()
 
-    // Font must be loaded in composable context (not inside remember)
+    val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
+
+    // Font must be loaded in composable context
     val monoFont = FontFamily(Font(Res.font.JetBrainsMono_Regular))
     val fontExt = editorContentStyle.of(TextStyle(fontFamily = monoFont))
 
-    // Only recreate the session when switching to a different konstruction
-    val session = remember(selectedKonId, monoFont) {
+    // Theme extension — Material theme needs composable context
+    val materialTheme = rememberMaterialEditorTheme()
+    val themeExt: Extension = when (themeName) {
+        EditorThemeName.DRACULA -> dracula
+        EditorThemeName.ONE_DARK -> oneDark
+        EditorThemeName.GITHUB_LIGHT -> gitHubLight
+        EditorThemeName.MATERIAL -> materialTheme
+    }
+
+    // Keymap extension
+    val keymapExt: Extension = when (keymapName) {
+        KeymapName.VIM -> com.monkopedia.kodemirror.vim.vim()
+        KeymapName.EMACS -> keymapOf(*emacsStyleKeymap.toTypedArray())
+        KeymapName.DEFAULT -> extensionListOf() // basicSetup already includes default keymap
+    }
+
+    // Recreate session when konstruction, theme, or keymap changes
+    val session = remember(selectedKonId, themeName, keymapName, monoFont) {
         val saveKeymap = keymapOf(
             KeyBinding(
                 key = "Mod-s",
@@ -154,7 +182,7 @@ private fun EditorContent(
                 preventDefault = true
             )
         )
-        val extensions = basicSetup + dracula + fontExt + kotlinLang + vimExt + saveKeymap
+        val extensions = basicSetup + themeExt + fontExt + kotlinLang + keymapExt + saveKeymap
         val config = com.monkopedia.kodemirror.state.EditorStateConfig(
             doc = content.asDoc(),
             extensions = extensions

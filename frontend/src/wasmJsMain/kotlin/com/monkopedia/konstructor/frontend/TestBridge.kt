@@ -43,7 +43,7 @@ import kotlinx.serialization.json.jsonPrimitive
  *   page.keyboard.type("text")
  */
 object TestBridge {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     fun install(
         scope: CoroutineScope,
@@ -71,6 +71,18 @@ object TestBridge {
             settingsVm.setCodePaneMode(
                 com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode.valueOf(mode)
             )
+        }
+        exposeAction("setEditorTheme") { theme ->
+            settingsVm.setEditorTheme(
+                com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName.valueOf(theme)
+            )
+            incrementVersion()
+        }
+        exposeAction("setKeymap") { keymap ->
+            settingsVm.setKeymap(
+                com.monkopedia.konstructor.frontend.viewmodel.KeymapName.valueOf(keymap)
+            )
+            incrementVersion()
         }
         exposeAction("deleteWorkspace") { id ->
             scope.launch {
@@ -259,13 +271,20 @@ object TestBridge {
         refreshTriggerRef = refreshTrigger
 
         scope.launch {
+            // Combine settings into a single flow to stay within combine's 5-arg limit
+            val settingsFlow = combine(
+                settingsVm.codePaneMode,
+                settingsVm.editorTheme,
+                settingsVm.keymap
+            ) { mode, theme, keymap -> Triple(mode, theme, keymap) }
+
             combine(
                 serviceHolder.connected,
                 spaceListVm.workspaces,
                 spaceListVm.selectedWorkspaceId,
-                settingsVm.codePaneMode,
+                settingsFlow,
                 refreshTrigger
-            ) { connected, workspaces, selectedWsId, mode, _ ->
+            ) { connected, workspaces, selectedWsId, (mode, theme, keymap), _ ->
                 // Fetch konstructions for the selected workspace if possible
                 val konNames = if (selectedWsId != null && connected) {
                     try {
@@ -290,6 +309,8 @@ object TestBridge {
                     workspaceIds = workspaces?.map { it.id } ?: emptyList(),
                     selectedWorkspaceId = selectedWsId,
                     codePaneMode = mode.name,
+                    editorTheme = theme.name,
+                    keymap = keymap.name,
                     screen = when {
                         workspaces == null -> "loading"
                         workspaces.isEmpty() -> "empty"
@@ -359,6 +380,8 @@ object TestBridge {
         val workspaceIds: List<String> = emptyList(),
         val selectedWorkspaceId: String? = null,
         val codePaneMode: String = "EDITOR",
+        val editorTheme: String = "DRACULA",
+        val keymap: String = "VIM",
         val screen: String = "loading",
         val konstructionCount: Int = 0,
         val konstructionNames: List<String> = emptyList()

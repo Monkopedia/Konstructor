@@ -28,12 +28,31 @@ enum class CodePaneMode {
     SELECTION
 }
 
+enum class EditorThemeName(val displayName: String, val isDark: Boolean) {
+    DRACULA("Dracula", true),
+    ONE_DARK("One Dark", true),
+    GITHUB_LIGHT("GitHub Light", false),
+    MATERIAL("Material (auto)", true)
+}
+
+enum class KeymapName(val displayName: String) {
+    DEFAULT("Default"),
+    VIM("Vim"),
+    EMACS("Emacs")
+}
+
 class SettingsViewModel {
 
     private val storage = window.localStorage
 
     private val _codePaneMode = MutableStateFlow(CodePaneMode.EDITOR)
     val codePaneMode: StateFlow<CodePaneMode> = _codePaneMode.asStateFlow()
+
+    private val _editorTheme = MutableStateFlow(loadEnum("editorTheme", EditorThemeName.DRACULA))
+    val editorTheme: StateFlow<EditorThemeName> = _editorTheme.asStateFlow()
+
+    private val _keymap = MutableStateFlow(loadEnum("keymap", KeymapName.VIM))
+    val keymap: StateFlow<KeymapName> = _keymap.asStateFlow()
 
     private val _showCodeLeft = MutableStateFlow(loadBoolean("showCodeLeft", false))
     val showCodeLeft: StateFlow<Boolean> = _showCodeLeft.asStateFlow()
@@ -49,6 +68,16 @@ class SettingsViewModel {
 
     fun setCodePaneMode(mode: CodePaneMode) {
         _codePaneMode.value = mode
+    }
+
+    fun setEditorTheme(theme: EditorThemeName) {
+        _editorTheme.value = theme
+        saveString("editorTheme", theme.name)
+    }
+
+    fun setKeymap(keymap: KeymapName) {
+        _keymap.value = keymap
+        saveString("keymap", keymap.name)
     }
 
     fun setShowCodeLeft(value: Boolean) {
@@ -85,5 +114,18 @@ class SettingsViewModel {
 
     private fun saveFloat(key: String, value: Float) {
         storage.setItem("konstructor.$key", value.toString())
+    }
+
+    private fun saveString(key: String, value: String) {
+        storage.setItem("konstructor.$key", value)
+    }
+
+    private inline fun <reified T : Enum<T>> loadEnum(key: String, default: T): T {
+        val name = storage.getItem("konstructor.$key") ?: return default
+        return try {
+            enumValueOf<T>(name)
+        } catch (_: IllegalArgumentException) {
+            default
+        }
     }
 }
