@@ -86,17 +86,17 @@ class ThemeAndKeymapTest : BaseE2eTest() {
         assertEquals("ONE_DARK", bridgeStateString("editorTheme"))
         screenshot("theme-one-dark")
 
-        // Switch to GitHub Light
-        bridgeAction("setEditorTheme", "GITHUB_LIGHT")
+        // Switch to a light theme
+        bridgeAction("setEditorTheme", "SOLARIZED_LIGHT")
         page.waitForTimeout(3000.0)
-        assertEquals("GITHUB_LIGHT", bridgeStateString("editorTheme"))
-        screenshot("theme-github-light")
+        assertEquals("SOLARIZED_LIGHT", bridgeStateString("editorTheme"))
+        screenshot("theme-solarized-light")
 
-        // Switch to Material
-        bridgeAction("setEditorTheme", "MATERIAL")
+        // Switch to another dark theme
+        bridgeAction("setEditorTheme", "COBALT")
         page.waitForTimeout(3000.0)
-        assertEquals("MATERIAL", bridgeStateString("editorTheme"))
-        screenshot("theme-material")
+        assertEquals("COBALT", bridgeStateString("editorTheme"))
+        screenshot("theme-cobalt")
 
         // Switch back to Dracula
         bridgeAction("setEditorTheme", "DRACULA")

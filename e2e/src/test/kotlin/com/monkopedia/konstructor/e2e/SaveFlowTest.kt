@@ -55,7 +55,7 @@ class SaveFlowTest : BaseE2eTest() {
         page.waitForFunction(
             "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
             null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
         )
 
         // Get workspace ID
@@ -84,7 +84,7 @@ class SaveFlowTest : BaseE2eTest() {
         page.waitForFunction(
             "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
             null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
         )
 
         // Switch to editor

@@ -21,9 +21,6 @@ import kotlinx.browser.document
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    // Install global Ctrl+S interceptor — callback is set/updated by EditorPane
-    com.monkopedia.konstructor.frontend.threejs.installCtrlSListener()
-
     val composePane = document.getElementById("compose-pane") ?: document.body ?: return
     ComposeViewport(composePane) {
         KonstruktorApp()

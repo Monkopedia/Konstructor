@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import com.monkopedia.kodemirror.basicsetup.basicSetup
@@ -46,13 +45,28 @@ import com.monkopedia.kodemirror.state.asDoc
 import com.monkopedia.kodemirror.state.asInsert
 import com.monkopedia.kodemirror.state.extensionListOf
 import com.monkopedia.kodemirror.state.plus
+import com.monkopedia.kodemirror.themeamy.amy
+import com.monkopedia.kodemirror.themeayulight.ayuLight
+import com.monkopedia.kodemirror.themebarf.barf
+import com.monkopedia.kodemirror.themebespin.bespin
+import com.monkopedia.kodemirror.themebirdsofparadise.birdsOfParadise
+import com.monkopedia.kodemirror.themeboysandgirls.boysAndGirls
+import com.monkopedia.kodemirror.themeclouds.clouds
+import com.monkopedia.kodemirror.themecobalt.cobalt
+import com.monkopedia.kodemirror.themecoolglow.coolGlow
 import com.monkopedia.kodemirror.themedracula.dracula
-import com.monkopedia.kodemirror.themegithublight.gitHubLight
+import com.monkopedia.kodemirror.themeespresso.espresso
+import com.monkopedia.kodemirror.themenoctislilac.noctisLilac
 import com.monkopedia.kodemirror.themonedark.oneDark
+import com.monkopedia.kodemirror.themerosepinedawn.rosePineDawn
+import com.monkopedia.kodemirror.themesmoothy.smoothy
+import com.monkopedia.kodemirror.themesolarizedlight.solarizedLight
+import com.monkopedia.kodemirror.themetomorrow.tomorrow
 import com.monkopedia.kodemirror.view.KodeMirror
-import com.monkopedia.kodemirror.view.KeyBinding
 import com.monkopedia.kodemirror.view.editorContentStyle
 import com.monkopedia.kodemirror.view.keymapOf
+import com.monkopedia.kodemirror.view.onSave
+import com.monkopedia.kodemirror.view.saveKeymap
 import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
 import com.monkopedia.konstructor.frontend.viewmodel.KeymapName
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
@@ -156,7 +170,21 @@ private fun EditorContent(
     val themeExt: Extension = when (themeName) {
         EditorThemeName.DRACULA -> dracula
         EditorThemeName.ONE_DARK -> oneDark
-        EditorThemeName.GITHUB_LIGHT -> gitHubLight
+        EditorThemeName.AMY -> amy
+        EditorThemeName.AYU_LIGHT -> ayuLight
+        EditorThemeName.BARF -> barf
+        EditorThemeName.BESPIN -> bespin
+        EditorThemeName.BIRDS_OF_PARADISE -> birdsOfParadise
+        EditorThemeName.BOYS_AND_GIRLS -> boysAndGirls
+        EditorThemeName.CLOUDS -> clouds
+        EditorThemeName.COBALT -> cobalt
+        EditorThemeName.COOL_GLOW -> coolGlow
+        EditorThemeName.ESPRESSO -> espresso
+        EditorThemeName.NOCTIS_LILAC -> noctisLilac
+        EditorThemeName.ROSE_PINE_DAWN -> rosePineDawn
+        EditorThemeName.SMOOTHY -> smoothy
+        EditorThemeName.SOLARIZED_LIGHT -> solarizedLight
+        EditorThemeName.TOMORROW -> tomorrow
         EditorThemeName.MATERIAL -> materialTheme
     }
 
@@ -167,22 +195,14 @@ private fun EditorContent(
         KeymapName.DEFAULT -> extensionListOf() // basicSetup already includes default keymap
     }
 
+    // Save handler via onSave facet — works with both Ctrl+S keymap and vim :w
+    val saveExt = onSave.of { session ->
+        konstructionVm.save(session.state.doc.toString())
+    }
+
     // Recreate session when konstruction, theme, or keymap changes
     val session = remember(selectedKonId, themeName, keymapName, monoFont) {
-        val saveKeymap = keymapOf(
-            KeyBinding(
-                key = "Mod-s",
-                run = { editorSession ->
-                    val text = editorSession.state.doc.toString()
-                    scope.launch {
-                        konstructionVm.save(text)
-                    }
-                    true
-                },
-                preventDefault = true
-            )
-        )
-        val extensions = basicSetup + themeExt + fontExt + kotlinLang + keymapExt + saveKeymap
+        val extensions = basicSetup + themeExt + fontExt + kotlinLang + keymapExt + saveKeymap + saveExt
         val config = com.monkopedia.kodemirror.state.EditorStateConfig(
             doc = content.asDoc(),
             extensions = extensions
@@ -209,22 +229,6 @@ private fun EditorContent(
         }
     }
 
-    // Global Ctrl+S fallback — updates callback when session changes
-    DisposableEffect(session) {
-        com.monkopedia.konstructor.frontend.threejs.setGlobalSaveCallback {
-            com.monkopedia.konstructor.frontend.threejs.consoleLog(
-                "Global save callback fired!"
-            )
-            val text = session.state.doc.toString()
-            scope.launch {
-                konstructionVm.save(text)
-            }
-        }
-        onDispose {
-            com.monkopedia.konstructor.frontend.threejs.clearGlobalSaveCallback()
-        }
-    }
-
     // Editor
     Box(modifier = Modifier.fillMaxSize()) {
         KodeMirror(
@@ -232,8 +236,6 @@ private fun EditorContent(
             modifier = Modifier.fillMaxSize()
         )
     }
-
-    // TODO: vim :w save support blocked on Monkopedia/kodemirror#12
 }
 
 @Composable

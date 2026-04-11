@@ -31,7 +31,21 @@ enum class CodePaneMode {
 enum class EditorThemeName(val displayName: String, val isDark: Boolean) {
     DRACULA("Dracula", true),
     ONE_DARK("One Dark", true),
-    GITHUB_LIGHT("GitHub Light", false),
+    AMY("Amy", true),
+    AYU_LIGHT("Ayu Light", false),
+    BARF("Barf", true),
+    BESPIN("Bespin", true),
+    BIRDS_OF_PARADISE("Birds of Paradise", true),
+    BOYS_AND_GIRLS("Boys and Girls", true),
+    CLOUDS("Clouds", false),
+    COBALT("Cobalt", true),
+    COOL_GLOW("Cool Glow", true),
+    ESPRESSO("Espresso", false),
+    NOCTIS_LILAC("Noctis Lilac", false),
+    ROSE_PINE_DAWN("Rosé Pine Dawn", false),
+    SMOOTHY("Smoothy", false),
+    SOLARIZED_LIGHT("Solarized Light", false),
+    TOMORROW("Tomorrow", false),
     MATERIAL("Material (auto)", true)
 }
 
