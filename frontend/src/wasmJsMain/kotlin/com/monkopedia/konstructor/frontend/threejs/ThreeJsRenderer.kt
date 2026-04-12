@@ -15,7 +15,16 @@
  */
 package com.monkopedia.konstructor.frontend.threejs
 
+import kotlin.coroutines.resume
 import kotlin.js.JsAny
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.yield
 
 class ThreeJsRenderer(private val canvasId: String) {
 
@@ -33,6 +42,12 @@ class ThreeJsRenderer(private val canvasId: String) {
 
     /** Map of target name → URL currently loaded (to avoid re-loading unchanged meshes). */
     private val loadedUrls: MutableMap<String, String> = mutableMapOf()
+
+    /** In-flight load jobs per target, so we can cancel them if the target changes. */
+    private val loadJobs: MutableMap<String, Job> = mutableMapOf()
+
+    /** Scope for async mesh loading. Cancelled in [dispose]. */
+    private val loaderScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var axesHelper: AxesHelper? = null
     private var animationFrameId: Int = 0
@@ -123,40 +138,70 @@ class ThreeJsRenderer(private val canvasId: String) {
                 // Different (or new) URL — reload
                 meshes.remove(name)?.let { scene.remove(it) }
                 loadedUrls[name] = url
-                loadMeshForTarget(name, url, color)
+                loadJobs.remove(name)?.cancel()
+                loadJobs[name] = loaderScope.launch {
+                    loadMeshForTarget(name, url, color)
+                }
             }
         }
     }
 
-    private fun loadMeshForTarget(name: String, url: String, color: String) {
-        val loader = STLLoader()
-        loader.load(
-            url = url,
-            onLoad = { geometry ->
-                if (disposed) return@load
-                // If target was removed or URL changed before load completed, drop it
-                if (loadedUrls[name] != url) return@load
+    private suspend fun loadMeshForTarget(name: String, url: String, color: String) {
+        try {
+            // 1. Fetch/download via STLLoader (async, non-blocking).
+            val geometry = awaitStl(url)
+            // Bail out if the target was removed or its URL changed during download.
+            if (disposed || loadedUrls[name] != url) return
 
-                geometry.computeVertexNormals()
-                geometry.center()
+            // 2. Yield so Compose/animation can paint a frame before the heavy
+            // synchronous geometry work begins (computeVertexNormals/center
+            // iterate every vertex and cannot be made non-blocking without a
+            // Web Worker, but yielding keeps the UI from pileup-freezing).
+            yield()
+            geometry.computeVertexNormals()
+            if (disposed || loadedUrls[name] != url) return
 
-                val params = createPhongMaterialParamsWithColor(parseHexColor(color))
-                val material = MeshPhongMaterial(params)
-                val mesh = Mesh(geometry, material)
-                meshes[name] = mesh
-                scene.add(mesh)
-                consoleLog("Loaded mesh for '$name' from $url")
-            },
-            onProgress = null,
-            onError = { _ ->
-                consoleError("Failed to load STL for '$name': $url")
-            }
-        )
+            yield()
+            geometry.center()
+            if (disposed || loadedUrls[name] != url) return
+
+            yield()
+            val params = createPhongMaterialParamsWithColor(parseHexColor(color))
+            val material = MeshPhongMaterial(params)
+            val mesh = Mesh(geometry, material)
+            meshes[name] = mesh
+            scene.add(mesh)
+            consoleLog("Loaded mesh for '$name' from $url")
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            consoleError("Failed to load STL for '$name': ${e.message}")
+        }
     }
+
+    private suspend fun awaitStl(url: String): BufferGeometry =
+        suspendCancellableCoroutine { cont ->
+            val loader = STLLoader()
+            loader.load(
+                url = url,
+                onLoad = { geometry ->
+                    if (cont.isActive) cont.resume(geometry)
+                },
+                onProgress = null,
+                onError = { _ ->
+                    if (cont.isActive) {
+                        cont.resume(BufferGeometry()) // empty fallback; caller checks disposed
+                    }
+                }
+            )
+        }
 
     /** Clear all meshes (e.g. on konstruction switch). */
     fun clearModel() {
         if (disposed) return
+        for ((_, job) in loadJobs) {
+            job.cancel()
+        }
+        loadJobs.clear()
         for ((_, mesh) in meshes) {
             scene.remove(mesh)
         }
@@ -231,6 +276,8 @@ class ThreeJsRenderer(private val canvasId: String) {
 
     fun dispose() {
         disposed = true
+        loaderScope.cancel()
+        loadJobs.clear()
         if (animationFrameId != 0) {
             cancelAnimationFrame(animationFrameId)
         }
