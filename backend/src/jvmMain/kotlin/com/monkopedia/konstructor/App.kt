@@ -32,6 +32,11 @@ import io.ktor.server.application.install
 import io.ktor.server.http.content.defaultResource
 import io.ktor.server.http.content.resources
 import io.ktor.server.http.content.static
+import io.ktor.server.plugins.compression.Compression
+import io.ktor.server.plugins.compression.deflate
+import io.ktor.server.plugins.compression.gzip
+import io.ktor.server.plugins.compression.matchContentType
+import io.ktor.server.plugins.compression.minimumSize
 import io.ktor.server.response.respondOutputStream
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
@@ -82,6 +87,19 @@ class App : ServiceApp("konstructor") {
 
     override fun Application.configureHttp() {
         install(WebSockets) {}
+        install(Compression) {
+            gzip { priority = 1.0 }
+            deflate { priority = 10.0 }
+            minimumSize(1024)
+            // Include wasm and other static assets
+            matchContentType(
+                io.ktor.http.ContentType.parse("application/wasm"),
+                io.ktor.http.ContentType.Application.JavaScript,
+                io.ktor.http.ContentType.Text.Any,
+                io.ktor.http.ContentType.Application.Json,
+                io.ktor.http.ContentType.Application.OctetStream
+            )
+        }
     }
 
     override fun createRouting(routing: Routing) {

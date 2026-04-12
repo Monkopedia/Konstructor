@@ -47,6 +47,7 @@ kotlin {
         implementation(project(":lib"))
         implementation(libs.clikt)
         implementation(libs.ktor.server.core)
+        implementation(libs.ktor.server.compression)
         implementation(libs.ktor.server.cors)
         implementation(libs.ktor.server.websockets)
         implementation(libs.ktor.server.status.pages)

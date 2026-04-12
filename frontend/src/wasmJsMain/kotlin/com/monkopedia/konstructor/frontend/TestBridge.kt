@@ -292,12 +292,35 @@ object TestBridge {
         val refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
         refreshTriggerRef = refreshTrigger
 
-        // Trigger refresh whenever target displays change so the bridge state
-        // includes up-to-date target enabled/color info.
+        // Cache konstruction names to avoid re-fetching on every refresh trigger.
+        // Only re-fetches when workspace/connection/refresh key changes.
+        val konNamesCache = kotlinx.coroutines.flow.MutableStateFlow<List<String>>(emptyList())
+        scope.launch {
+            combine(
+                serviceHolder.connected,
+                spaceListVm.selectedWorkspaceId,
+                refreshTrigger
+            ) { connected, wsId, _ ->
+                if (wsId != null && connected) {
+                    try {
+                        val service = serviceHolder.service.value
+                        service?.get(wsId)?.list()?.map { it.name } ?: emptyList()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                } else {
+                    emptyList()
+                }
+            }.collect { konNamesCache.value = it }
+        }
+
+        // Trigger konstructions cache refresh when target displays change (cheap
+        // because the cache will only re-fetch if workspace selection changed)
         if (konstructionVm != null) {
             scope.launch {
                 konstructionVm.targetDisplays.collect {
-                    refreshTrigger.value = refreshTrigger.value + 1
+                    // Don't refetch konstructions; just nudge the combine below via
+                    // its own inputs (targetDisplays is a combine input directly)
                 }
             }
         }
@@ -310,36 +333,34 @@ object TestBridge {
                 settingsVm.keymap
             ) { mode, theme, keymap -> Triple(mode, theme, keymap) }
 
-            combine(
-                serviceHolder.connected,
+            // Include target displays directly as a combine input so the state
+            // updates reactively without needing a refresh trigger.
+            val targetFlow = konstructionVm?.targetDisplays
+                ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, com.monkopedia.konstructor.frontend.viewmodel.TargetDisplay>())
+
+            val viewFlow = combine(
                 spaceListVm.workspaces,
                 spaceListVm.selectedWorkspaceId,
+                konNamesCache,
                 settingsFlow,
-                refreshTrigger
-            ) { connected, workspaces, selectedWsId, (mode, theme, keymap), _ ->
-                // Fetch konstructions for the selected workspace if possible
-                val konNames = if (selectedWsId != null && connected) {
-                    try {
-                        val service = serviceHolder.service.value
-                        if (service != null) {
-                            val ws = service.get(selectedWsId)
-                            ws.list().map { it.name }
-                        } else {
-                            emptyList()
-                        }
-                    } catch (_: Exception) {
-                        emptyList()
-                    }
-                } else {
-                    emptyList()
-                }
-                val targets = konstructionVm?.targetDisplays?.value?.values?.map { display ->
+                targetFlow
+            ) { workspaces, selectedWsId, konNames, settings, displays ->
+                ViewState(workspaces, selectedWsId, konNames, settings, displays)
+            }
+
+            combine(
+                serviceHolder.connected,
+                viewFlow
+            ) { connected, vs ->
+                val (workspaces, selectedWsId, konNames, settings, displays) = vs
+                val (mode, theme, keymap) = settings
+                val targets = displays.values.map { display ->
                     TargetSnapshot(
                         name = display.name,
                         color = display.color,
                         isEnabled = display.isEnabled
                     )
-                } ?: emptyList()
+                }
                 AppStateSnapshot(
                     ready = true,
                     connected = connected,
@@ -373,6 +394,18 @@ object TestBridge {
             }
         }
     }
+
+    private data class ViewState(
+        val workspaces: List<Space>?,
+        val selectedWsId: String?,
+        val konNames: List<String>,
+        val settings: Triple<
+            com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode,
+            com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName,
+            com.monkopedia.konstructor.frontend.viewmodel.KeymapName
+        >,
+        val displays: Map<String, com.monkopedia.konstructor.frontend.viewmodel.TargetDisplay>
+    )
 
     private var refreshTriggerRef: kotlinx.coroutines.flow.MutableStateFlow<Int>? = null
 
