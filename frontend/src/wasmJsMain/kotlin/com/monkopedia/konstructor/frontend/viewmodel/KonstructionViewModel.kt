@@ -27,10 +27,15 @@ import com.monkopedia.konstructor.common.KonstructionTarget
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus
+import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 enum class UiState {
     LOADING,
@@ -39,6 +44,13 @@ enum class UiState {
     COMPILING,
     EXECUTING
 }
+
+@Serializable
+data class TargetDisplay(
+    val name: String,
+    val color: String = "#ffffff",
+    val isEnabled: Boolean = true
+)
 
 class KonstructionViewModel(
     private val serviceHolder: ServiceHolder
@@ -59,8 +71,22 @@ class KonstructionViewModel(
     private val _renderPath = MutableStateFlow<String?>(null)
     val renderPath: StateFlow<String?> = _renderPath.asStateFlow()
 
+    private val _targetDisplays = MutableStateFlow<Map<String, TargetDisplay>>(emptyMap())
+    val targetDisplays: StateFlow<Map<String, TargetDisplay>> = _targetDisplays.asStateFlow()
+
+    /** Map of target name → (render URL, color) for enabled targets with ready renders. */
+    private val _enabledRenderedTargets = MutableStateFlow<Map<String, Pair<String, String>>>(emptyMap())
+    val enabledRenderedTargets: StateFlow<Map<String, Pair<String, String>>> =
+        _enabledRenderedTargets.asStateFlow()
+
+    private val _renderPaths = MutableStateFlow<Map<String, String>>(emptyMap())
+
     private var konstructionService: KonstructionService? = null
     private var listenerKey: String? = null
+    private var currentKonstructionKey: String? = null
+
+    private val storage = window.localStorage
+    private val json = Json { ignoreUnknownKeys = true }
 
     fun loadKonstruction(konstruction: Konstruction) {
         com.monkopedia.konstructor.frontend.threejs.consoleLog(
@@ -69,6 +95,11 @@ class KonstructionViewModel(
         viewModelScope.launch {
             _state.value = UiState.LOADING
             _renderPath.value = null
+            _renderPaths.value = emptyMap()
+            currentKonstructionKey = "${konstruction.workspaceId}.${konstruction.id}"
+            // Load saved target displays for this konstruction
+            _targetDisplays.value = loadTargetDisplays(currentKonstructionKey!!)
+            recomputeEnabledTargets()
             val service = serviceHolder.service.value
             if (service == null) {
                 com.monkopedia.konstructor.frontend.threejs.consoleError(
@@ -101,8 +132,12 @@ class KonstructionViewModel(
                 _state.value = UiState.DEFAULT
                 registerListener(ks)
                 com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: listener registered")
-                // If already CLEAN with targets, fetch existing render paths
+                // Initialize target displays from info
                 val info = _info.value
+                if (info != null) {
+                    mergeTargetDisplays(info.targets.map { it.name })
+                }
+                // If already CLEAN with targets, fetch existing render paths
                 if (info != null && info.dirtyState == com.monkopedia.konstructor.common.DirtyState.CLEAN) {
                     for (target in info.targets) {
                         if (target.state == com.monkopedia.konstructor.common.DirtyState.CLEAN) {
@@ -111,10 +146,12 @@ class KonstructionViewModel(
                                 if (path != null) {
                                     com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: found existing render: $path")
                                     _renderPath.value = path
+                                    _renderPaths.value = _renderPaths.value + (target.name to path)
                                 }
                             } catch (_: Exception) {}
                         }
                     }
+                    recomputeEnabledTargets()
                 } else {
                     // Not clean — trigger compile/build
                     com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: starting auto-compile")
@@ -155,6 +192,7 @@ class KonstructionViewModel(
 
                 override suspend fun onInfoChanged(info: KonstructionInfo) {
                     _info.value = info
+                    mergeTargetDisplays(info.targets.map { it.name })
                     // Auto-build when compile succeeds and targets need execution
                     if (info.dirtyState == com.monkopedia.konstructor.common.DirtyState.NEEDS_EXEC) {
                         _state.value = UiState.EXECUTING
@@ -173,9 +211,11 @@ class KonstructionViewModel(
                                 val path = ks.konstructed(target.name)
                                 if (path != null) {
                                     _renderPath.value = path
+                                    _renderPaths.value = _renderPaths.value + (target.name to path)
                                 }
                             } catch (_: Exception) {}
                         }
+                        recomputeEnabledTargets()
                     }
                 }
 
@@ -195,6 +235,13 @@ class KonstructionViewModel(
 
                 override suspend fun onRenderChanged(render: KonstructionRender) {
                     _renderPath.value = render.renderPath
+                    val path = render.renderPath
+                    if (path != null) {
+                        _renderPaths.value = _renderPaths.value + (render.name to path)
+                    } else {
+                        _renderPaths.value = _renderPaths.value - render.name
+                    }
+                    recomputeEnabledTargets()
                 }
 
                 override suspend fun onContentChange(u: Unit) {
@@ -308,6 +355,77 @@ class KonstructionViewModel(
 
     suspend fun getKonstructedPath(target: String): String? {
         return konstructionService?.konstructed(target)
+    }
+
+    fun setTargetEnabled(name: String, enabled: Boolean) {
+        updateTargetDisplay(name) { it.copy(isEnabled = enabled) }
+    }
+
+    fun setTargetColor(name: String, color: String) {
+        updateTargetDisplay(name) { it.copy(color = color) }
+    }
+
+    private fun updateTargetDisplay(name: String, transform: (TargetDisplay) -> TargetDisplay) {
+        val current = _targetDisplays.value
+        val existing = current[name] ?: TargetDisplay(name = name)
+        _targetDisplays.value = current + (name to transform(existing))
+        saveTargetDisplays()
+        recomputeEnabledTargets()
+    }
+
+    private fun mergeTargetDisplays(names: List<String>) {
+        val current = _targetDisplays.value.toMutableMap()
+        var changed = false
+        for (name in names) {
+            if (name !in current) {
+                current[name] = TargetDisplay(name = name)
+                changed = true
+            }
+        }
+        // Remove displays for targets that no longer exist
+        val toRemove = current.keys - names.toSet()
+        if (toRemove.isNotEmpty()) {
+            toRemove.forEach { current.remove(it) }
+            changed = true
+        }
+        if (changed) {
+            _targetDisplays.value = current
+            saveTargetDisplays()
+            recomputeEnabledTargets()
+        }
+    }
+
+    private fun recomputeEnabledTargets() {
+        val displays = _targetDisplays.value
+        val paths = _renderPaths.value
+        _enabledRenderedTargets.value = displays
+            .filter { (_, d) -> d.isEnabled }
+            .mapNotNull { (name, d) ->
+                val path = paths[name] ?: return@mapNotNull null
+                name to (path to d.color)
+            }
+            .toMap()
+    }
+
+    private fun loadTargetDisplays(key: String): Map<String, TargetDisplay> {
+        val raw = storage.getItem("konstructor.targets.$key") ?: return emptyMap()
+        return try {
+            json.decodeFromString(
+                MapSerializer(String.serializer(), TargetDisplay.serializer()),
+                raw
+            )
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun saveTargetDisplays() {
+        val key = currentKonstructionKey ?: return
+        val jsonStr = json.encodeToString(
+            MapSerializer(String.serializer(), TargetDisplay.serializer()),
+            _targetDisplays.value
+        )
+        storage.setItem("konstructor.targets.$key", jsonStr)
     }
 
     override fun onCleared() {

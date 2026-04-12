@@ -19,6 +19,17 @@ import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+
+@Serializable
+data class DirectionalLightConfig(
+    val intensity: Float = 0.5f,
+    val x: Float = 0f,
+    val y: Float = 0f,
+    val z: Float = -1f
+)
 
 enum class CodePaneMode {
     EDITOR,
@@ -80,6 +91,9 @@ class SettingsViewModel {
     private val _ambientLightIntensity = MutableStateFlow(loadFloat("ambientLight", 0.5f))
     val ambientLightIntensity: StateFlow<Float> = _ambientLightIntensity.asStateFlow()
 
+    private val _directionalLights = MutableStateFlow(loadLights())
+    val directionalLights: StateFlow<List<DirectionalLightConfig>> = _directionalLights.asStateFlow()
+
     fun setCodePaneMode(mode: CodePaneMode) {
         _codePaneMode.value = mode
     }
@@ -112,6 +126,30 @@ class SettingsViewModel {
     fun setAmbientLightIntensity(value: Float) {
         _ambientLightIntensity.value = value
         saveFloat("ambientLight", value)
+    }
+
+    fun setDirectionalLights(lights: List<DirectionalLightConfig>) {
+        _directionalLights.value = lights
+        saveLights(lights)
+    }
+
+    private val lightsJson = Json { ignoreUnknownKeys = true }
+    private val lightsSerializer = ListSerializer(DirectionalLightConfig.serializer())
+
+    private fun loadLights(): List<DirectionalLightConfig> {
+        val raw = storage.getItem("konstructor.lights") ?: return listOf(
+            DirectionalLightConfig(intensity = 0.5f, x = 1f, y = 1f, z = -1f),
+            DirectionalLightConfig(intensity = 0.3f, x = -1f, y = -1f, z = 1f)
+        )
+        return try {
+            lightsJson.decodeFromString(lightsSerializer, raw)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun saveLights(lights: List<DirectionalLightConfig>) {
+        storage.setItem("konstructor.lights", lightsJson.encodeToString(lightsSerializer, lights))
     }
 
     private fun loadBoolean(key: String, default: Boolean): Boolean {

@@ -44,25 +44,46 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.monkopedia.konstructor.frontend.viewmodel.DirectionalLightConfig
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import org.koin.compose.koinInject
 
-data class DirectionalLightState(
-    var intensity: Float = 0.5f,
-    var x: String = "0",
-    var y: String = "0",
-    var z: String = "-1"
-)
+private data class DirectionalLightState(
+    val intensity: Float = 0.5f,
+    val x: String = "0",
+    val y: String = "0",
+    val z: String = "-1"
+) {
+    fun toConfig(): DirectionalLightConfig = DirectionalLightConfig(
+        intensity = intensity,
+        x = x.toFloatOrNull() ?: 0f,
+        y = y.toFloatOrNull() ?: 0f,
+        z = z.toFloatOrNull() ?: 0f
+    )
+}
+
+private fun DirectionalLightConfig.toState(): DirectionalLightState =
+    DirectionalLightState(intensity, x.toString(), y.toString(), z.toString())
 
 @Composable
 fun GlSettingsPane(modifier: Modifier = Modifier) {
     val settingsVm = koinInject<SettingsViewModel>()
     val ambientIntensity by settingsVm.ambientLightIntensity.collectAsState()
+    val savedLights by settingsVm.directionalLights.collectAsState()
 
-    val lights = remember {
-        mutableStateListOf(
-            DirectionalLightState(intensity = 0.5f, x = "0", y = "0", z = "-1")
-        )
+    // Keep a local mutable state list that mirrors the persisted list for fluid editing
+    val lights = remember { mutableStateListOf<DirectionalLightState>() }
+    androidx.compose.runtime.LaunchedEffect(savedLights) {
+        // Only reset local state if it differs from saved (to avoid clobbering in-progress edits)
+        val savedStates = savedLights.map { it.toState() }
+        if (lights.toList() != savedStates) {
+            lights.clear()
+            lights.addAll(savedStates)
+        }
+    }
+
+    fun persist() {
+        settingsVm.setDirectionalLights(lights.map { it.toConfig() })
     }
 
     LazyColumn(
@@ -96,6 +117,7 @@ fun GlSettingsPane(modifier: Modifier = Modifier) {
                 )
                 IconButton(onClick = {
                     lights.add(DirectionalLightState())
+                    persist()
                 }) {
                     Icon(
                         Icons.Filled.Add,
@@ -110,8 +132,14 @@ fun GlSettingsPane(modifier: Modifier = Modifier) {
             DirectionalLightCard(
                 index = index,
                 light = light,
-                onDelete = { lights.removeAt(index) },
-                onUpdate = { lights[index] = it }
+                onDelete = {
+                    lights.removeAt(index)
+                    persist()
+                },
+                onUpdate = {
+                    lights[index] = it
+                    persist()
+                }
             )
         }
     }

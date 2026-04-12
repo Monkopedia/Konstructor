@@ -26,8 +26,14 @@ class ThreeJsRenderer(private val canvasId: String) {
     private val controls: OrbitControls
     private val ambientLight: AmbientLight
     private val directionalLight: DirectionalLight
+    private val dynamicDirectionalLights: MutableList<DirectionalLight> = mutableListOf()
 
-    private var currentMesh: Mesh? = null
+    /** Map of target name → loaded mesh. */
+    private val meshes: MutableMap<String, Mesh> = mutableMapOf()
+
+    /** Map of target name → URL currently loaded (to avoid re-loading unchanged meshes). */
+    private val loadedUrls: MutableMap<String, String> = mutableMapOf()
+
     private var axesHelper: AxesHelper? = null
     private var animationFrameId: Int = 0
     private var disposed = false
@@ -49,18 +55,11 @@ class ThreeJsRenderer(private val canvasId: String) {
 
         controls = OrbitControls(camera, renderer.domElement)
 
-        // Matching old app lighting: white ambient at 0.5, white directional at 0.5
         ambientLight = AmbientLight(0xffffff, 0.5)
         scene.add(ambientLight)
 
-        directionalLight = DirectionalLight(0xffffff, 0.5)
-        directionalLight.position.set(1.0, 1.0, -1.0)
-        scene.add(directionalLight)
-
-        // Add a second light from the opposite side for better visibility
-        val fillLight = DirectionalLight(0xffffff, 0.3)
-        fillLight.position.set(-1.0, -1.0, 1.0)
-        scene.add(fillLight)
+        // Legacy hardcoded directional light (disabled — replaced by settings-driven ones)
+        directionalLight = DirectionalLight(0xffffff, 0.0)
 
         startAnimationLoop()
     }
@@ -92,44 +91,77 @@ class ThreeJsRenderer(private val canvasId: String) {
         camera.updateProjectionMatrix()
     }
 
-    fun loadStl(url: String) {
+    /**
+     * Reconcile the scene to show exactly the targets in [targets].
+     * For each entry, key = target name, value = (STL url, hex color).
+     * Meshes for targets not in the map are removed. New targets are loaded.
+     * Existing targets with matching URL keep the same mesh but update color.
+     */
+    fun setTargets(targets: Map<String, Pair<String, String>>) {
         if (disposed) return
-        consoleLog("Loading STL from: $url")
 
+        // Remove meshes for targets no longer present
+        val toRemove = meshes.keys - targets.keys
+        for (name in toRemove) {
+            val mesh = meshes.remove(name)
+            if (mesh != null) {
+                scene.remove(mesh)
+            }
+            loadedUrls.remove(name)
+        }
+
+        // Add/update remaining targets
+        for ((name, urlAndColor) in targets) {
+            val (url, color) = urlAndColor
+            val existingUrl = loadedUrls[name]
+            if (existingUrl == url) {
+                // Same URL — just update color
+                meshes[name]?.let { mesh ->
+                    setMeshColor(mesh, parseHexColor(color))
+                }
+            } else {
+                // Different (or new) URL — reload
+                meshes.remove(name)?.let { scene.remove(it) }
+                loadedUrls[name] = url
+                loadMeshForTarget(name, url, color)
+            }
+        }
+    }
+
+    private fun loadMeshForTarget(name: String, url: String, color: String) {
         val loader = STLLoader()
         loader.load(
             url = url,
             onLoad = { geometry ->
                 if (disposed) return@load
-                clearModelInternal()
+                // If target was removed or URL changed before load completed, drop it
+                if (loadedUrls[name] != url) return@load
 
                 geometry.computeVertexNormals()
                 geometry.center()
 
-                val material = MeshPhongMaterial(createPhongMaterialParams())
+                val params = createPhongMaterialParamsWithColor(parseHexColor(color))
+                val material = MeshPhongMaterial(params)
                 val mesh = Mesh(geometry, material)
-                currentMesh = mesh
+                meshes[name] = mesh
                 scene.add(mesh)
-
-                consoleLog("STL loaded successfully")
+                consoleLog("Loaded mesh for '$name' from $url")
             },
             onProgress = null,
             onError = { _ ->
-                consoleError("Failed to load STL: $url")
+                consoleError("Failed to load STL for '$name': $url")
             }
         )
     }
 
+    /** Clear all meshes (e.g. on konstruction switch). */
     fun clearModel() {
         if (disposed) return
-        clearModelInternal()
-    }
-
-    private fun clearModelInternal() {
-        currentMesh?.let { mesh ->
+        for ((_, mesh) in meshes) {
             scene.remove(mesh)
-            currentMesh = null
         }
+        meshes.clear()
+        loadedUrls.clear()
     }
 
     fun setShowFps(show: Boolean) {
@@ -138,6 +170,32 @@ class ThreeJsRenderer(private val canvasId: String) {
             hideFpsOverlay()
         }
     }
+
+    fun setAmbientIntensity(value: Float) {
+        setLightIntensity(ambientLight, value.toDouble())
+    }
+
+    /** Apply a list of directional lights, replacing any previously-set lights. */
+    fun setDirectionalLights(configs: List<DirectionalLightInput>) {
+        if (disposed) return
+        for (light in dynamicDirectionalLights) {
+            scene.remove(light)
+        }
+        dynamicDirectionalLights.clear()
+        for (cfg in configs) {
+            val light = DirectionalLight(0xffffff, cfg.intensity)
+            light.position.set(cfg.x, cfg.y, cfg.z)
+            scene.add(light)
+            dynamicDirectionalLights.add(light)
+        }
+    }
+
+    data class DirectionalLightInput(
+        val intensity: Double,
+        val x: Double,
+        val y: Double,
+        val z: Double
+    )
 
     fun setShowAxesHelper(show: Boolean) {
         if (show && axesHelper == null) {
@@ -176,11 +234,17 @@ class ThreeJsRenderer(private val canvasId: String) {
         if (animationFrameId != 0) {
             cancelAnimationFrame(animationFrameId)
         }
-        clearModelInternal()
+        clearModel()
         setShowAxesHelper(false)
         hideFpsOverlay()
         controls.dispose()
         renderer.dispose()
         removeCanvas(canvas)
     }
+}
+
+/** Parse a hex color like "#ff5722" into an Int (0xff5722). */
+private fun parseHexColor(hex: String): Int {
+    val clean = hex.removePrefix("#")
+    return clean.toInt(16)
 }

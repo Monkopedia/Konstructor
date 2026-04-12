@@ -84,6 +84,28 @@ object TestBridge {
             )
             incrementVersion()
         }
+        exposeAction("setTargetEnabled") { argJson ->
+            try {
+                val args = json.decodeFromString<JsonObject>(argJson)
+                val name = args["name"]!!.jsonPrimitive.content
+                val enabled = args["enabled"]!!.jsonPrimitive.content.toBoolean()
+                konstructionVm?.setTargetEnabled(name, enabled)
+                incrementVersion()
+            } catch (e: Exception) {
+                setError("setTargetEnabled failed: ${e.message}")
+            }
+        }
+        exposeAction("setTargetColor") { argJson ->
+            try {
+                val args = json.decodeFromString<JsonObject>(argJson)
+                val name = args["name"]!!.jsonPrimitive.content
+                val color = args["color"]!!.jsonPrimitive.content
+                konstructionVm?.setTargetColor(name, color)
+                incrementVersion()
+            } catch (e: Exception) {
+                setError("setTargetColor failed: ${e.message}")
+            }
+        }
         exposeAction("deleteWorkspace") { id ->
             scope.launch {
                 spaceListVm.deleteWorkspace(Space(id = id, name = ""))
@@ -270,6 +292,16 @@ object TestBridge {
         val refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
         refreshTriggerRef = refreshTrigger
 
+        // Trigger refresh whenever target displays change so the bridge state
+        // includes up-to-date target enabled/color info.
+        if (konstructionVm != null) {
+            scope.launch {
+                konstructionVm.targetDisplays.collect {
+                    refreshTrigger.value = refreshTrigger.value + 1
+                }
+            }
+        }
+
         scope.launch {
             // Combine settings into a single flow to stay within combine's 5-arg limit
             val settingsFlow = combine(
@@ -301,6 +333,13 @@ object TestBridge {
                 } else {
                     emptyList()
                 }
+                val targets = konstructionVm?.targetDisplays?.value?.values?.map { display ->
+                    TargetSnapshot(
+                        name = display.name,
+                        color = display.color,
+                        isEnabled = display.isEnabled
+                    )
+                } ?: emptyList()
                 AppStateSnapshot(
                     ready = true,
                     connected = connected,
@@ -317,7 +356,8 @@ object TestBridge {
                         else -> "main"
                     },
                     konstructionCount = konNames.size,
-                    konstructionNames = konNames
+                    konstructionNames = konNames,
+                    targets = targets
                 )
             }.collectLatest { state ->
                 try {
@@ -372,6 +412,13 @@ object TestBridge {
     }
 
     @Serializable
+    data class TargetSnapshot(
+        val name: String,
+        val color: String,
+        val isEnabled: Boolean
+    )
+
+    @Serializable
     data class AppStateSnapshot(
         val ready: Boolean = false,
         val connected: Boolean = false,
@@ -384,7 +431,8 @@ object TestBridge {
         val keymap: String = "VIM",
         val screen: String = "loading",
         val konstructionCount: Int = 0,
-        val konstructionNames: List<String> = emptyList()
+        val konstructionNames: List<String> = emptyList(),
+        val targets: List<TargetSnapshot> = emptyList()
     )
 }
 

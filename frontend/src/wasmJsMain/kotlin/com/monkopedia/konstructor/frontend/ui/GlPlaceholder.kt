@@ -37,10 +37,12 @@ import org.koin.compose.koinInject
 fun InitGlRenderer() {
     val konstructionVm = koinInject<KonstructionViewModel>()
     val settingsVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel>()
-    val renderPath by konstructionVm.renderPath.collectAsState()
+    val enabledTargets by konstructionVm.enabledRenderedTargets.collectAsState()
     val showFps by settingsVm.showFps.collectAsState()
     val showCameraWidget by settingsVm.showCameraWidget.collectAsState()
     val showCodeLeft by settingsVm.showCodeLeft.collectAsState()
+    val ambientIntensity by settingsVm.ambientLightIntensity.collectAsState()
+    val directionalLights by settingsVm.directionalLights.collectAsState()
 
     var renderer by remember { mutableStateOf<ThreeJsRenderer?>(null) }
 
@@ -55,15 +57,11 @@ fun InitGlRenderer() {
         }
     }
 
-    LaunchedEffect(renderer, renderPath) {
-        val path = renderPath
-        val r = renderer
-        if (r != null && path != null) {
-            consoleLog("InitGlRenderer: loading STL from $path")
-            r.loadStl(path)
-        } else if (r != null && path == null) {
-            r.clearModel()
-        }
+    // Reconcile meshes whenever the enabled-and-rendered target set changes
+    LaunchedEffect(renderer, enabledTargets) {
+        val r = renderer ?: return@LaunchedEffect
+        consoleLog("InitGlRenderer: setTargets size=${enabledTargets.size}")
+        r.setTargets(enabledTargets)
     }
 
     // Wire settings to renderer
@@ -72,6 +70,21 @@ fun InitGlRenderer() {
     }
     LaunchedEffect(renderer, showCameraWidget) {
         renderer?.setShowAxesHelper(showCameraWidget)
+    }
+    LaunchedEffect(renderer, ambientIntensity) {
+        renderer?.setAmbientIntensity(ambientIntensity)
+    }
+    LaunchedEffect(renderer, directionalLights) {
+        renderer?.setDirectionalLights(
+            directionalLights.map {
+                ThreeJsRenderer.DirectionalLightInput(
+                    intensity = it.intensity.toDouble(),
+                    x = it.x.toDouble(),
+                    y = it.y.toDouble(),
+                    z = it.z.toDouble()
+                )
+            }
+        )
     }
     LaunchedEffect(showCodeLeft) {
         com.monkopedia.konstructor.frontend.threejs.setCodeOnLeft(showCodeLeft)
