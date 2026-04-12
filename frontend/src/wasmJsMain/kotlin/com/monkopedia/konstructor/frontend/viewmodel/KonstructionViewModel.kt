@@ -31,6 +31,9 @@ import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
@@ -137,20 +140,33 @@ class KonstructionViewModel(
                 if (info != null) {
                     mergeTargetDisplays(info.targets.map { it.name })
                 }
-                // If already CLEAN with targets, fetch existing render paths
+                // If already CLEAN with targets, fetch existing render paths in parallel
                 if (info != null && info.dirtyState == com.monkopedia.konstructor.common.DirtyState.CLEAN) {
-                    for (target in info.targets) {
-                        if (target.state == com.monkopedia.konstructor.common.DirtyState.CLEAN) {
-                            try {
-                                val path = ks.konstructed(target.name)
-                                if (path != null) {
-                                    com.monkopedia.konstructor.frontend.threejs.consoleLog("loadKonstruction: found existing render: $path")
-                                    _renderPath.value = path
-                                    _renderPaths.value = _renderPaths.value + (target.name to path)
+                    val cleanTargets = info.targets.filter {
+                        it.state == com.monkopedia.konstructor.common.DirtyState.CLEAN
+                    }
+                    val paths = coroutineScope {
+                        cleanTargets.map { target ->
+                            async {
+                                try {
+                                    target.name to ks.konstructed(target.name)
+                                } catch (_: Exception) {
+                                    target.name to null
                                 }
-                            } catch (_: Exception) {}
+                            }
+                        }.awaitAll()
+                    }
+                    val newPaths = _renderPaths.value.toMutableMap()
+                    for ((name, path) in paths) {
+                        if (path != null) {
+                            newPaths[name] = path
+                            _renderPath.value = path
                         }
                     }
+                    _renderPaths.value = newPaths
+                    com.monkopedia.konstructor.frontend.threejs.consoleLog(
+                        "loadKonstruction: fetched ${paths.count { it.second != null }} render paths"
+                    )
                     recomputeEnabledTargets()
                 } else {
                     // Not clean — trigger compile/build
@@ -203,18 +219,29 @@ class KonstructionViewModel(
                         }
                     } else if (info.dirtyState == com.monkopedia.konstructor.common.DirtyState.CLEAN) {
                         _state.value = UiState.DEFAULT
-                        // Update render paths for clean targets
-                        info.targets.filter {
+                        // Update render paths for clean targets (in parallel)
+                        val cleanTargets = info.targets.filter {
                             it.state == com.monkopedia.konstructor.common.DirtyState.CLEAN
-                        }.forEach { target ->
-                            try {
-                                val path = ks.konstructed(target.name)
-                                if (path != null) {
-                                    _renderPath.value = path
-                                    _renderPaths.value = _renderPaths.value + (target.name to path)
-                                }
-                            } catch (_: Exception) {}
                         }
+                        val paths = coroutineScope {
+                            cleanTargets.map { target ->
+                                async {
+                                    try {
+                                        target.name to ks.konstructed(target.name)
+                                    } catch (_: Exception) {
+                                        target.name to null
+                                    }
+                                }
+                            }.awaitAll()
+                        }
+                        val newPaths = _renderPaths.value.toMutableMap()
+                        for ((name, path) in paths) {
+                            if (path != null) {
+                                newPaths[name] = path
+                                _renderPath.value = path
+                            }
+                        }
+                        _renderPaths.value = newPaths
                         recomputeEnabledTargets()
                     }
                 }
