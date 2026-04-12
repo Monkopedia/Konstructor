@@ -74,32 +74,20 @@
     <div id="compose-pane"></div>
 </div>
 <script>
-    // Hide the loading overlay once Compose has drawn its first canvas inside #compose-pane.
+    // Expose a global hook that the Kotlin app calls when the bridge is ready.
+    // The loading overlay hides when that fires (after Compose has rendered).
     (function() {
         var overlay = document.getElementById('loading-overlay');
         if (!overlay) return;
         var hidden = false;
-        function hide() {
+        globalThis.__konstructorLoaded = function() {
             if (hidden) return;
             hidden = true;
             overlay.classList.add('hidden');
             setTimeout(function() { overlay.remove(); }, 500);
-        }
-        // Watch for a canvas appearing in the compose-pane (Skiko renders into a shadow DOM canvas)
-        var composePane = document.getElementById('compose-pane');
-        if (composePane) {
-            var observer = new MutationObserver(function() {
-                // Heuristic: once the shadow DOM is established and has children, assume ready
-                if (composePane.shadowRoot || composePane.children.length > 0) {
-                    // Small delay to let initial paint finish
-                    setTimeout(hide, 200);
-                    observer.disconnect();
-                }
-            });
-            observer.observe(composePane, { childList: true, subtree: true });
-        }
+        };
         // Fallback: hide after 30s regardless
-        setTimeout(hide, 30000);
+        setTimeout(globalThis.__konstructorLoaded, 30000);
     })();
 </script>
 <script src="frontend.js"></script>

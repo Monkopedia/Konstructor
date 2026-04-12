@@ -91,13 +91,12 @@ class App : ServiceApp("konstructor") {
             gzip { priority = 1.0 }
             deflate { priority = 10.0 }
             minimumSize(1024)
-            // Include wasm and other static assets
+            // Compress text-ish assets but NOT wasm — the browser's streaming
+            // compiler is finicky about compressed wasm in some cases.
             matchContentType(
-                io.ktor.http.ContentType.parse("application/wasm"),
                 io.ktor.http.ContentType.Application.JavaScript,
                 io.ktor.http.ContentType.Text.Any,
-                io.ktor.http.ContentType.Application.Json,
-                io.ktor.http.ContentType.Application.OctetStream
+                io.ktor.http.ContentType.Application.Json
             )
         }
     }

@@ -292,16 +292,34 @@ object TestBridge {
         val refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
         refreshTriggerRef = refreshTrigger
 
-        // Cache konstruction names to avoid re-fetching on every refresh trigger.
-        // Only re-fetches when workspace/connection/refresh key changes.
+        // Refresh the bridge state whenever reactive inputs not in the main
+        // combine change (settings values + target displays).
+        scope.launch {
+            settingsVm.codePaneMode.collect { refreshTrigger.value++ }
+        }
+        scope.launch {
+            settingsVm.editorTheme.collect { refreshTrigger.value++ }
+        }
+        scope.launch {
+            settingsVm.keymap.collect { refreshTrigger.value++ }
+        }
+        if (konstructionVm != null) {
+            scope.launch {
+                konstructionVm.targetDisplays.collect { refreshTrigger.value++ }
+            }
+        }
+
+        // Cache konstruction names — only re-fetches when workspace selection
+        // or connection changes, not on every refresh.
         val konNamesCache = kotlinx.coroutines.flow.MutableStateFlow<List<String>>(emptyList())
         scope.launch {
             combine(
                 serviceHolder.connected,
-                spaceListVm.selectedWorkspaceId,
-                refreshTrigger
-            ) { connected, wsId, _ ->
-                if (wsId != null && connected) {
+                spaceListVm.selectedWorkspaceId
+            ) { connected, wsId -> connected to wsId }.collect { pair ->
+                val connected = pair.first
+                val wsId = pair.second
+                val names = if (wsId != null && connected) {
                     try {
                         val service = serviceHolder.service.value
                         service?.get(wsId)?.list()?.map { it.name } ?: emptyList()
@@ -311,74 +329,25 @@ object TestBridge {
                 } else {
                     emptyList()
                 }
-            }.collect { konNamesCache.value = it }
-        }
-
-        // Trigger konstructions cache refresh when target displays change (cheap
-        // because the cache will only re-fetch if workspace selection changed)
-        if (konstructionVm != null) {
-            scope.launch {
-                konstructionVm.targetDisplays.collect {
-                    // Don't refetch konstructions; just nudge the combine below via
-                    // its own inputs (targetDisplays is a combine input directly)
-                }
+                konNamesCache.value = names
             }
         }
 
         scope.launch {
-            // Combine settings into a single flow to stay within combine's 5-arg limit
-            val settingsFlow = combine(
-                settingsVm.codePaneMode,
-                settingsVm.editorTheme,
-                settingsVm.keymap
-            ) { mode, theme, keymap -> Triple(mode, theme, keymap) }
-
-            // Include target displays directly as a combine input so the state
-            // updates reactively without needing a refresh trigger.
-            val targetFlow = konstructionVm?.targetDisplays
-                ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, com.monkopedia.konstructor.frontend.viewmodel.TargetDisplay>())
-
-            val viewFlow = combine(
+            combine(
+                serviceHolder.connected,
                 spaceListVm.workspaces,
                 spaceListVm.selectedWorkspaceId,
                 konNamesCache,
-                settingsFlow,
-                targetFlow
-            ) { workspaces, selectedWsId, konNames, settings, displays ->
-                ViewState(workspaces, selectedWsId, konNames, settings, displays)
-            }
-
-            combine(
-                serviceHolder.connected,
-                viewFlow
-            ) { connected, vs ->
-                val (workspaces, selectedWsId, konNames, settings, displays) = vs
-                val (mode, theme, keymap) = settings
-                val targets = displays.values.map { display ->
-                    TargetSnapshot(
-                        name = display.name,
-                        color = display.color,
-                        isEnabled = display.isEnabled
-                    )
-                }
-                AppStateSnapshot(
-                    ready = true,
+                refreshTrigger
+            ) { connected, workspaces, selectedWsId, konNames, _ ->
+                buildSnapshot(
                     connected = connected,
-                    workspaceCount = workspaces?.size ?: -1,
-                    workspaceNames = workspaces?.map { it.name } ?: emptyList(),
-                    workspaceIds = workspaces?.map { it.id } ?: emptyList(),
-                    selectedWorkspaceId = selectedWsId,
-                    codePaneMode = mode.name,
-                    editorTheme = theme.name,
-                    keymap = keymap.name,
-                    screen = when {
-                        workspaces == null -> "loading"
-                        workspaces.isEmpty() -> "empty"
-                        else -> "main"
-                    },
-                    konstructionCount = konNames.size,
-                    konstructionNames = konNames,
-                    targets = targets
+                    workspaces = workspaces,
+                    selectedWsId = selectedWsId,
+                    konNames = konNames,
+                    settingsVm = settingsVm,
+                    konstructionVm = konstructionVm
                 )
             }.collectLatest { state ->
                 try {
@@ -388,6 +357,9 @@ object TestBridge {
                     setState(stateJson)
                     setReady(true)
                     incrementVersion()
+                    // Hide the loading overlay once the bridge has produced
+                    // state at least once (means Compose is running).
+                    notifyLoaded()
                 } catch (e: Exception) {
                     setError(e.message ?: "unknown error")
                 }
@@ -395,17 +367,41 @@ object TestBridge {
         }
     }
 
-    private data class ViewState(
-        val workspaces: List<Space>?,
-        val selectedWsId: String?,
-        val konNames: List<String>,
-        val settings: Triple<
-            com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode,
-            com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName,
-            com.monkopedia.konstructor.frontend.viewmodel.KeymapName
-        >,
-        val displays: Map<String, com.monkopedia.konstructor.frontend.viewmodel.TargetDisplay>
-    )
+    private fun buildSnapshot(
+        connected: Boolean,
+        workspaces: List<Space>?,
+        selectedWsId: String?,
+        konNames: List<String>,
+        settingsVm: SettingsViewModel,
+        konstructionVm: com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel?
+    ): AppStateSnapshot {
+        val targets = konstructionVm?.targetDisplays?.value?.values?.map { display ->
+            TargetSnapshot(
+                name = display.name,
+                color = display.color,
+                isEnabled = display.isEnabled
+            )
+        } ?: emptyList()
+        return AppStateSnapshot(
+            ready = true,
+            connected = connected,
+            workspaceCount = workspaces?.size ?: -1,
+            workspaceNames = workspaces?.map { it.name } ?: emptyList(),
+            workspaceIds = workspaces?.map { it.id } ?: emptyList(),
+            selectedWorkspaceId = selectedWsId,
+            codePaneMode = settingsVm.codePaneMode.value.name,
+            editorTheme = settingsVm.editorTheme.value.name,
+            keymap = settingsVm.keymap.value.name,
+            screen = when {
+                workspaces == null -> "loading"
+                workspaces.isEmpty() -> "empty"
+                else -> "main"
+            },
+            konstructionCount = konNames.size,
+            konstructionNames = konNames,
+            targets = targets
+        )
+    }
 
     private var refreshTriggerRef: kotlinx.coroutines.flow.MutableStateFlow<Int>? = null
 
@@ -483,6 +479,9 @@ private external fun setState(stateJson: String)
 
 @JsFun("() => { globalThis.__konstructor.version = (globalThis.__konstructor.version || 0) + 1; }")
 private external fun incrementVersion()
+
+@JsFun("() => { if (globalThis.__konstructorLoaded) globalThis.__konstructorLoaded(); }")
+private external fun notifyLoaded()
 
 @JsFun("(s) => { globalThis.__konstructor.error = s; }")
 private external fun setError(error: String)
