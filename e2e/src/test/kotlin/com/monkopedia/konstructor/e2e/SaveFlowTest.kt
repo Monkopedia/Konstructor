@@ -52,7 +52,8 @@ class SaveFlowTest : BaseE2eTest() {
         waitForBridge()
 
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen === 'main'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
         )
@@ -81,7 +82,8 @@ class SaveFlowTest : BaseE2eTest() {
         waitForBridge()
 
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen === 'main'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
         )

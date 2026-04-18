@@ -30,7 +30,8 @@ class WorkspaceCrudTest : BaseE2eTest() {
 
         // Wait for workspace list to show 1 workspace
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount === 1",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.workspaceCount === 1",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )
@@ -49,7 +50,8 @@ class WorkspaceCrudTest : BaseE2eTest() {
         bridgeAction("createWorkspace", "ToDelete")
 
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount === 1",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.workspaceCount === 1",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )
@@ -63,7 +65,8 @@ class WorkspaceCrudTest : BaseE2eTest() {
         bridgeAction("deleteWorkspace", wsId)
 
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.workspaceCount === 0",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.workspaceCount === 0",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )

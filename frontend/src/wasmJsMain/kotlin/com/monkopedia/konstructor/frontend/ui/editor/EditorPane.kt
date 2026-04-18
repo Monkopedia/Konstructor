@@ -67,6 +67,7 @@ import com.monkopedia.kodemirror.view.editorContentStyle
 import com.monkopedia.kodemirror.view.keymapOf
 import com.monkopedia.kodemirror.view.onSave
 import com.monkopedia.kodemirror.view.saveKeymap
+import com.monkopedia.konstructor.common.KonstructionType
 import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
 import com.monkopedia.konstructor.frontend.viewmodel.KeymapName
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
@@ -124,7 +125,7 @@ fun EditorPane(modifier: Modifier = Modifier) {
                     Text("Select a konstruction to edit", color = Color.Gray)
                 }
             }
-            selectedKonstruction?.type == com.monkopedia.konstructor.common.KonstructionType.STL -> {
+            selectedKonstruction?.type == KonstructionType.STL -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -201,7 +202,8 @@ private fun EditorContent(
 
     // Recreate session when konstruction, theme, or keymap changes
     val session = remember(selectedKonId, themeName, keymapName, monoFont) {
-        val extensions = basicSetup + themeExt + fontExt + kotlinLang + keymapExt + saveKeymap + saveExt
+        val extensions = basicSetup + themeExt + fontExt + kotlinLang +
+            keymapExt + saveKeymap + saveExt
         val config = com.monkopedia.kodemirror.state.EditorStateConfig(
             doc = content.asDoc(),
             extensions = extensions

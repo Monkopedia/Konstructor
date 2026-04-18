@@ -57,13 +57,15 @@ class ThemeAndKeymapTest : BaseE2eTest() {
             ks.set(VALID_SCRIPT)
         }
 
-        // Load app — first load triggers workspace discovery, reload ensures Initializer auto-selects
+        // Load app — first load triggers workspace discovery,
+        // reload ensures Initializer auto-selects
         loadApp()
         waitForBridge()
         page.reload()
         waitForBridge()
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen === 'main'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )

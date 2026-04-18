@@ -95,7 +95,8 @@ fun NavigationPane(modifier: Modifier = Modifier) {
                 onAddKonstruction = { dialogVm.showCreateKonstructionDialog(space.id) },
                 onUploadStl = {
                     kotlinx.browser.window.alert(
-                        "STL upload is not yet available. Use 'Add new konstruction' to create script-based models."
+                        "STL upload is not yet available. " +
+                            "Use 'Add new konstruction' to create script-based models."
                     )
                 }
             )
@@ -249,7 +250,8 @@ private fun KonstructionItem(
             } else {
                 Icons.Filled.Widgets
             },
-            contentDescription = if (konstruction.type == KonstructionType.STL) "STL file" else "Script",
+            contentDescription =
+            if (konstruction.type == KonstructionType.STL) "STL file" else "Script",
             tint = if (konstruction.type == KonstructionType.STL) {
                 MaterialTheme.colorScheme.secondary
             } else {

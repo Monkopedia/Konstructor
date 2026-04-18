@@ -29,7 +29,8 @@ class ScreenshotTest : BaseE2eTest() {
         waitForBridge()
         // Wait for the screen to settle
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen !== 'loading'",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen !== 'loading'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(15000.0)
         )
@@ -47,7 +48,8 @@ class ScreenshotTest : BaseE2eTest() {
         page.reload()
         waitForBridge()
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen === 'main'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
         )

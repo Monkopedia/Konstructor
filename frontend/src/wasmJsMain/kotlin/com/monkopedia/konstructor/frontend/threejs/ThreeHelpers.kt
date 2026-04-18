@@ -100,7 +100,10 @@ external fun createPhongMaterialParams(): JsAny
 @JsFun("(color) => ({ color: color, specular: 0x111111, shininess: 200 })")
 external fun createPhongMaterialParamsWithColor(color: Int): JsAny
 
-@JsFun("(mesh, color) => { if (mesh.material && mesh.material.color) mesh.material.color.set(color); }")
+@JsFun(
+    "(mesh, color) => { if (mesh.material && mesh.material.color)" +
+        " mesh.material.color.set(color); }"
+)
 external fun setMeshColor(mesh: Mesh, color: Int)
 
 @JsFun("(light, intensity) => { light.intensity = intensity; }")

@@ -22,13 +22,8 @@ subprojects {
             // Since kotlin doesn't pick up on multi platform projects
             filter.include("**/*.kt")
             filter.exclude("**/three-kt/**")
-            ktlint("0.42.1") {
-                userData(
-                    mapOf(
-                        "android" to "true",
-                        "max_line_length" to "120"
-                    )
-                )
+            ktlint("0.45.2") {
+                userData(mapOf("android" to "true"))
             }
 
             licenseHeader(

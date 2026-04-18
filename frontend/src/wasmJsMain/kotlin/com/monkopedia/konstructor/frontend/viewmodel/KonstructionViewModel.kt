@@ -69,7 +69,8 @@ class KonstructionViewModel(
     val targetDisplays: StateFlow<Map<String, TargetDisplay>> = targetDisplayRepo.displays
 
     /** Map of target name → (render URL, color) for enabled targets with ready renders. */
-    private val _enabledRenderedTargets = MutableStateFlow<Map<String, Pair<String, String>>>(emptyMap())
+    private val _enabledRenderedTargets =
+        MutableStateFlow<Map<String, Pair<String, String>>>(emptyMap())
     val enabledRenderedTargets: StateFlow<Map<String, Pair<String, String>>> =
         _enabledRenderedTargets.asStateFlow()
 

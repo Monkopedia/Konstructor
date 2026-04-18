@@ -52,7 +52,8 @@ class CompileTaskTest {
             |build.gradle.kts:${9 + offset}:9: error: unresolved reference: classpath
             |        classpath("com.monkopedia:ksrpc-gradle-plugin:0.7.2")
             |        ^
-            |""".trimMargin()
+            |
+        """.trimMargin()
         assertEquals(
             listOf(
                 TaskMessage("error: unresolved reference: buildscript", 1, 1),

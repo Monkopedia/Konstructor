@@ -161,7 +161,8 @@ class LoadTimingTest : BaseE2eTest() {
         val tAfterBridge = System.currentTimeMillis()
 
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen !== 'loading'",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen !== 'loading'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
         )

@@ -62,7 +62,9 @@ export("simpleCube")
         waitForBridge()
         page.waitForTimeout(5000.0) // let Compose fully render
 
-        val state = page.evaluate("() => JSON.stringify(globalThis.__konstructor.state)")?.toString() ?: "{}"
+        val state = page
+            .evaluate("() => JSON.stringify(globalThis.__konstructor.state)")
+            ?.toString() ?: "{}"
         System.err.println("=== BRIDGE STATE: $state ===")
 
         // Check if content is available via API

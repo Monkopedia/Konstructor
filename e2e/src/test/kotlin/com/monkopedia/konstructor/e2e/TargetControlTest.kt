@@ -71,7 +71,8 @@ class TargetControlTest : BaseE2eTest() {
         page.reload()
         waitForBridge()
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen === 'main'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
         )
@@ -90,7 +91,8 @@ class TargetControlTest : BaseE2eTest() {
 
     private fun targetSnapshot(name: String): JsonObject? {
         val jsonStr = page.evaluate(
-            "(n) => JSON.stringify(globalThis.__konstructor.state.targets.find(t => t.name === n) || null)",
+            "(n) => JSON.stringify(" +
+                "globalThis.__konstructor.state.targets.find(t => t.name === n) || null)",
             name
         ) as? String ?: return null
         if (jsonStr == "null") return null
