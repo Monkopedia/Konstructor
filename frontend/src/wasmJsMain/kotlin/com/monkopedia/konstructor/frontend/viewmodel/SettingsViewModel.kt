@@ -15,13 +15,11 @@
  */
 package com.monkopedia.konstructor.frontend.viewmodel
 
-import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 
 @Serializable
 data class DirectionalLightConfig(
@@ -66,124 +64,51 @@ enum class KeymapName(val displayName: String) {
     EMACS("Emacs")
 }
 
+private val DEFAULT_LIGHTS = listOf(
+    DirectionalLightConfig(intensity = 0.5f, x = 1f, y = 1f, z = -1f),
+    DirectionalLightConfig(intensity = 0.3f, x = -1f, y = -1f, z = 1f)
+)
+
 class SettingsViewModel {
 
-    private val storage = window.localStorage
-
+    // codePaneMode is not persisted — resets to EDITOR each session.
     private val _codePaneMode = MutableStateFlow(CodePaneMode.EDITOR)
     val codePaneMode: StateFlow<CodePaneMode> = _codePaneMode.asStateFlow()
 
-    private val _editorTheme = MutableStateFlow(loadEnum("editorTheme", EditorThemeName.DRACULA))
-    val editorTheme: StateFlow<EditorThemeName> = _editorTheme.asStateFlow()
-
-    private val _keymap = MutableStateFlow(loadEnum("keymap", KeymapName.VIM))
-    val keymap: StateFlow<KeymapName> = _keymap.asStateFlow()
-
-    private val _showCodeLeft = MutableStateFlow(loadBoolean("showCodeLeft", false))
-    val showCodeLeft: StateFlow<Boolean> = _showCodeLeft.asStateFlow()
-
-    private val _showFps = MutableStateFlow(loadBoolean("showFps", false))
-    val showFps: StateFlow<Boolean> = _showFps.asStateFlow()
-
-    private val _showCameraWidget = MutableStateFlow(loadBoolean("showCameraWidget", true))
-    val showCameraWidget: StateFlow<Boolean> = _showCameraWidget.asStateFlow()
-
-    private val _ambientLightIntensity = MutableStateFlow(loadFloat("ambientLight", 0.5f))
-    val ambientLightIntensity: StateFlow<Float> = _ambientLightIntensity.asStateFlow()
-
-    private val _directionalLights = MutableStateFlow(loadLights())
-    val directionalLights: StateFlow<List<DirectionalLightConfig>> = _directionalLights.asStateFlow()
-
-    fun setCodePaneMode(mode: CodePaneMode) {
-        _codePaneMode.value = mode
-    }
-
-    fun setEditorTheme(theme: EditorThemeName) {
-        _editorTheme.value = theme
-        saveString("editorTheme", theme.name)
-    }
-
-    fun setKeymap(keymap: KeymapName) {
-        _keymap.value = keymap
-        saveString("keymap", keymap.name)
-    }
-
-    fun setShowCodeLeft(value: Boolean) {
-        _showCodeLeft.value = value
-        saveBoolean("showCodeLeft", value)
-    }
-
-    fun setShowFps(value: Boolean) {
-        _showFps.value = value
-        saveBoolean("showFps", value)
-    }
-
-    fun setShowCameraWidget(value: Boolean) {
-        _showCameraWidget.value = value
-        saveBoolean("showCameraWidget", value)
-    }
-
-    fun setAmbientLightIntensity(value: Float) {
-        _ambientLightIntensity.value = value
-        saveFloat("ambientLight", value)
-    }
-
-    fun setDirectionalLights(lights: List<DirectionalLightConfig>) {
-        _directionalLights.value = lights
-        saveLights(lights)
-    }
-
-    private val lightsJson = Json { ignoreUnknownKeys = true }
-    private val lightsSerializer = ListSerializer(DirectionalLightConfig.serializer())
-
-    private fun loadLights(): List<DirectionalLightConfig> {
-        val defaults = listOf(
-            DirectionalLightConfig(intensity = 0.5f, x = 1f, y = 1f, z = -1f),
-            DirectionalLightConfig(intensity = 0.3f, x = -1f, y = -1f, z = 1f)
+    private val editorThemeStore =
+        PersistedStateFlow.enum("editorTheme", EditorThemeName.DRACULA)
+    private val keymapStore =
+        PersistedStateFlow.enum("keymap", KeymapName.VIM)
+    private val showCodeLeftStore =
+        PersistedStateFlow.boolean("showCodeLeft", false)
+    private val showFpsStore =
+        PersistedStateFlow.boolean("showFps", false)
+    private val showCameraWidgetStore =
+        PersistedStateFlow.boolean("showCameraWidget", true)
+    private val ambientLightIntensityStore =
+        PersistedStateFlow.float("ambientLight", 0.5f)
+    private val directionalLightsStore =
+        PersistedStateFlow.serialized(
+            "lights",
+            DEFAULT_LIGHTS,
+            ListSerializer(DirectionalLightConfig.serializer())
         )
-        val raw = storage.getItem("konstructor.lights") ?: return defaults
-        return try {
-            lightsJson.decodeFromString(lightsSerializer, raw)
-        } catch (t: Throwable) {
-            // Corrupt or incompatible — fall back to defaults in memory.
-            // Leave localStorage untouched so a future build / rollback can
-            // still recover the data. Next user-initiated save will overwrite.
-            defaults
-        }
-    }
 
-    private fun saveLights(lights: List<DirectionalLightConfig>) {
-        storage.setItem("konstructor.lights", lightsJson.encodeToString(lightsSerializer, lights))
-    }
+    val editorTheme: StateFlow<EditorThemeName> = editorThemeStore.flow
+    val keymap: StateFlow<KeymapName> = keymapStore.flow
+    val showCodeLeft: StateFlow<Boolean> = showCodeLeftStore.flow
+    val showFps: StateFlow<Boolean> = showFpsStore.flow
+    val showCameraWidget: StateFlow<Boolean> = showCameraWidgetStore.flow
+    val ambientLightIntensity: StateFlow<Float> = ambientLightIntensityStore.flow
+    val directionalLights: StateFlow<List<DirectionalLightConfig>> = directionalLightsStore.flow
 
-    private fun loadBoolean(key: String, default: Boolean): Boolean {
-        return storage.getItem("konstructor.$key")?.toBooleanStrictOrNull() ?: default
-    }
-
-    private fun saveBoolean(key: String, value: Boolean) {
-        storage.setItem("konstructor.$key", value.toString())
-    }
-
-    private fun loadFloat(key: String, default: Float): Float {
-        return storage.getItem("konstructor.$key")?.toFloatOrNull() ?: default
-    }
-
-    private fun saveFloat(key: String, value: Float) {
-        storage.setItem("konstructor.$key", value.toString())
-    }
-
-    private fun saveString(key: String, value: String) {
-        storage.setItem("konstructor.$key", value)
-    }
-
-    private inline fun <reified T : Enum<T>> loadEnum(key: String, default: T): T {
-        val name = storage.getItem("konstructor.$key") ?: return default
-        return try {
-            enumValueOf<T>(name)
-        } catch (t: Throwable) {
-            // Unknown enum value (e.g. stale theme name from a previous version).
-            // Fall back in memory but don't remove — a rollback could re-add support.
-            default
-        }
-    }
+    fun setCodePaneMode(mode: CodePaneMode) { _codePaneMode.value = mode }
+    fun setEditorTheme(theme: EditorThemeName) = editorThemeStore.set(theme)
+    fun setKeymap(keymap: KeymapName) = keymapStore.set(keymap)
+    fun setShowCodeLeft(value: Boolean) = showCodeLeftStore.set(value)
+    fun setShowFps(value: Boolean) = showFpsStore.set(value)
+    fun setShowCameraWidget(value: Boolean) = showCameraWidgetStore.set(value)
+    fun setAmbientLightIntensity(value: Float) = ambientLightIntensityStore.set(value)
+    fun setDirectionalLights(lights: List<DirectionalLightConfig>) =
+        directionalLightsStore.set(lights)
 }
