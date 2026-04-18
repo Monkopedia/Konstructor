@@ -118,6 +118,28 @@ external fun getContainerWidth(id: String): Int
 @JsFun("(id) => { var el = document.getElementById(id); return el ? el.clientHeight : 0; }")
 external fun getContainerHeight(id: String): Int
 
+/**
+ * Observe the size of the element with [id] and call [onResize] whenever it
+ * changes. Returns a disposer that stops the observer.
+ */
+@JsFun(
+    """(id, cb) => {
+    var el = document.getElementById(id);
+    if (!el || typeof ResizeObserver === 'undefined') {
+        return () => {};
+    }
+    var ro = new ResizeObserver(function(entries) {
+        for (var i = 0; i < entries.length; i++) {
+            var r = entries[i].contentRect;
+            cb(Math.round(r.width), Math.round(r.height));
+        }
+    });
+    ro.observe(el);
+    return () => { ro.disconnect(); };
+}"""
+)
+external fun observeElementSize(id: String, onResize: (Int, Int) -> Unit): () -> Unit
+
 // Global Ctrl+S interceptor — installed once at startup, calls globalThis.__konstructor_save
 @JsFun(
     """() => {

@@ -51,7 +51,15 @@ fun InitGlRenderer() {
         val r = ThreeJsRenderer("konstructor-gl-canvas")
         renderer = r
         r.fillContainer("gl-pane")
+        // Re-size the canvas whenever the gl-pane div changes size
+        // (window resize, show-code-left flip, devtools open, etc.)
+        val disposeObserver = com.monkopedia.konstructor.frontend.threejs.observeElementSize(
+            "gl-pane"
+        ) { w, h ->
+            r.resize(w, h)
+        }
         onDispose {
+            disposeObserver()
             r.dispose()
             renderer = null
         }

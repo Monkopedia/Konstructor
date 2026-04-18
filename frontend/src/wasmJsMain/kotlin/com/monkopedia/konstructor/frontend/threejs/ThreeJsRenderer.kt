@@ -82,13 +82,17 @@ class ThreeJsRenderer(private val canvasId: String) {
         if (disposed) return
         val w = getContainerWidth(containerId)
         val h = getContainerHeight(containerId)
-        if (w > 0 && h > 0) {
-            viewWidth = w
-            viewHeight = h
-            renderer.setSize(w, h)
-            camera.aspect = w.toDouble() / h.toDouble()
-            camera.updateProjectionMatrix()
-        }
+        resize(w, h)
+    }
+
+    fun resize(width: Int, height: Int) {
+        if (disposed) return
+        if (width <= 0 || height <= 0) return
+        viewWidth = width
+        viewHeight = height
+        renderer.setSize(width, height)
+        camera.aspect = width.toDouble() / height.toDouble()
+        camera.updateProjectionMatrix()
     }
 
     fun updateLayout(left: Int, top: Int, width: Int, height: Int) {
