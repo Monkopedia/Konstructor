@@ -137,14 +137,18 @@ class SettingsViewModel {
     private val lightsSerializer = ListSerializer(DirectionalLightConfig.serializer())
 
     private fun loadLights(): List<DirectionalLightConfig> {
-        val raw = storage.getItem("konstructor.lights") ?: return listOf(
+        val defaults = listOf(
             DirectionalLightConfig(intensity = 0.5f, x = 1f, y = 1f, z = -1f),
             DirectionalLightConfig(intensity = 0.3f, x = -1f, y = -1f, z = 1f)
         )
+        val raw = storage.getItem("konstructor.lights") ?: return defaults
         return try {
             lightsJson.decodeFromString(lightsSerializer, raw)
-        } catch (_: Exception) {
-            emptyList()
+        } catch (t: Throwable) {
+            // Corrupt or incompatible — fall back to defaults in memory.
+            // Leave localStorage untouched so a future build / rollback can
+            // still recover the data. Next user-initiated save will overwrite.
+            defaults
         }
     }
 
@@ -176,7 +180,9 @@ class SettingsViewModel {
         val name = storage.getItem("konstructor.$key") ?: return default
         return try {
             enumValueOf<T>(name)
-        } catch (_: IllegalArgumentException) {
+        } catch (t: Throwable) {
+            // Unknown enum value (e.g. stale theme name from a previous version).
+            // Fall back in memory but don't remove — a rollback could re-add support.
             default
         }
     }

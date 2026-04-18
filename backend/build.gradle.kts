@@ -79,8 +79,15 @@ val browser = rootProject.findProject(":frontend")!!
 val browserBuildDir = browser.layout.buildDirectory
 val buildDir = layout.buildDirectory
 
+// Set -PwasmDev=true to use the development bundle (unoptimized, preserves
+// function names, much larger) for easier debugging of wasm runtime errors.
+val useDevBundle = (project.findProperty("wasmDev") as? String)?.toBoolean() == true
+val bundleDir = if (useDevBundle) "developmentExecutable" else "productionExecutable"
+val bundleTask = if (useDevBundle) "wasmJsBrowserDevelopmentExecutableDistribution"
+else "wasmJsBrowserDistribution"
+
 val copy = tasks.register<Copy>("copyJsBundleToKtor") {
-    from(browserBuildDir.dir("dist/wasmJs/productionExecutable"))
+    from(browserBuildDir.dir("dist/wasmJs/$bundleDir"))
     into(buildDir.dir("importedResources/web"))
 }
 val lib = rootProject.findProject(":lib")!!
@@ -95,8 +102,8 @@ val copyLib = tasks.register<Copy>("copyLibToKtor") {
 afterEvaluate {
 
     tasks.named("copyJsBundleToKtor") {
-        dependsOn(browser.tasks["wasmJsBrowserDistribution"])
-        mustRunAfter(browser.tasks["wasmJsBrowserDistribution"])
+        dependsOn(browser.tasks[bundleTask])
+        mustRunAfter(browser.tasks[bundleTask])
     }
     tasks.named("copyLibToKtor") {
         dependsOn(lib.tasks["shadowJar"])

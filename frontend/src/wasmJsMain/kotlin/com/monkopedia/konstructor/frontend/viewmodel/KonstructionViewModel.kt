@@ -441,7 +441,9 @@ class KonstructionViewModel(
                 MapSerializer(String.serializer(), TargetDisplay.serializer()),
                 raw
             )
-        } catch (_: Exception) {
+        } catch (t: Throwable) {
+            // Corrupt or incompatible — fall back to empty in memory.
+            // Leave localStorage alone in case a rollback can still read it.
             emptyMap()
         }
     }

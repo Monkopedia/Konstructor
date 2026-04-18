@@ -18,9 +18,8 @@ package com.monkopedia.konstructor.frontend.threejs
 import kotlin.coroutines.resume
 import kotlin.js.JsAny
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -47,7 +46,7 @@ class ThreeJsRenderer(private val canvasId: String) {
     private val loadJobs: MutableMap<String, Job> = mutableMapOf()
 
     /** Scope for async mesh loading. Cancelled in [dispose]. */
-    private val loaderScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val loaderScope = MainScope()
 
     private var axesHelper: AxesHelper? = null
     private var animationFrameId: Int = 0

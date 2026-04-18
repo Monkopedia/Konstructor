@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
 
 class ServiceHolder {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = kotlinx.coroutines.MainScope()
 
     private val _service = MutableStateFlow<Konstructor?>(null)
     val service: StateFlow<Konstructor?> = _service.asStateFlow()

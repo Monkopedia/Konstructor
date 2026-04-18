@@ -88,12 +88,12 @@ class App : ServiceApp("konstructor") {
     override fun Application.configureHttp() {
         install(WebSockets) {}
         install(Compression) {
+            // gzip only — browsers reliably handle gzipped wasm via
+            // WebAssembly.instantiateStreaming; deflate caused crashes.
             gzip { priority = 1.0 }
-            deflate { priority = 10.0 }
             minimumSize(1024)
-            // Compress text-ish assets but NOT wasm — the browser's streaming
-            // compiler is finicky about compressed wasm in some cases.
             matchContentType(
+                io.ktor.http.ContentType.parse("application/wasm"),
                 io.ktor.http.ContentType.Application.JavaScript,
                 io.ktor.http.ContentType.Text.Any,
                 io.ktor.http.ContentType.Application.Json

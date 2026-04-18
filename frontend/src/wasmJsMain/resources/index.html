@@ -74,6 +74,27 @@
     <div id="compose-pane"></div>
 </div>
 <script>
+    // Log unhandled wasm/coroutine errors so they're easy to diagnose.
+    window.addEventListener('unhandledrejection', function(e) {
+        console.error('[unhandledrejection]', e.reason, e);
+    });
+    window.addEventListener('error', function(e) {
+        console.error('[windowError]', e.message, e.filename + ':' + e.lineno, e.error);
+    });
+
+    // Escape hatch: Ctrl+Shift+Alt+R clears konstructor localStorage and
+    // reloads. Useful if corrupt saved state wedges the app on startup.
+    window.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.shiftKey && e.altKey && e.key.toLowerCase() === 'r') {
+            var keys = Object.keys(localStorage).filter(function(k) {
+                return k.indexOf('konstructor.') === 0;
+            });
+            keys.forEach(function(k) { localStorage.removeItem(k); });
+            console.log('[localStorage] cleared', keys.length, 'keys');
+            location.reload();
+        }
+    });
+
     // Expose a global hook that the Kotlin app calls when the bridge is ready.
     // The loading overlay hides when that fires (after Compose has rendered).
     (function() {
