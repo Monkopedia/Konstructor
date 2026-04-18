@@ -56,7 +56,6 @@ import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import org.koin.compose.koinInject
-import org.koin.compose.koinInject
 
 @Composable
 fun NavigationPane(modifier: Modifier = Modifier) {

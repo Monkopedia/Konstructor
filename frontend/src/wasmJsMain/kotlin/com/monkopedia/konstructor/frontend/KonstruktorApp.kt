@@ -27,7 +27,11 @@ import androidx.compose.ui.Modifier
 import com.monkopedia.konstructor.frontend.di.appModule
 import com.monkopedia.konstructor.frontend.ui.Initializer
 import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
+import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
+import com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
+import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
+import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
 
@@ -62,11 +66,11 @@ fun KonstruktorApp() {
 @Composable
 private fun InstallTestBridge() {
     val scope = rememberCoroutineScope()
-    val serviceHolder = koinInject<com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder>()
-    val spaceListVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel>()
+    val serviceHolder = koinInject<ServiceHolder>()
+    val spaceListVm = koinInject<SpaceListViewModel>()
     val settingsVm = koinInject<SettingsViewModel>()
-    val konstructionVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel>()
-    val workspaceVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel>()
+    val konstructionVm = koinInject<KonstructionViewModel>()
+    val workspaceVm = koinInject<WorkspaceViewModel>()
 
     LaunchedEffect(Unit) {
         TestBridge.install(scope, serviceHolder, spaceListVm, settingsVm, konstructionVm, workspaceVm)

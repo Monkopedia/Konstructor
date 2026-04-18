@@ -17,9 +17,15 @@ package com.monkopedia.konstructor.frontend
 
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode
+import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
+import com.monkopedia.konstructor.frontend.viewmodel.KeymapName
+import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
+import com.monkopedia.konstructor.frontend.viewmodel.TargetDisplay
+import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -50,8 +56,8 @@ object TestBridge {
         serviceHolder: ServiceHolder,
         spaceListVm: SpaceListViewModel,
         settingsVm: SettingsViewModel,
-        konstructionVm: com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel? = null,
-        workspaceVm: com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel? = null
+        konstructionVm: KonstructionViewModel? = null,
+        workspaceVm: WorkspaceViewModel? = null
     ) {
         initBridge()
 
@@ -69,18 +75,18 @@ object TestBridge {
         }
         exposeAction("setCodePaneMode") { mode ->
             settingsVm.setCodePaneMode(
-                com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode.valueOf(mode)
+                CodePaneMode.valueOf(mode)
             )
         }
         exposeAction("setEditorTheme") { theme ->
             settingsVm.setEditorTheme(
-                com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName.valueOf(theme)
+                EditorThemeName.valueOf(theme)
             )
             incrementVersion()
         }
         exposeAction("setKeymap") { keymap ->
             settingsVm.setKeymap(
-                com.monkopedia.konstructor.frontend.viewmodel.KeymapName.valueOf(keymap)
+                KeymapName.valueOf(keymap)
             )
             incrementVersion()
         }
@@ -268,7 +274,7 @@ object TestBridge {
         }
         exposeAction("navigate") { mode ->
             settingsVm.setCodePaneMode(
-                com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode.valueOf(mode)
+                CodePaneMode.valueOf(mode)
             )
         }
         exposeAction("selectKonstruction") { konId ->
@@ -278,9 +284,6 @@ object TestBridge {
             scope.launch {
                 try {
                     val content = konstructionVm?.content?.value ?: ""
-                    com.monkopedia.konstructor.frontend.threejs.consoleLog(
-                        "triggerSave bridge action: content.length=${content.length}"
-                    )
                     konstructionVm?.save(content)
                     incrementVersion()
                 } catch (e: Exception) {
@@ -373,7 +376,7 @@ object TestBridge {
         selectedWsId: String?,
         konNames: List<String>,
         settingsVm: SettingsViewModel,
-        konstructionVm: com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel?
+        konstructionVm: KonstructionViewModel?
     ): AppStateSnapshot {
         val targets = konstructionVm?.targetDisplays?.value?.values?.map { display ->
             TargetSnapshot(

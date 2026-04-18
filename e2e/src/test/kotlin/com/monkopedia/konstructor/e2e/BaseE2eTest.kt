@@ -83,10 +83,18 @@ abstract class BaseE2eTest {
         page.waitForSelector("body", waitOpts(10000.0))
     }
 
-    /** Wait for the TestBridge to expose state with a truthy screen value. */
+    /**
+     * Wait for the TestBridge to be fully ready: state exposed AND the
+     * WebSocket to the backend is connected. Without waiting for `connected`,
+     * early bridge actions (like `createWorkspace`) can silently no-op because
+     * `serviceHolder.service.value` is still null.
+     */
     protected fun waitForBridge(timeoutMs: Double = 30000.0) {
         page.waitForFunction(
-            "() => globalThis.__konstructor && globalThis.__konstructor.state && globalThis.__konstructor.state.screen",
+            "() => globalThis.__konstructor && " +
+                "globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen && " +
+                "globalThis.__konstructor.state.connected === true",
             null,
             Page.WaitForFunctionOptions().setTimeout(timeoutMs)
         )

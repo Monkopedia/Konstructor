@@ -24,8 +24,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.monkopedia.konstructor.frontend.threejs.ThreeJsRenderer
-import com.monkopedia.konstructor.frontend.threejs.consoleLog
+import com.monkopedia.konstructor.frontend.threejs.observeElementSize
+import com.monkopedia.konstructor.frontend.threejs.setCodeOnLeft
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
+import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import org.koin.compose.koinInject
 
 /**
@@ -36,7 +38,7 @@ import org.koin.compose.koinInject
 @Composable
 fun InitGlRenderer() {
     val konstructionVm = koinInject<KonstructionViewModel>()
-    val settingsVm = koinInject<com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel>()
+    val settingsVm = koinInject<SettingsViewModel>()
     val enabledTargets by konstructionVm.enabledRenderedTargets.collectAsState()
     val showFps by settingsVm.showFps.collectAsState()
     val showCameraWidget by settingsVm.showCameraWidget.collectAsState()
@@ -47,15 +49,12 @@ fun InitGlRenderer() {
     var renderer by remember { mutableStateOf<ThreeJsRenderer?>(null) }
 
     DisposableEffect(Unit) {
-        consoleLog("InitGlRenderer: creating ThreeJsRenderer")
         val r = ThreeJsRenderer("konstructor-gl-canvas")
         renderer = r
         r.fillContainer("gl-pane")
         // Re-size the canvas whenever the gl-pane div changes size
         // (window resize, show-code-left flip, devtools open, etc.)
-        val disposeObserver = com.monkopedia.konstructor.frontend.threejs.observeElementSize(
-            "gl-pane"
-        ) { w, h ->
+        val disposeObserver = observeElementSize("gl-pane") { w, h ->
             r.resize(w, h)
         }
         onDispose {
@@ -67,9 +66,7 @@ fun InitGlRenderer() {
 
     // Reconcile meshes whenever the enabled-and-rendered target set changes
     LaunchedEffect(renderer, enabledTargets) {
-        val r = renderer ?: return@LaunchedEffect
-        consoleLog("InitGlRenderer: setTargets size=${enabledTargets.size}")
-        r.setTargets(enabledTargets)
+        renderer?.setTargets(enabledTargets)
     }
 
     // Wire settings to renderer
@@ -95,6 +92,6 @@ fun InitGlRenderer() {
         )
     }
     LaunchedEffect(showCodeLeft) {
-        com.monkopedia.konstructor.frontend.threejs.setCodeOnLeft(showCodeLeft)
+        setCodeOnLeft(showCodeLeft)
     }
 }
