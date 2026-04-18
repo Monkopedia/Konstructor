@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -163,7 +163,9 @@ external fun installCtrlSListener()
     if (!el) {
         el = document.createElement('div');
         el.id = 'konstructor-fps';
-        el.style.cssText = 'position:absolute;top:4px;left:4px;color:#0f0;font:12px monospace;z-index:100;pointer-events:none;background:rgba(0,0,0,0.5);padding:2px 6px;border-radius:3px;';
+        el.style.cssText = 'position:absolute;top:4px;left:4px;color:#0f0;' +
+            'font:12px monospace;z-index:100;pointer-events:none;' +
+            'background:rgba(0,0,0,0.5);padding:2px 6px;border-radius:3px;';
         var gl = document.getElementById('gl-pane');
         if (gl) { gl.style.position = 'relative'; gl.appendChild(el); }
     }
@@ -179,7 +181,6 @@ external fun updateFpsOverlay(fps: Int)
 }"""
 )
 external fun hideFpsOverlay()
-
 
 @JsFun("(cb) => { globalThis.__konstructor_save = cb; }")
 external fun setGlobalSaveCallback(callback: () -> Unit)

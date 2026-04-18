@@ -28,7 +28,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class ScriptServiceImpl(private val script: KcsgScript, private val exec: KcsgScript.() -> Unit) : ScriptService {
+class ScriptServiceImpl(
+    private val script: KcsgScript,
+    private val exec: KcsgScript.() -> Unit
+) : ScriptService {
     private var shipper: Shipper? = null
     private val serviceCache = mutableMapOf<String, BuildServiceImpl>()
     private val statusCache = mutableMapOf<String, TargetStatus>()

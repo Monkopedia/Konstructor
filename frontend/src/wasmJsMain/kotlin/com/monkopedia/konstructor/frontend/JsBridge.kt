@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,7 +24,6 @@ import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
-import com.monkopedia.konstructor.frontend.viewmodel.TargetDisplay
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collectLatest
@@ -244,9 +243,11 @@ object JsBridge {
                     val kon = kons.firstOrNull { it.id == konId } ?: return@launch
                     val ks = service.konstruction(kon)
                     val result = ks.compile()
-                    setLastResult(json.encodeToString(
-                        com.monkopedia.konstructor.common.TaskResult.serializer(), result
-                    ))
+                    setLastResult(
+                        json.encodeToString(
+                            com.monkopedia.konstructor.common.TaskResult.serializer(), result
+                        )
+                    )
                     incrementVersion()
                 } catch (e: Exception) {
                     setError("compile failed: ${e.message}")
@@ -266,9 +267,11 @@ object JsBridge {
                     val kon = kons.firstOrNull { it.id == konId } ?: return@launch
                     val ks = service.konstruction(kon)
                     val result = ks.konstruct(target)
-                    setLastResult(json.encodeToString(
-                        com.monkopedia.konstructor.common.TaskResult.serializer(), result
-                    ))
+                    setLastResult(
+                        json.encodeToString(
+                            com.monkopedia.konstructor.common.TaskResult.serializer(), result
+                        )
+                    )
                     incrementVersion()
                 } catch (e: Exception) {
                     setError("build failed: ${e.message}")
@@ -442,10 +445,13 @@ object JsBridge {
         }
         incrementVersion()
     }
-
 }
 
-@JsFun("() => { globalThis.__konstructor = { ready: false, version: 0, state: null, lastResult: null }; }")
+@JsFun(
+    "() => { " +
+        "globalThis.__konstructor = { ready: false, version: 0, state: null, lastResult: null }; " +
+        "}"
+)
 private external fun initBridge()
 
 @JsFun("(v) => { globalThis.__konstructor.ready = v; }")
@@ -470,5 +476,10 @@ private fun exposeAction(name: String, action: (String) -> Unit) {
     exposeActionJs(name, action)
 }
 
-@JsFun("(name, fn) => { if (!globalThis.__konstructor.actions) globalThis.__konstructor.actions = {}; globalThis.__konstructor.actions[name] = fn; }")
+@JsFun(
+    "(name, fn) => { " +
+        "if (!globalThis.__konstructor.actions) globalThis.__konstructor.actions = {}; " +
+        "globalThis.__konstructor.actions[name] = fn; " +
+        "}"
+)
 private external fun exposeActionJs(name: String, fn: (String) -> Unit)

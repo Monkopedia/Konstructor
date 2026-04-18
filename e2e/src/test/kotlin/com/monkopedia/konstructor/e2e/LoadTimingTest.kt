@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,9 +24,9 @@ import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
 import com.monkopedia.ksrpc.toStub
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
+import kotlin.math.roundToLong
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
-import kotlin.math.roundToLong
 
 /**
  * Measures various stages of initial page load and prints a breakdown.
@@ -76,10 +76,11 @@ class LoadTimingTest : BaseE2eTest() {
             ks.requestKonstructs(listOf("cubeA", "cubeB", "cubeC", "cubeD"))
             // Wait for build to finish — poll info
             var attempts = 0
+            val cleanState = com.monkopedia.konstructor.common.DirtyState.CLEAN
             while (attempts < 60) {
                 val info = ks.getInfo()
                 if (info.targets.size == 4 &&
-                    info.targets.all { it.state == com.monkopedia.konstructor.common.DirtyState.CLEAN }
+                    info.targets.all { it.state == cleanState }
                 ) break
                 kotlinx.coroutines.delay(1000)
                 attempts++
@@ -94,7 +95,8 @@ class LoadTimingTest : BaseE2eTest() {
         val tAfterBridge = System.currentTimeMillis()
 
         page.waitForFunction(
-            "() => globalThis.__konstructor.state && globalThis.__konstructor.state.screen === 'main'",
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.screen === 'main'",
             null,
             com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
         )
@@ -142,8 +144,9 @@ class LoadTimingTest : BaseE2eTest() {
                 "  ${r.name.padEnd(30)} ${r.duration.toString().padStart(5)}ms  ${kb}KB"
             )
         }
-        val stlTotalMs = resources.filter { it.name.endsWith(".stl") }.sumOf { it.duration }
-        val stlTotalKb = resources.filter { it.name.endsWith(".stl") }.sumOf { it.decodedBodySize } / 1024
+        val stlResources = resources.filter { it.name.endsWith(".stl") }
+        val stlTotalMs = stlResources.sumOf { it.duration }
+        val stlTotalKb = stlResources.sumOf { it.decodedBodySize } / 1024
         System.err.println("  TOTAL STL: ${stlTotalMs}ms (cumulative), ${stlTotalKb}KB")
         System.err.println(sep)
     }
@@ -214,7 +217,7 @@ class LoadTimingTest : BaseE2eTest() {
             val decodedKb = r.decodedBodySize / 1024
             val savings = if (r.decodedBodySize > 0 && r.transferSize > 0) {
                 val pct = (100 - (r.transferSize * 100.0 / r.decodedBodySize)).roundToLong()
-                " (saved ${pct}%)"
+                " (saved $pct%)"
             } else ""
             System.err.println(
                 "  ${r.name.padEnd(40)} ${r.duration.toString().padStart(5)}ms  " +

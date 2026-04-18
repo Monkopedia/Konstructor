@@ -17,13 +17,11 @@ package com.monkopedia.konstructor.tasks
 
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.KonstructionControllerImpl.Companion.copyContentToScript
-import com.monkopedia.konstructor.hostservices.ScriptManager
-import com.monkopedia.konstructor.common.TaskResult
-import com.monkopedia.konstructor.common.TaskStatus.FAILURE
-import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.PathController
+import com.monkopedia.konstructor.common.TaskResult
+import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.hostservices.InvalidScriptException
-import java.io.File
+import com.monkopedia.konstructor.hostservices.ScriptManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking

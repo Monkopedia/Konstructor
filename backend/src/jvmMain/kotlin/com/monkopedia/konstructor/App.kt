@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,7 +33,6 @@ import io.ktor.server.http.content.defaultResource
 import io.ktor.server.http.content.resources
 import io.ktor.server.http.content.static
 import io.ktor.server.plugins.compression.Compression
-import io.ktor.server.plugins.compression.deflate
 import io.ktor.server.plugins.compression.gzip
 import io.ktor.server.plugins.compression.matchContentType
 import io.ktor.server.plugins.compression.minimumSize

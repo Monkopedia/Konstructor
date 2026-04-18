@@ -23,7 +23,12 @@ subprojects {
             filter.include("**/*.kt")
             filter.exclude("**/three-kt/**")
             ktlint("0.42.1") {
-                userData(mapOf("android" to "true"))
+                userData(
+                    mapOf(
+                        "android" to "true",
+                        "max_line_length" to "120"
+                    )
+                )
             }
 
             licenseHeader(

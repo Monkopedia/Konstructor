@@ -67,7 +67,7 @@ kotlin.compilerOptions {
 
 tasks.withType<
     org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
->().configureEach {
+    >().configureEach {
     compilerOptions {
         jvmTarget.set(
             org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
@@ -113,7 +113,7 @@ afterEvaluate {
     val jvmJar = tasks.named<Jar>("jvmJar")
     tasks.register<
         com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-    >("shadowJar") {
+        >("shadowJar") {
         from(jvmJar.map { it.outputs })
         val cp = project.configurations.getByName("jvmRuntimeClasspath")
         configurations = listOf(cp)

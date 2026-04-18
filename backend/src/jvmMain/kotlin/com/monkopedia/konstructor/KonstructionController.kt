@@ -223,11 +223,17 @@ class KonstructionControllerImpl(
     companion object {
 
         fun copyContentToScript(inputStream: InputStream, kotlinFile: File) {
+            val mainInvocation =
+                "fun main(args: Array<String>) = " +
+                    "com.monkopedia.konstructor.lib.runKonstruction(" +
+                    "args, com.monkopedia.kcsg.KcsgScript())"
             kotlinFile.outputStream().use { os ->
-                (KcsgScript.HEADER.replace(
-                    "com.monkopedia.kcsg.KcsgScript().apply",
-                    "fun main(args: Array<String>) = com.monkopedia.konstructor.lib.runKonstruction(args, com.monkopedia.kcsg.KcsgScript())"
-                ) + "\n").byteInputStream().copyTo(os)
+                (
+                    KcsgScript.HEADER.replace(
+                        "com.monkopedia.kcsg.KcsgScript().apply",
+                        mainInvocation
+                    ) + "\n"
+                    ).byteInputStream().copyTo(os)
                 inputStream.use { it.copyTo(os) }
                 ("\n" + KcsgScript.FOOTER).byteInputStream().copyTo(os)
             }

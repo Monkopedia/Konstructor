@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,9 +32,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
 import com.monkopedia.kodemirror.basicsetup.basicSetup
 import com.monkopedia.kodemirror.commands.emacsStyleKeymap
 import com.monkopedia.kodemirror.language.StreamLanguage
@@ -57,11 +57,11 @@ import com.monkopedia.kodemirror.themecoolglow.coolGlow
 import com.monkopedia.kodemirror.themedracula.dracula
 import com.monkopedia.kodemirror.themeespresso.espresso
 import com.monkopedia.kodemirror.themenoctislilac.noctisLilac
-import com.monkopedia.kodemirror.themonedark.oneDark
 import com.monkopedia.kodemirror.themerosepinedawn.rosePineDawn
 import com.monkopedia.kodemirror.themesmoothy.smoothy
 import com.monkopedia.kodemirror.themesolarizedlight.solarizedLight
 import com.monkopedia.kodemirror.themetomorrow.tomorrow
+import com.monkopedia.kodemirror.themonedark.oneDark
 import com.monkopedia.kodemirror.view.KodeMirror
 import com.monkopedia.kodemirror.view.editorContentStyle
 import com.monkopedia.kodemirror.view.keymapOf
@@ -75,7 +75,6 @@ import com.monkopedia.konstructor.frontend.viewmodel.UiState
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import konstructor.frontend.generated.resources.JetBrainsMono_Regular
 import konstructor.frontend.generated.resources.Res
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.Font
 import org.koin.compose.koinInject
 

@@ -21,9 +21,9 @@ import com.monkopedia.kcsg.STL
 import com.monkopedia.konstructor.lib.TargetStatus.BUILT
 import com.monkopedia.konstructor.lib.TargetStatus.ERROR
 import java.io.File
-import kotlinx.io.files.Path
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.io.files.Path
 
 internal class ImportedScriptRemoteImpl(
     private val script: ScriptService,

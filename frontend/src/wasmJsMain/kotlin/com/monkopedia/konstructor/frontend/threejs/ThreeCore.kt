@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,7 +24,7 @@ external class Scene : JsAny {
     fun remove(obj: Object3D)
 }
 
-external open class Object3D : JsAny {
+open external class Object3D : JsAny {
     val position: Vector3
     val rotation: Euler
     fun lookAt(x: Double, y: Double, z: Double)
@@ -58,7 +58,7 @@ external class PerspectiveCamera(
     fun updateProjectionMatrix()
 }
 
-external open class Light(
+open external class Light(
     color: Int = definedExternally,
     intensity: Double = definedExternally
 ) : Object3D
@@ -78,7 +78,7 @@ external class Color : JsAny {
     fun set(color: String): Color
 }
 
-external open class Material : JsAny {
+open external class Material : JsAny {
     fun dispose()
 }
 
@@ -90,7 +90,7 @@ external class MeshPhongMaterial(
     var shininess: Double
 }
 
-external open class BufferGeometry : JsAny {
+open external class BufferGeometry : JsAny {
     fun computeVertexNormals()
     fun center(): BufferGeometry
     fun dispose()
