@@ -40,8 +40,8 @@ fun KonstruktorApp() {
     KoinApplication(application = {
         modules(appModule)
     }) {
-        // Install the test bridge for Playwright e2e testing
-        InstallTestBridge()
+        InstallJsBridge()
+        HideLoadingOverlayOnStartup()
 
         val settingsVm = koinInject<SettingsViewModel>()
         val editorTheme by settingsVm.editorTheme.collectAsState()
@@ -64,7 +64,7 @@ fun KonstruktorApp() {
 }
 
 @Composable
-private fun InstallTestBridge() {
+private fun InstallJsBridge() {
     val scope = rememberCoroutineScope()
     val serviceHolder = koinInject<ServiceHolder>()
     val spaceListVm = koinInject<SpaceListViewModel>()
@@ -73,6 +73,6 @@ private fun InstallTestBridge() {
     val workspaceVm = koinInject<WorkspaceViewModel>()
 
     LaunchedEffect(Unit) {
-        TestBridge.install(scope, serviceHolder, spaceListVm, settingsVm, konstructionVm, workspaceVm)
+        JsBridge.install(scope, serviceHolder, spaceListVm, settingsVm, konstructionVm, workspaceVm)
     }
 }

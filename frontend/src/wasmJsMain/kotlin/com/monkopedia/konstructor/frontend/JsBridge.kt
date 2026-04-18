@@ -30,25 +30,28 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Exposes app state to `globalThis.__konstructor` for Playwright e2e testing.
+ * Bridges app state and mutating actions to JavaScript via
+ * `globalThis.__konstructor`. Used for:
+ *  - Playwright e2e tests (read state, invoke actions).
+ *  - Any non-Compose JS caller that needs to observe or mutate state.
  *
- * Playwright reads state via:
- *   page.evaluate(() => globalThis.__konstructor.state)
- *   page.evaluate(() => globalThis.__konstructor.ready)
- *   page.evaluate(() => globalThis.__konstructor.version)
+ * Read state:
+ *   globalThis.__konstructor.state      // AppStateSnapshot JSON
+ *   globalThis.__konstructor.version    // bumps on every change
+ *   globalThis.__konstructor.ready      // true once first state emitted
  *
- * Keyboard input goes through the canvas:
- *   document.body.shadowRoot.querySelector("canvas").focus()
- *   page.keyboard.type("text")
+ * Invoke an action:
+ *   globalThis.__konstructor.actions.<name>(jsonArg)
+ *
+ * See BridgeStateSnapshot.kt for the exported state shape.
  */
-object TestBridge {
+object JsBridge {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     fun install(
@@ -360,9 +363,6 @@ object TestBridge {
                     setState(stateJson)
                     setReady(true)
                     incrementVersion()
-                    // Hide the loading overlay once the bridge has produced
-                    // state at least once (means Compose is running).
-                    notifyLoaded()
                 } catch (e: Exception) {
                     setError(e.message ?: "unknown error")
                 }
@@ -443,29 +443,6 @@ object TestBridge {
         incrementVersion()
     }
 
-    @Serializable
-    data class TargetSnapshot(
-        val name: String,
-        val color: String,
-        val isEnabled: Boolean
-    )
-
-    @Serializable
-    data class AppStateSnapshot(
-        val ready: Boolean = false,
-        val connected: Boolean = false,
-        val workspaceCount: Int = -1,
-        val workspaceNames: List<String> = emptyList(),
-        val workspaceIds: List<String> = emptyList(),
-        val selectedWorkspaceId: String? = null,
-        val codePaneMode: String = "EDITOR",
-        val editorTheme: String = "DRACULA",
-        val keymap: String = "VIM",
-        val screen: String = "loading",
-        val konstructionCount: Int = 0,
-        val konstructionNames: List<String> = emptyList(),
-        val targets: List<TargetSnapshot> = emptyList()
-    )
 }
 
 @JsFun("() => { globalThis.__konstructor = { ready: false, version: 0, state: null, lastResult: null }; }")
@@ -482,9 +459,6 @@ private external fun setState(stateJson: String)
 
 @JsFun("() => { globalThis.__konstructor.version = (globalThis.__konstructor.version || 0) + 1; }")
 private external fun incrementVersion()
-
-@JsFun("() => { if (globalThis.__konstructorLoaded) globalThis.__konstructorLoaded(); }")
-private external fun notifyLoaded()
 
 @JsFun("(s) => { globalThis.__konstructor.error = s; }")
 private external fun setError(error: String)
