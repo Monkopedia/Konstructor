@@ -16,6 +16,8 @@ javafx = "0.1.0"
 compose-multiplatform = "1.10.3"
 lifecycle = "2.10.0"
 kodemirror = "0.2.0"
+spotless = "7.0.2"
+ktlint = "1.5.0"
 
 
 [libraries]
@@ -61,7 +63,7 @@ kotlin-serialization = { module = "org.jetbrains.kotlin:kotlin-serialization", v
 ksrpc = { module = "com.monkopedia.ksrpc:ksrpc-gradle-plugin", version.ref = "ksrpc" }
 
 [plugins]
-autostyle = { id = "com.github.autostyle", version = "3.2" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 javafx = { id = "org.openjfx.javafxplugin", version.ref = "javafx" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }

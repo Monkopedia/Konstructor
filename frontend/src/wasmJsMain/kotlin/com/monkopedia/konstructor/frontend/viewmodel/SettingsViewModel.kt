@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -102,7 +102,9 @@ class SettingsViewModel {
     val ambientLightIntensity: StateFlow<Float> = ambientLightIntensityStore.flow
     val directionalLights: StateFlow<List<DirectionalLightConfig>> = directionalLightsStore.flow
 
-    fun setCodePaneMode(mode: CodePaneMode) { _codePaneMode.value = mode }
+    fun setCodePaneMode(mode: CodePaneMode) {
+        _codePaneMode.value = mode
+    }
     fun setEditorTheme(theme: EditorThemeName) = editorThemeStore.set(theme)
     fun setKeymap(keymap: KeymapName) = keymapStore.set(keymap)
     fun setShowCodeLeft(value: Boolean) = showCodeLeftStore.set(value)

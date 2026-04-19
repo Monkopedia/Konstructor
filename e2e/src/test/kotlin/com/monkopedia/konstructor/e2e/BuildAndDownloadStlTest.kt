@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -110,14 +110,16 @@ class BuildAndDownloadStlTest {
         // Compile
         val compileResult = ks.compile()
         assertEquals(
-            TaskStatus.SUCCESS, compileResult.status,
+            TaskStatus.SUCCESS,
+            compileResult.status,
             "Compilation failed: ${compileResult.messages}"
         )
 
         // Build target
         val buildResult = ks.konstruct("simpleCube")
         assertEquals(
-            TaskStatus.SUCCESS, buildResult.status,
+            TaskStatus.SUCCESS,
+            buildResult.status,
             "Build failed: ${buildResult.messages}"
         )
 
@@ -156,14 +158,16 @@ class BuildAndDownloadStlTest {
 
         val compileResult = ks.compile()
         assertEquals(
-            TaskStatus.SUCCESS, compileResult.status,
+            TaskStatus.SUCCESS,
+            compileResult.status,
             "Compilation failed: ${compileResult.messages}"
         )
 
         // Build cube target
         val cubeBuild = ks.konstruct("myCube")
         assertEquals(
-            TaskStatus.SUCCESS, cubeBuild.status,
+            TaskStatus.SUCCESS,
+            cubeBuild.status,
             "Cube build failed: ${cubeBuild.messages}"
         )
         val cubePath = ks.konstructed("myCube")
@@ -172,7 +176,8 @@ class BuildAndDownloadStlTest {
         // Build sphere target
         val sphereBuild = ks.konstruct("mySphere")
         assertEquals(
-            TaskStatus.SUCCESS, sphereBuild.status,
+            TaskStatus.SUCCESS,
+            sphereBuild.status,
             "Sphere build failed: ${sphereBuild.messages}"
         )
         val spherePath = ks.konstructed("mySphere")

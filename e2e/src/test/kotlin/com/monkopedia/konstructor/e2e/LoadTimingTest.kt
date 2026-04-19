@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,7 +34,7 @@ import org.junit.Test
  */
 class LoadTimingTest : BaseE2eTest() {
 
-    private val FOUR_TARGET_SCRIPT = """
+    private val fourTargetScript = """
         val cubeA by primitive {
             cube { dimensions = xyz(10.0, 10.0, 10.0) }
         }
@@ -67,7 +67,7 @@ class LoadTimingTest : BaseE2eTest() {
                 Konstruction(name = "PrebuiltTest", workspaceId = ws.id, id = "")
             )
             val ks = service.konstruction(kon)
-            ks.set(FOUR_TARGET_SCRIPT)
+            ks.set(fourTargetScript)
             val compileResult = ks.compile()
             require(compileResult.status == TaskStatus.SUCCESS) {
                 "Compile failed: ${compileResult.messages}"
@@ -81,7 +81,9 @@ class LoadTimingTest : BaseE2eTest() {
                 val info = ks.getInfo()
                 if (info.targets.size == 4 &&
                     info.targets.all { it.state == cleanState }
-                ) break
+                ) {
+                    break
+                }
                 kotlinx.coroutines.delay(1000)
                 attempts++
             }
@@ -219,7 +221,9 @@ class LoadTimingTest : BaseE2eTest() {
             val savings = if (r.decodedBodySize > 0 && r.transferSize > 0) {
                 val pct = (100 - (r.transferSize * 100.0 / r.decodedBodySize)).roundToLong()
                 " (saved $pct%)"
-            } else ""
+            } else {
+                ""
+            }
             System.err.println(
                 "  ${r.name.padEnd(40)} ${r.duration.toString().padStart(5)}ms  " +
                     "${transferKb}KB xfer / ${decodedKb}KB decoded$savings"

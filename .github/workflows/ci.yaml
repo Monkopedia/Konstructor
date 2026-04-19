@@ -41,8 +41,8 @@ jobs:
       - name: Raise file descriptor limit
         run: ulimit -n 4096 || true
 
-      - name: Autostyle check
-        run: ./gradlew autostyleCheck
+      - name: Spotless check
+        run: ./gradlew spotlessCheck
 
       - name: Build shadowJar (produces the backend fat jar e2e tests run against)
         run: ./gradlew shadowJar

@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -59,7 +59,8 @@ class KonstructionServiceImpl(
     id: String,
     private val warehouseWrapper: WarehouseWrapper,
     private val onClose: suspend () -> Unit
-) : KonstructionService, LoggingService {
+) : KonstructionService,
+    LoggingService {
     private val konstructionController = KonstructorManager(config).controllerFor(workspaceId, id)
     private val listenerLock = Mutex()
     private val listeners = mutableMapOf<String, ListenerHandler>()
@@ -121,7 +122,9 @@ class KonstructionServiceImpl(
                 targets = info.targets.map {
                     if (it.state != NEEDS_COMPILE) {
                         it.copy(state = NEEDS_COMPILE).also(changedTargets::add)
-                    } else it
+                    } else {
+                        it
+                    }
                 }
             )
             konstructionController.info = newInfo
@@ -143,14 +146,20 @@ class KonstructionServiceImpl(
                 konstructionController.compile()
                 var changedTargets = mutableListOf<KonstructionTarget>()
                 val newState =
-                    if (konstructionController.lastCompileResult().status == SUCCESS) NEEDS_EXEC
-                    else CLEAN
+                    if (konstructionController.lastCompileResult().status == SUCCESS) {
+                        NEEDS_EXEC
+                    } else {
+                        CLEAN
+                    }
                 val newInfo = info.copy(
                     dirtyState = newState,
                     targets = info.targets.map {
-                        if (it.state == NEEDS_COMPILE) it.copy(state = newState)
-                            .also(changedTargets::add)
-                        else it
+                        if (it.state == NEEDS_COMPILE) {
+                            it.copy(state = newState)
+                                .also(changedTargets::add)
+                        } else {
+                            it
+                        }
                     }
                 )
                 konstructionController.info = newInfo
@@ -220,12 +229,17 @@ class KonstructionServiceImpl(
                 val changedTargets = mutableListOf<KonstructionTarget>()
                 val targets = allTargets.map { target ->
                     val dirtyState =
-                        if (target in latestBuilt) CLEAN
-                        else existingTargets[target]?.state ?: NEEDS_EXEC
+                        if (target in latestBuilt) {
+                            CLEAN
+                        } else {
+                            existingTargets[target]?.state ?: NEEDS_EXEC
+                        }
                     existingTargets[target]?.let {
                         if (it.state != dirtyState) {
                             it.copy(state = dirtyState).also(changedTargets::add)
-                        } else it
+                        } else {
+                            it
+                        }
                     } ?: KonstructionTarget(target, dirtyState).also(changedTargets::add)
                 }
                 val newInfo = info.copy(

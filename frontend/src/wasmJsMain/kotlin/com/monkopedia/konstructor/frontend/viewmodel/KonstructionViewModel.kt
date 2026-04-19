@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -74,7 +74,7 @@ class KonstructionViewModel(
     val enabledRenderedTargets: StateFlow<Map<String, Pair<String, String>>> =
         _enabledRenderedTargets.asStateFlow()
 
-    private val _renderPaths = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val renderPaths = MutableStateFlow<Map<String, String>>(emptyMap())
 
     private var konstructionService: KonstructionService? = null
     private var listenerKey: String? = null
@@ -90,7 +90,7 @@ class KonstructionViewModel(
         viewModelScope.launch {
             _state.value = UiState.LOADING
             _renderPath.value = null
-            _renderPaths.value = emptyMap()
+            renderPaths.value = emptyMap()
             targetDisplayRepo.activate(konstruction.workspaceId, konstruction.id)
             recomputeEnabledTargets()
             val service = serviceHolder.service.value
@@ -135,14 +135,14 @@ class KonstructionViewModel(
                             }
                         }.awaitAll()
                     }
-                    val newPaths = _renderPaths.value.toMutableMap()
+                    val newPaths = renderPaths.value.toMutableMap()
                     for ((name, path) in paths) {
                         if (path != null) {
                             newPaths[name] = path
                             _renderPath.value = path
                         }
                     }
-                    _renderPaths.value = newPaths
+                    renderPaths.value = newPaths
                     recomputeEnabledTargets()
                 } else {
                     autoCompileAndBuild(ks)
@@ -169,15 +169,14 @@ class KonstructionViewModel(
     private suspend fun registerListener(ks: KonstructionService) {
         try {
             val listener = object : KonstructionListener {
-                override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> {
-                    return listOf(
+                override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> =
+                    listOf(
                         KonstructionCallbacks.INFO_CHANGE,
                         KonstructionCallbacks.DIRTY_CHANGE,
                         KonstructionCallbacks.CONTENT_CHANGE,
                         KonstructionCallbacks.TASK_COMPLETE,
                         KonstructionCallbacks.RENDER_CHANGE
                     )
-                }
 
                 override suspend fun onInfoChanged(info: KonstructionInfo) {
                     _info.value = info
@@ -205,14 +204,14 @@ class KonstructionViewModel(
                                     }
                                 }.awaitAll()
                             }
-                            val newPaths = _renderPaths.value.toMutableMap()
+                            val newPaths = renderPaths.value.toMutableMap()
                             for ((name, path) in paths) {
                                 if (path != null) {
                                     newPaths[name] = path
                                     _renderPath.value = path
                                 }
                             }
-                            _renderPaths.value = newPaths
+                            renderPaths.value = newPaths
                             recomputeEnabledTargets()
                         }
                         else -> { /* other dirty states: no-op */ }
@@ -235,9 +234,9 @@ class KonstructionViewModel(
                     _renderPath.value = render.renderPath
                     val path = render.renderPath
                     if (path != null) {
-                        _renderPaths.value = _renderPaths.value + (render.name to path)
+                        renderPaths.value = renderPaths.value + (render.name to path)
                     } else {
-                        _renderPaths.value = _renderPaths.value - render.name
+                        renderPaths.value = renderPaths.value - render.name
                     }
                     recomputeEnabledTargets()
                 }
@@ -333,19 +332,17 @@ class KonstructionViewModel(
         }
     }
 
-    suspend fun getKonstructedPath(target: String): String? {
-        return konstructionService?.konstructed(target)
-    }
+    suspend fun getKonstructedPath(target: String): String? =
+        konstructionService?.konstructed(target)
 
     fun setTargetEnabled(name: String, enabled: Boolean) =
         targetDisplayRepo.setEnabled(name, enabled)
 
-    fun setTargetColor(name: String, color: String) =
-        targetDisplayRepo.setColor(name, color)
+    fun setTargetColor(name: String, color: String) = targetDisplayRepo.setColor(name, color)
 
     private fun recomputeEnabledTargets() {
         val displays = targetDisplayRepo.displays.value
-        val paths = _renderPaths.value
+        val paths = renderPaths.value
         _enabledRenderedTargets.value = displays
             .filter { (_, d) -> d.isEnabled }
             .mapNotNull { (name, d) ->

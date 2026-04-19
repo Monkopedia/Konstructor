@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -126,9 +126,8 @@ abstract class BaseE2eTest {
     }
 
     /** Get the current version counter. */
-    protected fun getVersion(): Int {
-        return (page.evaluate("() => globalThis.__konstructor.version") as? Number)?.toInt() ?: 0
-    }
+    protected fun getVersion(): Int =
+        (page.evaluate("() => globalThis.__konstructor.version") as? Number)?.toInt() ?: 0
 
     /**
      * Call a bridge action and wait for the version counter to change.
@@ -170,10 +169,9 @@ abstract class BaseE2eTest {
     }
 
     /** Read lastResult from the bridge as a raw JSON string. */
-    protected fun bridgeLastResult(): String {
-        return page.evaluate("() => JSON.stringify(globalThis.__konstructor.lastResult)")
+    protected fun bridgeLastResult(): String =
+        page.evaluate("() => JSON.stringify(globalThis.__konstructor.lastResult)")
             ?.toString() ?: "null"
-    }
 
     /** Read lastResult parsed as a JsonObject. */
     protected fun bridgeLastResultObject(): JsonObject {
@@ -220,23 +218,20 @@ abstract class BaseE2eTest {
     }
 
     /** Encode a string as a JSON string literal (with quotes and escaping). */
-    protected fun jsonString(value: String): String {
-        return buildString {
-            append('"')
-            for (ch in value) {
-                when (ch) {
-                    '"' -> append("\\\"")
-                    '\\' -> append("\\\\")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(ch)
-                }
+    protected fun jsonString(value: String): String = buildString {
+        append('"')
+        for (ch in value) {
+            when (ch) {
+                '"' -> append("\\\"")
+                '\\' -> append("\\\\")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(ch)
             }
-            append('"')
         }
+        append('"')
     }
 
-    protected fun waitOpts(timeout: Double) =
-        Page.WaitForSelectorOptions().setTimeout(timeout)
+    protected fun waitOpts(timeout: Double) = Page.WaitForSelectorOptions().setTimeout(timeout)
 }

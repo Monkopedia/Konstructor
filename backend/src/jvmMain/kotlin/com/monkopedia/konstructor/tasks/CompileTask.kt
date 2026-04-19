@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -39,11 +39,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runInterruptible
 
-class CompileTask(
-    private val config: Config,
-    private val input: File,
-    private val output: File
-) {
+class CompileTask(private val config: Config, private val input: File, private val output: File) {
     @OptIn(DelicateCoroutinesApi::class)
     suspend fun execute(): TaskResult = newSingleThreadContext(
         "Compile-${input.absolutePath}"
@@ -76,8 +72,8 @@ class CompileTask(
         private val headerLines = KcsgScript.HEADER.split("\n").size
         private val footerLines = KcsgScript.FOOTER.split("\n").size
 
-        fun parseErrors(stdOut: BufferedReader, isError: Boolean = false): List<TaskMessage> {
-            return stdOut.lineSequence().onEach {
+        fun parseErrors(stdOut: BufferedReader, isError: Boolean = false): List<TaskMessage> =
+            stdOut.lineSequence().onEach {
                 if (isError) {
                     hauler.error(it)
                 } else {
@@ -116,6 +112,5 @@ class CompileTask(
                     }
                 }
             }.toList()
-        }
     }
 }

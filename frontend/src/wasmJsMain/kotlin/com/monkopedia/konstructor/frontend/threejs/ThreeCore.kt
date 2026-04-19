@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -58,15 +58,11 @@ external class PerspectiveCamera(
     fun updateProjectionMatrix()
 }
 
-open external class Light(
-    color: Int = definedExternally,
-    intensity: Double = definedExternally
-) : Object3D
+open external class Light(color: Int = definedExternally, intensity: Double = definedExternally) :
+    Object3D
 
-external class AmbientLight(
-    color: Int = definedExternally,
-    intensity: Double = definedExternally
-) : Light
+external class AmbientLight(color: Int = definedExternally, intensity: Double = definedExternally) :
+    Light
 
 external class DirectionalLight(
     color: Int = definedExternally,
@@ -82,9 +78,7 @@ open external class Material : JsAny {
     fun dispose()
 }
 
-external class MeshPhongMaterial(
-    params: JsAny = definedExternally
-) : Material {
+external class MeshPhongMaterial(params: JsAny = definedExternally) : Material {
     val color: Color
     val specular: Color
     var shininess: Double
@@ -101,9 +95,7 @@ external class Mesh(
     material: Material = definedExternally
 ) : Object3D
 
-external class WebGLRenderer(
-    params: JsAny = definedExternally
-) : JsAny {
+external class WebGLRenderer(params: JsAny = definedExternally) : JsAny {
     val domElement: JsAny
     fun setSize(width: Int, height: Int)
     fun render(scene: Scene, camera: PerspectiveCamera)
@@ -112,6 +104,4 @@ external class WebGLRenderer(
     fun dispose()
 }
 
-external class AxesHelper(
-    size: Double = definedExternally
-) : Object3D
+external class AxesHelper(size: Double = definedExternally) : Object3D

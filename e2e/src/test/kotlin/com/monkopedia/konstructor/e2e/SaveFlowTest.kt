@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,7 +30,7 @@ import org.junit.Test
  */
 class SaveFlowTest : BaseE2eTest() {
 
-    private val VALID_SCRIPT = """
+    private val validScript = """
         val simpleCube by primitive {
             cube {
                 dimensions = xyz(10.0, 10.0, 10.0)
@@ -73,7 +73,7 @@ class SaveFlowTest : BaseE2eTest() {
                 Konstruction(name = "SaveTest", workspaceId = wsId, id = "")
             )
             val ks = service.konstruction(kon)
-            ks.set(VALID_SCRIPT)
+            ks.set(validScript)
             System.err.println("Created konstruction ${kon.id} and set content")
         }
 

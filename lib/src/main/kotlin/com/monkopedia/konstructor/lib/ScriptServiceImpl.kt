@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,10 +28,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class ScriptServiceImpl(
-    private val script: KcsgScript,
-    private val exec: KcsgScript.() -> Unit
-) : ScriptService {
+class ScriptServiceImpl(private val script: KcsgScript, private val exec: KcsgScript.() -> Unit) :
+    ScriptService {
     private var shipper: Shipper? = null
     private val serviceCache = mutableMapOf<String, BuildServiceImpl>()
     private val statusCache = mutableMapOf<String, TargetStatus>()

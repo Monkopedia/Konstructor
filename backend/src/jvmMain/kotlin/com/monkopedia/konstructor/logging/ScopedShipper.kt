@@ -1,12 +1,12 @@
 /*
  * Copyright 2022 Jason Monk
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     https://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,15 +24,11 @@ import com.monkopedia.hauler.Palette
 import com.monkopedia.hauler.Shipper
 import com.monkopedia.hauler.ThreadNameFilter
 
-class ScopedShipper(
-    private val tagPrefix: String,
-    name: String,
-    private val shipper: Shipper
-) : Shipper {
+class ScopedShipper(private val tagPrefix: String, name: String, private val shipper: Shipper) :
+    Shipper {
     private val fullPrefix = "$tagPrefix.$name"
-    override suspend fun deliveries(u: Unit): DeliveryService {
-        return shipper.deliveries().weighIn(ThreadNameFilter(PREFIX, tagPrefix))
-    }
+    override suspend fun deliveries(u: Unit): DeliveryService =
+        shipper.deliveries().weighIn(ThreadNameFilter(PREFIX, tagPrefix))
 
     override suspend fun requestDockPickup(u: Unit): LoadingDock {
         val loadingDock = shipper.requestDockPickup()
@@ -43,8 +39,11 @@ class ScopedShipper(
                     logs.copy(
                         threadNames = logs.threadNames.map { "$fullPrefix.$it" } + fullPrefix,
                         messages = logs.messages.map {
-                            if (it.threadName == null) it.copy(threadName = defaultIndex)
-                            else it
+                            if (it.threadName == null) {
+                                it.copy(threadName = defaultIndex)
+                            } else {
+                                it
+                            }
                         }
                     )
                 )
