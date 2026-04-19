@@ -16,8 +16,8 @@ javafx = "0.1.0"
 compose-multiplatform = "1.10.3"
 lifecycle = "2.10.0"
 kodemirror = "0.2.0"
-spotless = "7.0.2"
-ktlint = "1.5.0"
+spotless = "8.4.0"
+ktlint = "1.8.0"
 
 
 [libraries]

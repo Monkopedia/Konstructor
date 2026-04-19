@@ -53,9 +53,13 @@ fun TopBar() {
 
     val titleText = when (codePaneMode) {
         CodePaneMode.NAVIGATION -> "Select konstruction"
+
         CodePaneMode.SETTINGS -> "Settings"
+
         CodePaneMode.GL_SETTINGS -> "Lights"
+
         CodePaneMode.SELECTION -> "Targets"
+
         CodePaneMode.EDITOR -> buildString {
             if (workspaceName.isNotEmpty()) {
                 append(workspaceName)

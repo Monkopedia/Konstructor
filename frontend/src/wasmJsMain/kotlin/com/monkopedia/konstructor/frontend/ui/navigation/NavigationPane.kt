@@ -247,7 +247,7 @@ private fun KonstructionItem(konstruction: Konstruction, onClick: () -> Unit, on
                 Icons.Filled.Widgets
             },
             contentDescription =
-            if (konstruction.type == KonstructionType.STL) "STL file" else "Script",
+                if (konstruction.type == KonstructionType.STL) "STL file" else "Script",
             tint = if (konstruction.type == KonstructionType.STL) {
                 MaterialTheme.colorScheme.secondary
             } else {

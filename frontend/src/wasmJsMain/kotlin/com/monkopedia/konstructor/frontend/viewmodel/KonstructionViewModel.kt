@@ -190,6 +190,7 @@ class KonstructionViewModel(
                                 _state.value = UiState.DEFAULT
                             }
                         }
+
                         DirtyState.CLEAN -> {
                             _state.value = UiState.DEFAULT
                             val cleanTargets = info.targets.filter { it.state == DirtyState.CLEAN }
@@ -214,6 +215,7 @@ class KonstructionViewModel(
                             renderPaths.value = newPaths
                             recomputeEnabledTargets()
                         }
+
                         else -> { /* other dirty states: no-op */ }
                     }
                 }

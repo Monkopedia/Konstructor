@@ -48,7 +48,9 @@ fun KonstruktorApp() {
 
         // Material theme follows the editor theme's light/dark preference
         val isDark = when (editorTheme) {
-            EditorThemeName.MATERIAL -> true // Material auto defaults to dark
+            EditorThemeName.MATERIAL -> true
+
+            // Material auto defaults to dark
             else -> editorTheme.isDark
         }
 

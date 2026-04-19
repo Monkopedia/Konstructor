@@ -101,9 +101,13 @@ fun EditorPane(modifier: Modifier = Modifier) {
         // Status bar
         when (uiState) {
             UiState.LOADING -> StatusBar("Loading...", Color(0xFF64B5F6))
+
             UiState.SAVING -> StatusBar("Saving...", Color(0xFFFFB74D))
+
             UiState.COMPILING -> StatusBar("Compiling...", Color(0xFFFFB74D))
+
             UiState.EXECUTING -> StatusBar("Executing...", Color(0xFFFFB74D))
+
             UiState.DEFAULT -> {
                 if (messages.isNotEmpty()) {
                     StatusBar(
@@ -125,6 +129,7 @@ fun EditorPane(modifier: Modifier = Modifier) {
                     Text("Select a konstruction to edit", color = Color.Gray)
                 }
             }
+
             selectedKonstruction?.type == KonstructionType.STL -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -137,6 +142,7 @@ fun EditorPane(modifier: Modifier = Modifier) {
                     )
                 }
             }
+
             else -> {
                 EditorContent(
                     content = content,
