@@ -25,9 +25,6 @@ repositories {
 }
 
 kotlin {
-    js(IR) {
-        browser {}
-    }
     wasmJs {
         browser {}
     }
