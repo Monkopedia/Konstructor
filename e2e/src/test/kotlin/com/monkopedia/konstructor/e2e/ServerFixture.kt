@@ -29,6 +29,10 @@ class ServerFixture {
     var port: Int = 0
         private set
 
+    /** Path to `java` binary of the JVM currently running tests. */
+    private val javaBinary: String =
+        File(System.getProperty("java.home"), "bin/java").absolutePath
+
     fun start() {
         tempDir = Files.createTempDirectory("konstructor-e2e-").toFile()
         val dataDir = File(tempDir, ".konstructor")
@@ -38,7 +42,7 @@ class ServerFixture {
             ?: error("Set -Dkonstructor.jar to the backend shadow JAR path")
 
         val env = ProcessBuilder(
-            "/usr/lib/jvm/java-21-openjdk/bin/java",
+            javaBinary,
             "-jar",
             jarPath,
             "--http",
@@ -94,7 +98,7 @@ class ServerFixture {
             ?: error("Set -Dkonstructor.jar to the backend shadow JAR path")
         val dataDir = File(tempDir, ".konstructor")
         process = ProcessBuilder(
-            "/usr/lib/jvm/java-21-openjdk/bin/java",
+            javaBinary,
             "-jar",
             jarPath,
             "--http",

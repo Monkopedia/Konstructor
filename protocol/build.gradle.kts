@@ -37,19 +37,17 @@ kotlin {
         api(libs.ksrpc.core)
         api(libs.hauler)
         api(libs.kotlinx.datetime)
+        // ByteReadChannel is in the public KonstructionService surface —
+        // must be api so consumers don't have to redeclare ktor-io.
+        api(libs.ktor.io)
         implementation(libs.kotlinx.serialization.core)
         implementation(libs.kotlinx.serialization.json)
         implementation(libs.kotlinx.coroutines.core)
-        compileOnly(libs.ktor.io)
     }
     sourceSets["jvmMain"].dependencies {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
         implementation(libs.slf4j.api)
-        compileOnly(libs.ktor.server.core)
-        compileOnly(libs.ktor.server.host.common)
-        compileOnly(libs.ktor.server.netty)
-        compileOnly(libs.ktor.client.core)
 
         implementation(libs.kotlinx.serialization.core)
         implementation(libs.kotlinx.serialization.json)
@@ -62,12 +60,6 @@ kotlin {
     }
     sourceSets["jvmTest"].dependencies {
         implementation(kotlin("test-junit"))
-    }
-    sourceSets["jsMain"].dependencies {
-        compileOnly(libs.ktor.client.core)
-    }
-    sourceSets["wasmJsMain"].dependencies {
-        compileOnly(libs.ktor.client.core)
     }
 }
 
