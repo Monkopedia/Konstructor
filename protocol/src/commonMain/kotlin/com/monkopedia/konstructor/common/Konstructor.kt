@@ -16,12 +16,13 @@
 package com.monkopedia.konstructor.common
 
 import com.monkopedia.hauler.Shipper
+import com.monkopedia.ksrpc.RpcHostService
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
 
 @KsService
-interface Konstructor : RpcService {
+interface Konstructor : RpcHostService {
     @KsMethod("/list")
     suspend fun list(u: Unit = Unit): List<Space>
 

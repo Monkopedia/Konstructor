@@ -16,13 +16,14 @@
 package com.monkopedia.konstructor.common
 
 import com.monkopedia.hauler.Shipper
+import com.monkopedia.ksrpc.RpcBidiService
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
 import io.ktor.utils.io.ByteReadChannel
 
 @KsService
-interface KonstructionService : RpcService {
+interface KonstructionService : RpcBidiService {
     @KsMethod("/name")
     suspend fun getName(u: Unit = Unit): String
 

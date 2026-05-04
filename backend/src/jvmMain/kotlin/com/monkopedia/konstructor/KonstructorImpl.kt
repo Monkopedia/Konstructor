@@ -20,7 +20,6 @@ package com.monkopedia.konstructor
 import com.monkopedia.hauler.Flatbed
 import com.monkopedia.hauler.Shipper
 import com.monkopedia.hauler.attach
-import com.monkopedia.hauler.deliveries
 import com.monkopedia.hauler.route
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionService
@@ -60,9 +59,9 @@ class KonstructorImpl(private val config: Config) :
     init {
         scope.launch {
             warehouse.requestPickup().attach(scope)
-            warehouse.writeBinary(File(config.dataDir, "log.bin"))
-            warehouse.writeText(File(config.dataDir, "log.txt"))
-            warehouse.deliveries().deliveries(scope).route(Flatbed, LogFormatter)
+            warehouse.writeBinary(File(config.dataDir, "log.bin"), scope)
+            warehouse.writeText(File(config.dataDir, "log.txt"), scope)
+            warehouse.deliveries().streamDeliveries().route(scope, Flatbed, LogFormatter)
         }
     }
 

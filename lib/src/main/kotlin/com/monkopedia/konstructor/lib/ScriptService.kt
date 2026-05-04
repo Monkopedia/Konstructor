@@ -16,6 +16,7 @@
 package com.monkopedia.konstructor.lib
 
 import com.monkopedia.hauler.Shipper
+import com.monkopedia.ksrpc.RpcBidiService
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
@@ -25,7 +26,7 @@ import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.channelFlow
 
 @KsService
-interface ScriptService : RpcService {
+interface ScriptService : RpcBidiService {
 
     @KsMethod("/initialize")
     suspend fun initialize(config: ScriptConfiguration)
@@ -47,7 +48,7 @@ interface ScriptService : RpcService {
 }
 
 @KsService
-interface BuildService : RpcService {
+interface BuildService : RpcBidiService {
     @KsMethod("/info")
     suspend fun getInfo(u: Unit = Unit): ScriptTargetInfo
 

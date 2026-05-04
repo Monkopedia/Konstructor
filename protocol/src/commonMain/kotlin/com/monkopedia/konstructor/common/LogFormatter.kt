@@ -16,13 +16,12 @@
 package com.monkopedia.konstructor.common
 
 import com.monkopedia.hauler.Box
-import com.monkopedia.hauler.Formatter
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-val LogFormatter: Formatter = FlowCollector<String>::format
+val LogFormatter: suspend FlowCollector<String>.(Box) -> Unit = FlowCollector<String>::format
 
 private suspend fun FlowCollector<String>.format(box: Box) {
     val time = Instant.fromEpochMilliseconds(box.timestamp)

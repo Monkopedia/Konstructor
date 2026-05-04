@@ -15,12 +15,12 @@
  */
 package com.monkopedia.konstructor.lib
 
-import com.monkopedia.ksrpc.RpcService
+import com.monkopedia.ksrpc.RpcHostService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
 
 @KsService
-interface HostService : RpcService {
+interface HostService : RpcHostService {
     @KsMethod("/get_caching")
     suspend fun supportsCaching(u: Unit = Unit): Boolean
 

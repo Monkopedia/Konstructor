@@ -15,8 +15,7 @@
  */
 package com.monkopedia.konstructor.logging
 
-import com.monkopedia.hauler.DeliveryDay
-import com.monkopedia.hauler.Formatter
+import com.monkopedia.hauler.Box
 import com.monkopedia.hauler.Palette
 import com.monkopedia.hauler.Shipper
 import com.monkopedia.hauler.pack
@@ -24,7 +23,11 @@ import com.monkopedia.hauler.unpack
 import com.monkopedia.konstructor.common.LogFormatter
 import java.io.File
 import java.io.PrintWriter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toCollection
 import kotlinx.serialization.BinaryFormat
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -32,63 +35,74 @@ import kotlinx.serialization.cbor.Cbor
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 
-suspend fun Shipper.writeText(file: File) {
-    deliveries().registerDeliveryDay(fileDelivery(file))
-}
-
-fun fileDelivery(
+suspend fun Shipper.writeText(
     file: File,
+    scope: CoroutineScope,
     maxSize: Int = 500_000,
-    formatter: Formatter = LogFormatter
-): DeliveryDay = object : DeliveryDay {
-    override suspend fun onLogs(event: Palette) {
-        val oldLines = file.readLines()
-        val newLines = flow {
-            event.unpack().sortedBy { it.timestamp }.forEach { formatter.invoke(this, it) }
-        }.toCollection(mutableListOf())
-
-        val lines = sequence {
-            newLines.asReversed().forEach { yield(it) }
-            oldLines.asReversed().forEach { yield(it) }
-        }
-        var count = 0
-        val tmpFile = File(file.parentFile, file.name + ".tmp")
-        val output = PrintWriter(tmpFile.outputStream().bufferedWriter())
-        lines.takeWhile {
-            count += (it.length + 1)
-            count < maxSize
-        }.toList().asReversed().forEach {
-            output.println(it)
-        }
-        output.flush()
-        output.close()
-        tmpFile.renameTo(file)
-    }
+    formatter: suspend FlowCollector<String>.(Box) -> Unit = LogFormatter
+) {
+    deliveries().streamDeliveriesPacked()
+        .onEach { event -> appendText(file, event, maxSize, formatter) }
+        .launchIn(scope)
 }
 
-suspend fun Shipper.writeBinary(file: File) {
-    deliveries().registerDeliveryDay(fileBinaryDelivery(file))
+private suspend fun appendText(
+    file: File,
+    event: Palette,
+    maxSize: Int,
+    formatter: suspend FlowCollector<String>.(Box) -> Unit
+) {
+    val oldLines = if (file.exists()) file.readLines() else emptyList()
+    val newLines = flow {
+        event.unpack().sortedBy { it.timestamp }.forEach { formatter.invoke(this, it) }
+    }.toCollection(mutableListOf())
+
+    val lines = sequence {
+        newLines.asReversed().forEach { yield(it) }
+        oldLines.asReversed().forEach { yield(it) }
+    }
+    var count = 0
+    val tmpFile = File(file.parentFile, file.name + ".tmp")
+    val output = PrintWriter(tmpFile.outputStream().bufferedWriter())
+    lines.takeWhile {
+        count += (it.length + 1)
+        count < maxSize
+    }.toList().asReversed().forEach {
+        output.println(it)
+    }
+    output.flush()
+    output.close()
+    tmpFile.renameTo(file)
 }
 
 @OptIn(ExperimentalSerializationApi::class)
-fun fileBinaryDelivery(
+suspend fun Shipper.writeBinary(
     file: File,
+    scope: CoroutineScope,
     maxCount: Int = 10_000,
     serializer: BinaryFormat = Cbor
-): DeliveryDay = object : DeliveryDay {
-    override suspend fun onLogs(event: Palette) {
-        val oldPalette = serializer.decodeFromByteArray<Palette>(file.readBytes())
-        val oldLines = oldPalette.unpack()
-        val newLines = event.unpack()
-        val logs = (
-            oldLines.subList(
-                (oldLines.size - (maxCount - newLines.size)).coerceAtLeast(0),
-                oldLines.size
-            ) + newLines
-            ).sortedBy { it.timestamp }
-        val tmpFile = File(file.parentFile, file.name + ".tmp")
-        val output = serializer.encodeToByteArray(logs.pack())
-        tmpFile.writeBytes(output)
-        tmpFile.renameTo(file)
+) {
+    deliveries().streamDeliveriesPacked()
+        .onEach { event -> appendBinary(file, event, maxCount, serializer) }
+        .launchIn(scope)
+}
+
+@OptIn(ExperimentalSerializationApi::class)
+private fun appendBinary(file: File, event: Palette, maxCount: Int, serializer: BinaryFormat) {
+    val oldLines = if (file.exists()) {
+        serializer.decodeFromByteArray<Palette>(file.readBytes()).unpack()
+    } else {
+        emptyList()
     }
+    val newLines = event.unpack()
+    val logs = (
+        oldLines.subList(
+            (oldLines.size - (maxCount - newLines.size)).coerceAtLeast(0),
+            oldLines.size
+        ) + newLines
+        ).sortedBy { it.timestamp }
+    val tmpFile = File(file.parentFile, file.name + ".tmp")
+    val output = serializer.encodeToByteArray(logs.pack())
+    tmpFile.writeBytes(output)
+    tmpFile.renameTo(file)
 }

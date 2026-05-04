@@ -1,9 +1,9 @@
 [versions]
 logback = "1.5.18"
 clikt = "5.0.3"
-hauler = "0.3.0"
+hauler = "0.4.0-RC1"
 kcsg = "0.4.0"
-ksrpc = "0.11.1"
+ksrpc = "1.0.0-RC2"
 koin = "4.2.0"
 ktor = "3.4.2"
 kotlin = "2.3.20"
@@ -26,6 +26,7 @@ clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 hauler = { module = "com.monkopedia:hauler", version.ref = "hauler" }
 kcsg = { module = "com.monkopedia:kcsg", version.ref = "kcsg" }
 kcsg-dsl = { module = "com.monkopedia:kcsg-dsl", version.ref = "kcsg" }
+ksrpc-binary-ktor = { module = "com.monkopedia.ksrpc:ksrpc-binary-ktor", version.ref = "ksrpc" }
 ksrpc-core = { module = "com.monkopedia.ksrpc:ksrpc-core", version.ref = "ksrpc" }
 ksrpc-ktor-client = { module = "com.monkopedia.ksrpc:ksrpc-ktor-client", version.ref = "ksrpc" }
 ksrpc-ktor-websocket-client = { module = "com.monkopedia.ksrpc:ksrpc-ktor-websocket-client", version.ref = "ksrpc" }

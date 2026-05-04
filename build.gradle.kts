@@ -51,6 +51,7 @@ subprojects {
         }
         kotlinGradle {
             target("**/*.gradle.kts")
+            targetExclude("**/three-kt/**", "**/build/**")
             ktlint(libs.versions.ktlint.get())
         }
     }

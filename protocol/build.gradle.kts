@@ -32,6 +32,7 @@ kotlin {
     }
     sourceSets["commonMain"].dependencies {
         api(libs.ksrpc.core)
+        api(libs.ksrpc.binary.ktor)
         api(libs.hauler)
         api(libs.kotlinx.datetime)
         // ByteReadChannel is in the public KonstructionService surface —

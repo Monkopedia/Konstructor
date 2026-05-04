@@ -40,11 +40,12 @@ import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.logging.LoggingService
 import com.monkopedia.konstructor.logging.WarehouseWrapper
 import com.monkopedia.konstructor.logging.callContext
-import com.monkopedia.ksrpc.channels.randomUuid
 import io.ktor.utils.io.ByteReadChannel
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.coroutineContext
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -174,9 +175,10 @@ class KonstructionServiceImpl(
             }
         }
 
+    @OptIn(ExperimentalUuidApi::class)
     override suspend fun register(listener: KonstructionListener): String =
         callContext("register", baseCallSign = konstructionController.callSign) {
-            val key = randomUuid()
+            val key = Uuid.random().toString()
             val handler = ListenerHandler(key, this, scope, listener).also {
                 it.init()
             }
