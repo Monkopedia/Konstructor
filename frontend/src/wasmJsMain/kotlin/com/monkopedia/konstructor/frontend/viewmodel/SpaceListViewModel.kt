@@ -29,8 +29,8 @@ class SpaceListViewModel(private val serviceHolder: ServiceHolder) : ViewModel()
     private val _workspaces = MutableStateFlow<List<Space>?>(null)
     val workspaces: StateFlow<List<Space>?> = _workspaces.asStateFlow()
 
-    private val _selectedWorkspaceId = MutableStateFlow<String?>(null)
-    val selectedWorkspaceId: StateFlow<String?> = _selectedWorkspaceId.asStateFlow()
+    private val _selectedWorkspaceId = PersistedStateFlow.nullableString("selectedWorkspaceId")
+    val selectedWorkspaceId: StateFlow<String?> = _selectedWorkspaceId.flow
 
     init {
         viewModelScope.launch {
@@ -49,7 +49,7 @@ class SpaceListViewModel(private val serviceHolder: ServiceHolder) : ViewModel()
     }
 
     fun selectWorkspace(id: String?) {
-        _selectedWorkspaceId.value = id
+        _selectedWorkspaceId.set(id)
     }
 
     fun refreshWorkspaces() {

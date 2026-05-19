@@ -29,8 +29,8 @@ class WorkspaceViewModel(private val serviceHolder: ServiceHolder) : ViewModel()
     private val _konstructions = MutableStateFlow<List<Konstruction>>(emptyList())
     val konstructions: StateFlow<List<Konstruction>> = _konstructions.asStateFlow()
 
-    private val _selectedKonstructionId = MutableStateFlow<String?>(null)
-    val selectedKonstructionId: StateFlow<String?> = _selectedKonstructionId.asStateFlow()
+    private val _selectedKonstructionId = PersistedStateFlow.nullableString("selectedKonstructionId")
+    val selectedKonstructionId: StateFlow<String?> = _selectedKonstructionId.flow
 
     private val _workspaceName = MutableStateFlow("")
     val workspaceName: StateFlow<String> = _workspaceName.asStateFlow()
@@ -38,7 +38,7 @@ class WorkspaceViewModel(private val serviceHolder: ServiceHolder) : ViewModel()
     private var currentWorkspace: Workspace? = null
 
     fun selectKonstruction(id: String?) {
-        _selectedKonstructionId.value = id
+        _selectedKonstructionId.set(id)
     }
 
     fun loadWorkspace(workspaceId: String) {

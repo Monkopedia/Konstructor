@@ -80,6 +80,10 @@ class PersistedStateFlow<T> private constructor(
         fun string(key: String, default: String): PersistedStateFlow<String> =
             create(key, default, { it }, { it })
 
+        // Empty string in storage encodes null. Non-empty stored values round-trip as-is.
+        fun nullableString(key: String): PersistedStateFlow<String?> =
+            create(key, null, { it ?: "" }, { if (it.isEmpty()) null else it })
+
         inline fun <reified T : Enum<T>> enum(key: String, default: T): PersistedStateFlow<T> =
             create(key, default, { it.name }, {
                 try {
