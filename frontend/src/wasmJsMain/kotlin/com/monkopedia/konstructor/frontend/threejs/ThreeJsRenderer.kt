@@ -64,7 +64,10 @@ class ThreeJsRenderer(private val canvasId: String) {
         renderer.setPixelRatio(getDevicePixelRatio())
 
         camera = PerspectiveCamera(45.0, 1.0, 0.1, 1000.0)
-        camera.position.set(0.0, 50.0, 100.0)
+        // kcsg/CSG geometry uses Z-up (CAD convention); three.js defaults to Y-up.
+        camera.up.set(0.0, 0.0, 1.0)
+        camera.position.set(0.0, -50.0, 100.0)
+        camera.lookAt(0.0, 0.0, 0.0)
 
         controls = OrbitControls(camera, renderer.domElement)
 

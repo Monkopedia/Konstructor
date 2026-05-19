@@ -27,6 +27,7 @@ external class Scene : JsAny {
 open external class Object3D : JsAny {
     val position: Vector3
     val rotation: Euler
+    val up: Vector3
     fun lookAt(x: Double, y: Double, z: Double)
 }
 
