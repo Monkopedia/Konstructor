@@ -63,9 +63,10 @@ class KonstructionControllerImplTest {
     }
 
     @Test
-    fun testReadEmptyContent() {
+    fun testReadEmptyContent() = runBlocking {
         val result = controller.read()
         assertEquals("", result)
+        Unit
     }
 
     @Test

@@ -37,6 +37,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
@@ -48,7 +49,7 @@ interface KonstructionController {
     val scriptLock: Mutex
     var info: KonstructionInfo
 
-    fun read(): String
+    suspend fun read(): String
     suspend fun write(content: String)
     suspend fun write(content: ByteReadChannel)
     suspend fun compile()
@@ -56,36 +57,6 @@ interface KonstructionController {
     suspend fun render(targets: List<String>): List<String>
     suspend fun lastRenderResult(): TaskResult
     suspend fun renderFile(target: String): File?
-}
-
-@Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
-class SimpleLock : Object() {
-    var isLocked: Boolean = false
-        set(value) {
-            synchronized(this) {
-                if (value) {
-                    while (field) {
-                        wait()
-                    }
-                    field = true
-                } else {
-                    require(field) {
-                        "Lock cann't be unlocked when not locked"
-                    }
-                    field = false
-                    notify()
-                }
-            }
-        }
-}
-
-inline fun <R> SimpleLock.withLock(exec: () -> R): R {
-    isLocked = true
-    try {
-        return exec()
-    } finally {
-        isLocked = false
-    }
 }
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -101,7 +72,7 @@ class KonstructionControllerImpl(
     }
     private val pathController = PathController(config)
     override val paths = pathController[workspaceId, id]
-    private val contentFileLock = SimpleLock()
+    private val contentFileLock = Mutex()
     private var hasInitialized = false
     private var infoImpl: KonstructionInfo? = null
     override var info: KonstructionInfo
@@ -196,7 +167,7 @@ class KonstructionControllerImpl(
         }
     }
 
-    override fun read(): String {
+    override suspend fun read(): String {
         if (!paths.contentFile.exists()) {
             return ""
         }
