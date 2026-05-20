@@ -76,6 +76,15 @@ class KonstructionViewModel(
 
     private val renderPaths = MutableStateFlow<Map<String, String>>(emptyMap())
 
+    // Render output files keep a stable URL across rebuilds (same target name →
+    // same path). Without a changing token, both the enabledRenderedTargets
+    // StateFlow (value-equality dedup) and the renderer's URL-keyed mesh cache
+    // suppress reloading the new geometry — the model only refreshes after a
+    // manual visibility toggle. A monotonic token per delivered render yields a
+    // distinct URL so it actually reloads.
+    private var renderGeneration = 0
+    private fun freshen(path: String): String = "$path?v=${++renderGeneration}"
+
     private var konstructionService: KonstructionService? = null
     private var listenerKey: String? = null
 
@@ -138,8 +147,9 @@ class KonstructionViewModel(
                     val newPaths = renderPaths.value.toMutableMap()
                     for ((name, path) in paths) {
                         if (path != null) {
-                            newPaths[name] = path
-                            _renderPath.value = path
+                            val fresh = freshen(path)
+                            newPaths[name] = fresh
+                            _renderPath.value = fresh
                         }
                     }
                     renderPaths.value = newPaths
@@ -208,8 +218,9 @@ class KonstructionViewModel(
                             val newPaths = renderPaths.value.toMutableMap()
                             for ((name, path) in paths) {
                                 if (path != null) {
-                                    newPaths[name] = path
-                                    _renderPath.value = path
+                                    val fresh = freshen(path)
+                                    newPaths[name] = fresh
+                                    _renderPath.value = fresh
                                 }
                             }
                             renderPaths.value = newPaths
@@ -233,11 +244,13 @@ class KonstructionViewModel(
                 }
 
                 override suspend fun onRenderChanged(render: KonstructionRender) {
-                    _renderPath.value = render.renderPath
                     val path = render.renderPath
                     if (path != null) {
-                        renderPaths.value = renderPaths.value + (render.name to path)
+                        val fresh = freshen(path)
+                        _renderPath.value = fresh
+                        renderPaths.value = renderPaths.value + (render.name to fresh)
                     } else {
+                        _renderPath.value = null
                         renderPaths.value = renderPaths.value - render.name
                     }
                     recomputeEnabledTargets()
