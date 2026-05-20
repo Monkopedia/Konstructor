@@ -17,9 +17,7 @@ package com.monkopedia.konstructor.frontend.ui.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -103,27 +101,9 @@ fun EditorPane(modifier: Modifier = Modifier) {
         }
     }
 
-    Column(modifier = modifier) {
-        // Status bar
-        when (uiState) {
-            UiState.LOADING -> StatusBar("Loading...", Color(0xFF64B5F6))
-
-            UiState.SAVING -> StatusBar("Saving...", Color(0xFFFFB74D))
-
-            UiState.COMPILING -> StatusBar("Compiling...", Color(0xFFFFB74D))
-
-            UiState.EXECUTING -> StatusBar("Executing...", Color(0xFFFFB74D))
-
-            UiState.DEFAULT -> {
-                if (messages.isNotEmpty()) {
-                    StatusBar(
-                        "${messages.size} message(s)",
-                        Color(0xFFEF5350)
-                    )
-                }
-            }
-        }
-
+    // Editor content fills the pane; the status is overlaid as a footer pinned
+    // to the bottom of the pane (matching the pre-migration MessageComponent).
+    Box(modifier = modifier) {
         // Only render editor when we have a selected konstruction
         val selectedKonstruction = konstructions.firstOrNull { it.id == selectedKonId }
         when {
@@ -156,6 +136,28 @@ fun EditorPane(modifier: Modifier = Modifier) {
                     selectedKonId = selectedKonId!!,
                     messages = messages
                 )
+            }
+        }
+
+        // Status footer overlay, pinned to the bottom of the editor pane.
+        val statusModifier = Modifier.align(Alignment.BottomEnd)
+        when (uiState) {
+            UiState.LOADING -> StatusBar("Loading...", Color(0xFF64B5F6), statusModifier)
+
+            UiState.SAVING -> StatusBar("Saving...", Color(0xFFFFB74D), statusModifier)
+
+            UiState.COMPILING -> StatusBar("Compiling...", Color(0xFFFFB74D), statusModifier)
+
+            UiState.EXECUTING -> StatusBar("Executing...", Color(0xFFFFB74D), statusModifier)
+
+            UiState.DEFAULT -> {
+                if (messages.isNotEmpty()) {
+                    StatusBar(
+                        "${messages.size} message(s)",
+                        Color(0xFFEF5350),
+                        statusModifier
+                    )
+                }
             }
         }
     }
@@ -278,10 +280,9 @@ private fun EditorContent(
 }
 
 @Composable
-private fun StatusBar(text: String, color: Color) {
+private fun StatusBar(text: String, color: Color, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .background(color.copy(alpha = 0.2f))
             .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
