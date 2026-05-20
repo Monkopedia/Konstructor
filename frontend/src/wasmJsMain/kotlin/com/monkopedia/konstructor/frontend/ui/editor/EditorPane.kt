@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -39,6 +40,11 @@ import com.monkopedia.kodemirror.basicsetup.basicSetup
 import com.monkopedia.kodemirror.commands.emacsStyleKeymap
 import com.monkopedia.kodemirror.language.StreamLanguage
 import com.monkopedia.kodemirror.legacy.modes.kotlin
+import com.monkopedia.kodemirror.lint.Diagnostic
+import com.monkopedia.kodemirror.lint.LintConfig
+import com.monkopedia.kodemirror.lint.forceLinting
+import com.monkopedia.kodemirror.lint.lintGutter
+import com.monkopedia.kodemirror.lint.linter
 import com.monkopedia.kodemirror.materialtheme.rememberMaterialEditorTheme
 import com.monkopedia.kodemirror.state.Extension
 import com.monkopedia.kodemirror.state.asDoc
@@ -147,7 +153,8 @@ fun EditorPane(modifier: Modifier = Modifier) {
                 EditorContent(
                     content = content,
                     konstructionVm = konstructionVm,
-                    selectedKonId = selectedKonId!!
+                    selectedKonId = selectedKonId!!,
+                    messages = messages
                 )
             }
         }
@@ -158,7 +165,8 @@ fun EditorPane(modifier: Modifier = Modifier) {
 private fun EditorContent(
     content: String,
     konstructionVm: KonstructionViewModel,
-    selectedKonId: String
+    selectedKonId: String,
+    messages: List<com.monkopedia.konstructor.common.TaskMessage>
 ) {
     val scope = rememberCoroutineScope()
     val settingsVm = koinInject<SettingsViewModel>()
@@ -206,10 +214,26 @@ private fun EditorContent(
         konstructionVm.save(session.state.doc.toString())
     }
 
+    // Holds the latest compiler messages so the linter source (which the lint
+    // extension re-runs on doc changes) always maps the current diagnostics
+    // onto up-to-date line positions. Updated below whenever messages change.
+    val messagesHolder = remember(selectedKonId) { mutableStateOf<List<Diagnostic>>(emptyList()) }
+
     // Recreate session when konstruction, theme, or keymap changes
     val session = remember(selectedKonId, themeName, keymapName, monoFont) {
+        // Lint extension: decorates offending lines (red error / orange warning),
+        // adds gutter markers, and shows message text on hover. The source reads
+        // pre-built diagnostics from the holder; setDiagnostics-driven updates
+        // happen via forceLinting in the LaunchedEffect below.
+        val lintSource: com.monkopedia.kodemirror.lint.LintSource = { _ ->
+            messagesHolder.value
+        }
+        val lintExt = linter(
+            source = lintSource,
+            config = LintConfig(delay = 0)
+        )
         val extensions = basicSetup + themeExt + fontExt + kotlinLang +
-            keymapExt + saveKeymap + saveExt
+            keymapExt + saveKeymap + saveExt + lintExt + lintGutter()
         val config = com.monkopedia.kodemirror.state.EditorStateConfig(
             doc = content.asDoc(),
             extensions = extensions
@@ -217,6 +241,14 @@ private fun EditorContent(
         com.monkopedia.kodemirror.view.EditorSession(
             com.monkopedia.kodemirror.state.EditorState.create(config)
         )
+    }
+
+    // Push compiler messages into the editor as diagnostics. Diagnostics are
+    // rebuilt against the live document so line ranges stay correct, then the
+    // linter is forced to re-run to apply them.
+    LaunchedEffect(session, messages) {
+        messagesHolder.value = messages.toDiagnostics(session.state.doc)
+        forceLinting(session)
     }
 
     // When content changes externally (server load, not user save), update

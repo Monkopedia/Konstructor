@@ -81,6 +81,7 @@ kotlin {
         implementation("com.monkopedia.kodemirror:commands")
         implementation("com.monkopedia.kodemirror:language")
         implementation("com.monkopedia.kodemirror:lezer-highlight")
+        implementation("com.monkopedia.kodemirror:lint")
 
         // Network / RPC
         implementation(libs.ksrpc.ktor.client)
