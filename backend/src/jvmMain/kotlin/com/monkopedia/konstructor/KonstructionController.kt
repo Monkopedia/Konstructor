@@ -120,11 +120,13 @@ class KonstructionControllerImpl(
                 }
             }
             paths.renderOutput.mkdirs()
-            val script = ScriptManager(config).getScript(paths, info.konstruction.name)
+            val (script, scriptExit) =
+                ScriptManager(config).getScriptWithExit(paths, info.konstruction.name)
             val executeTask = ExecuteTask(
                 config = config,
                 script = script,
-                extraTargets = targets
+                extraTargets = targets,
+                subprocessExit = scriptExit
             )
             val (result, executedTargets) = executeTask.execute()
             paths.renderResultFile.outputStream().use { output ->

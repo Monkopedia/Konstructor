@@ -45,7 +45,6 @@ import kotlinx.serialization.json.encodeToStream
 import org.junit.After
 import org.junit.Assume.assumeTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 
 /**
@@ -247,21 +246,22 @@ class SubprocessFailureTest {
 
     /**
      * A script that blocks forever inside a build target. The init handshake is
-     * now bounded by a withTimeout(executeTimeout) in ScriptManager.getScript,
-     * and the build phase by the post-init force-kill (issue #4).
+     * bounded by a withTimeout(executeTimeout) in ScriptManager.getScript, and the
+     * build phase by the post-init force-kill (issue #4).
      *
-     * Still @Ignore: with a short executeTimeout the force-kill does fire, but
-     * render() does not reliably unblock within a test window — ExecuteTask's
-     * in-flight ksrpc build call doesn't promptly surface the killed
-     * subprocess. Quantifying/fixing that ExecuteTask-unblock-after-kill timing
-     * is a separate piece of work; the init-handshake bound (the gap this issue
-     * named) is fixed in production.
+     * The build-phase-hang gap had two causes, both fixed here:
+     *   1. The dominant one: `kotlin` is a bash launcher that forks `kotlinc`, which forks the
+     *      real `java`. The old ExecProcess.kill() = destroyForcibly() killed only the top
+     *      bash; the grandchild JVM survived, kept the stdout pipe open, and the host's ksrpc
+     *      receive loop never saw EOF — so the in-flight build call() (listTargets/buildTarget)
+     *      hung forever even though proc.waitFor() had returned. ExecProcess.kill() now destroys
+     *      the whole descendant tree, so the pipe closes and ksrpc#200's connection-death wakeup
+     *      fires.
+     *   2. Defense-in-depth: even with the pipe closed, the per-target status wait collects
+     *      statusFlow(), which parks in awaitClose() with no outstanding call to wake.
+     *      ScriptManager.getScriptWithExit now hands ExecuteTask the subprocess exit Deferred,
+     *      and ExecuteTask.awaitTerminalStatus races the status wait against it.
      */
-    @Ignore(
-        "Init-handshake hang is now bounded in production; this build-phase-hang " +
-            "case still doesn't unblock render() promptly after force-kill " +
-            "(ExecuteTask ksrpc-call-after-kill timing — separate work)."
-    )
     @Test
     fun hangingScriptIsKilledByTimeout() = runBlocking {
         compile(HANG_SCRIPT)
@@ -300,8 +300,10 @@ class SubprocessFailureTest {
     private suspend fun render(cfg: Config = config()): List<String> {
         val paths = paths(cfg)
         paths.renderOutput.mkdirs()
-        val script = ScriptManager(cfg).getScript(paths, "failure-test")
-        val (result, executed) = ExecuteTask(cfg, script, extraTargets = emptyList()).execute()
+        val (script, scriptExit) = ScriptManager(cfg).getScriptWithExit(paths, "failure-test")
+        val (result, executed) =
+            ExecuteTask(cfg, script, extraTargets = emptyList(), subprocessExit = scriptExit)
+                .execute()
         paths.renderResultFile.outputStream().use { out ->
             cfg.json.encodeToStream(result, out)
         }

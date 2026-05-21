@@ -116,6 +116,17 @@ object ExecUtil {
         }
 
         fun kill() {
+            // The command is `bash -c "kotlin ... ContentKt"`, and the `kotlin` launcher is
+            // itself a bash script that forks `kotlinc`, which forks the actual `java` process.
+            // destroyForcibly() only kills the top bash; the grandchild JVM survives, keeps the
+            // stdout pipe open, and the host's ksrpc receive loop never sees EOF — so any
+            // in-flight call() hangs indefinitely even though proc.waitFor() (the direct child)
+            // has already returned. Kill the whole descendant tree so the pipe actually closes
+            // and ksrpc#200's connection-death wakeup can fire. Destroy descendants before the
+            // root so newly-forked children can't be reparented away mid-teardown.
+            runCatching {
+                proc.toHandle().descendants().forEach { it.destroyForcibly() }
+            }
             proc.destroyForcibly()
         }
     }

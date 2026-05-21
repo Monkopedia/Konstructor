@@ -30,6 +30,7 @@ import com.monkopedia.konstructor.tasks.ExecUtil
 import com.monkopedia.ksrpc.toStub
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
@@ -40,8 +41,26 @@ import kotlinx.coroutines.withTimeout
 class ScriptManager private constructor(private val config: Config) {
     private val hauler by lazy { hauler() }
 
+    suspend fun getScript(paths: PathController.Paths, name: String): ScriptService =
+        getScriptWithExit(paths, name).first
+
+    /**
+     * Like [getScript], but also returns the subprocess exit signal so the caller can race
+     * an in-flight build against the child `kotlin` process dying.
+     *
+     * The render path waits for a build target to reach a terminal status by collecting
+     * [com.monkopedia.konstructor.lib.statusFlow], which suspends in `awaitClose()` until the
+     * subprocess pushes a BUILT/ERROR callback. When the force-kill timer here destroys a
+     * hung subprocess, ksrpc wakes pending *calls* (the receive loop closes the multiChannel),
+     * but the status flow has no outstanding call — it's parked in `awaitClose()` — so nothing
+     * unblocks it. Handing the exit `Deferred` to [ExecuteTask] lets it race the status wait
+     * against process death and surface the kill promptly instead of hanging.
+     */
     @OptIn(DelicateCoroutinesApi::class)
-    suspend fun getScript(paths: PathController.Paths, name: String): ScriptService {
+    suspend fun getScriptWithExit(
+        paths: PathController.Paths,
+        name: String
+    ): Pair<ScriptService, Deferred<Int>> {
         val opts = config.runtimeOpts
         val command = "kotlin $opts -cp ${paths.compileOutput.absolutePath} ContentKt"
         val scriptHost =
@@ -96,7 +115,7 @@ class ScriptManager private constructor(private val config: Config) {
                 hauler.debug("Force killing ${paths.workspaceId}/${paths.konstructionId}")
                 exec.kill()
             }
-            return service
+            return service to exec.exitCode
         } catch (t: Throwable) {
             hauler.warn("$name could not be initialized", t)
             // Reap the subprocess so the watcher above releases the lock.

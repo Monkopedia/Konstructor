@@ -23,18 +23,37 @@ import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
+import com.monkopedia.konstructor.lib.BuildService
 import com.monkopedia.konstructor.lib.ScriptService
+import com.monkopedia.konstructor.lib.TargetStatus
 import com.monkopedia.konstructor.lib.TargetStatus.BUILT
 import com.monkopedia.konstructor.lib.TargetStatus.ERROR
 import com.monkopedia.konstructor.lib.statusFlow
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.selects.select
 
 class ExecuteTask(
     private val config: Config,
     private val script: ScriptService,
-    private val extraTargets: List<String>
+    private val extraTargets: List<String>,
+    /**
+     * Exit signal for the script subprocess, if the caller has one (see
+     * [com.monkopedia.konstructor.hostservices.ScriptManager.getScriptWithExit]).
+     *
+     * The per-target status wait below parks in `statusFlow().firstOrNull()`, which suspends
+     * in the flow's `awaitClose()` until the subprocess pushes a terminal BUILT/ERROR status.
+     * If the subprocess hangs and is force-killed, ksrpc wakes pending *calls* but not this
+     * parked flow — there's no outstanding call to wake. Racing the wait against this
+     * `Deferred` lets the kill surface as a FAILURE promptly instead of hanging until some
+     * unrelated timeout. Null callers (e.g. the recursive sub-script path) keep the prior
+     * behavior.
+     */
+    private val subprocessExit: Deferred<Int>? = null
 ) {
     private val hauler by lazy { hauler() }
     suspend fun execute(): Pair<TaskResult, List<String>> {
@@ -47,16 +66,18 @@ class ExecuteTask(
         for (export in builtTargets) {
             hauler.debug("Starting building $export")
             val exportService = script.buildTarget(export)
-            val status = exportService.statusFlow().onEach {
-                hauler.info("Current status $it")
-            }.filter { it in listOf(BUILT, ERROR) }.firstOrNull()
+            val status = awaitTerminalStatus(export, exportService)
 
             isSuccessful = status == BUILT
             if (!isSuccessful) {
-                hauler.error("Error: ${exportService.getErrorTrace()}")
+                hauler.error("Error: ${runCatching { exportService.getErrorTrace() }.getOrNull()}")
             }
-            exportService.close()
+            runCatching { exportService.close() }
             hauler.debug("Done with $export")
+            if (!isSuccessful && subprocessExit?.isCompleted == true) {
+                // The subprocess is gone; remaining targets can't build. Stop here.
+                break
+            }
         }
         try {
             script.closeService(Unit)
@@ -80,6 +101,41 @@ class ExecuteTask(
                 FAILURE,
                 CompileTask.parseErrors(errors.toString().byteInputStream().bufferedReader())
             ) to allTargets
+        }
+    }
+
+    /**
+     * Wait for [exportService] to reach a terminal BUILT/ERROR status, returning null if the
+     * flow ends without one.
+     *
+     * When [subprocessExit] is supplied, the wait is raced against the subprocess dying: a
+     * hung build that gets force-killed completes [subprocessExit] (rather than ever emitting
+     * a terminal status), and we report ERROR so [execute] surfaces a FAILURE promptly instead
+     * of parking forever in the status flow's `awaitClose()`.
+     */
+    private suspend fun awaitTerminalStatus(
+        export: String,
+        exportService: BuildService
+    ): TargetStatus? {
+        val statusFlow = exportService.statusFlow().onEach {
+            hauler.info("Current status $it")
+        }.filter { it in listOf(BUILT, ERROR) }
+        val exit = subprocessExit ?: return statusFlow.firstOrNull()
+        return coroutineScope {
+            // The status collector runs as a child of this scope; whichever branch loses the
+            // select is cancelled when the scope returns, so no collector is leaked.
+            val statusJob = async { statusFlow.firstOrNull() }
+            select {
+                statusJob.onAwait { it }
+                exit.onAwait { exitCode ->
+                    statusJob.cancel()
+                    hauler.error(
+                        "Subprocess exited (code $exitCode) before $export reached a " +
+                            "terminal status; reporting build failure"
+                    )
+                    ERROR
+                }
+            }
         }
     }
 }
