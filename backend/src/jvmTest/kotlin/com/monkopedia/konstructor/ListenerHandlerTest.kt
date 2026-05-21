@@ -41,6 +41,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.encodeToStream
@@ -153,13 +154,12 @@ class ListenerHandlerTest {
      * dump showed repeated 120s timeouts for listeners that were never cleaned
      * up).
      *
-     * This test asserts the *current* (buggy) behaviour: the timeout fires
-     * (the callback is cancelled) but cleanup does NOT complete. If the
-     * production code is later fixed to run cleanup outside the cancelled
-     * scope, flip these assertions.
+     * After the fix (cleanup runs in a NonCancellable context outside the
+     * timed-out scope) the timeout fires AND the listener is closed and
+     * unregistered, so the dead listener no longer leaks.
      */
     @Test
-    fun deadClientCallbackTimesOutButCleanupDoesNotComplete() = runTest {
+    fun deadClientCallbackTimesOutAndIsCleanedUp() = runTest {
         val neverCompletes = CompletableDeferred<Unit>()
         val listener = FakeKonstructionListener(
             blockUntil = mapOf(KonstructionCallbacks.CONTENT_CHANGE to neverCompletes)
@@ -176,26 +176,25 @@ class ListenerHandlerTest {
         }
 
         handler.onContentChange()
-        // Let the callback start and park in its blocking await.
-        advanceUntilIdle()
+        // Let the callback start and park in its blocking await WITHOUT advancing
+        // the clock (advanceUntilIdle would jump past the 120s timeout).
+        runCurrent()
         assertEquals(1, listener.contentChanges.size, "callback should have started")
         assertFalse(listener.closed, "should not be closed before the timeout elapses")
 
         // Cross the 120s boundary in virtual time -> withTimeout cancels the
-        // callback body. The catch block runs but its suspending cleanup is
-        // itself cancelled.
+        // callback body, and the NonCancellable cleanup closes + unregisters.
         advanceTimeBy(121.seconds)
         advanceUntilIdle()
 
-        // The callback was cancelled (it never finished its await), but the
-        // listener was NOT closed and is still registered. See the bug note above.
-        assertFalse(
-            listener.closed,
-            "BUG: timed-out listener is not close()d (cleanup runs in cancelled scope)"
-        )
+        // The timed-out listener is closed and removed from the service map.
         assertTrue(
+            listener.closed,
+            "timed-out listener should be close()d by the NonCancellable cleanup"
+        )
+        assertFalse(
             service.unregister(key),
-            "BUG: timed-out listener is still registered and must be removed manually"
+            "timed-out listener should already be unregistered"
         )
     }
 

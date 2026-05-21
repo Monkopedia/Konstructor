@@ -48,10 +48,12 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 class KonstructionServiceImpl(
@@ -385,13 +387,17 @@ class ListenerHandler(
     ) {
         val callSign = coroutineContext[CallSign.Key]
         scope.launch(callSign ?: EmptyCoroutineContext) {
-            withTimeout(120.seconds) {
-                try {
+            try {
+                withTimeout(120.seconds) {
                     listener.function()
-                } catch (t: Throwable) {
-                    hauler("ListenerHandler").error("Exception while calling listener", t)
-                    close()
                 }
+            } catch (t: Throwable) {
+                hauler("ListenerHandler").error("Exception while calling listener", t)
+                // Cleanup must run outside the (now-cancelled) timeout scope:
+                // close() suspends, and inside a cancelling coroutine it would
+                // immediately throw CancellationException and never actually
+                // unregister — leaking the dead listener (the 120s-flood bug).
+                withContext(NonCancellable) { close() }
             }
         }
     }

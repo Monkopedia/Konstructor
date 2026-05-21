@@ -32,8 +32,10 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 class ScriptManager private constructor(private val config: Config) {
     private val hauler by lazy { hauler() }
@@ -52,40 +54,55 @@ class ScriptManager private constructor(private val config: Config) {
         hauler.debug("Opening script for ${paths.workspaceId}/${paths.konstructionId}")
 
         val exec = ExecUtil.executeWithChannel(command)
-        val connection = exec.connection.await()
-        val service = connection.defaultChannel().toStub<ScriptService, String>()
         val callSign = coroutineContext[CallSign.Key]
+        // Release the lock when the subprocess exits — by normal exit or by any
+        // of the kill paths below (caller cancellation, init failure, timeout).
         GlobalScope.launch(callSign ?: EmptyCoroutineContext) {
             hauler.info("Waiting for ${paths.workspaceId}/${paths.konstructionId}")
             exec.exitCode.await()
             hauler.info("Exit from ${paths.workspaceId}/${paths.konstructionId}")
             lock.unlock()
         }
-        service.setShipper(
-            shipper = WarehouseWrapper().getScoped(
-                "${paths.workspaceId}.${paths.konstructionId}",
-                name
-            )
-        )
+        // If the caller is cancelled, reap the subprocess so its exit releases
+        // the lock instead of leaking it until the force-kill timeout.
+        coroutineContext[Job]?.invokeOnCompletion {
+            if (!exec.exitCode.isCompleted) exec.kill()
+        }
         try {
-            service.initializeHostServices(scriptHost)
-            service.initialize(
-                ScriptConfiguration(
-                    outputDirectory = paths.renderOutput.absolutePath,
-                    eagerExport = true
+            // Bound the setup handshake. Without this, a hang in connect/init
+            // holds the lock indefinitely — the force-kill timer below only
+            // arms once init has already succeeded.
+            val service = withTimeout(config.executeTimeout) {
+                val connection = exec.connection.await()
+                val service = connection.defaultChannel().toStub<ScriptService, String>()
+                service.setShipper(
+                    shipper = WarehouseWrapper().getScoped(
+                        "${paths.workspaceId}.${paths.konstructionId}",
+                        name
+                    )
                 )
-            )
+                service.initializeHostServices(scriptHost)
+                service.initialize(
+                    ScriptConfiguration(
+                        outputDirectory = paths.renderOutput.absolutePath,
+                        eagerExport = true
+                    )
+                )
+                service
+            }
             hauler.debug("Initialized ${paths.workspaceId}/${paths.konstructionId}")
             exec.parentScope.launch(callSign ?: EmptyCoroutineContext) {
                 delay(config.executeTimeout)
                 hauler.debug("Force killing ${paths.workspaceId}/${paths.konstructionId}")
                 exec.kill()
             }
+            return service
         } catch (t: Throwable) {
             hauler.warn("$name could not be initialized", t)
+            // Reap the subprocess so the watcher above releases the lock.
+            exec.kill()
             throw InvalidScriptException("$name could not be initialized", t)
         }
-        return service
     }
 
     companion object : (Config) -> ScriptManager {

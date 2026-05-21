@@ -25,11 +25,9 @@ class Config(
     dataDirFile: File = File(
         System.getenv("KONSTRUCTOR_HOME")
             ?: File(System.getenv("HOME"), ".konstructor").path
-    )
+    ),
+    val executeTimeout: Duration = 5.minutes
 ) {
-
-    val executeTimeout: Duration
-        get() = 5.minutes
     val cachingEnabled: Boolean
         get() = true
     val compilerOpts: String

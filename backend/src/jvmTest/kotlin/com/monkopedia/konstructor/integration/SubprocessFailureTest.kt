@@ -32,6 +32,7 @@ import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -214,27 +215,12 @@ class SubprocessFailureTest {
      * building. Ideally the per-konstruction scriptLock — taken inside
      * ScriptManager.getScript — would be released so a subsequent render can run.
      *
-     * REAL BUG (documented, not fixed — issue #4, render-side analogue of #1):
-     * cancelling render does NOT release scriptLock. ScriptManager.getScript only
-     * unlocks from a GlobalScope watcher on `exec.exitCode.await()`, and nothing
-     * kills the child `kotlin` process when the calling coroutine is cancelled.
-     * The subprocess keeps running, exitCode never completes, and the lock is
-     * held until config.executeTimeout (5 min) force-kills it — if init even
-     * completed. This test (run live) observes the lock still held after 30s.
-     *
-     * This mirrors the content-lock deadlock fixed in 4bb8248 but on the
-     * subprocess scriptLock path, which that fix did not cover. Reaping the
-     * subprocess on render cancellation (e.g. try/finally around getScript that
-     * calls exec.kill(), or binding the ExecProcess scope to the caller's job) is
-     * a production change and a design call, so it is left unaddressed here.
-     *
-     * @Ignore so the suite stays green; remove the annotation to reproduce.
+     * Fixed (issue #4, render-side analogue of #1): ScriptManager.getScript now
+     * registers coroutineContext[Job].invokeOnCompletion -> exec.kill(), so when
+     * the calling render coroutine is cancelled the child `kotlin` process is
+     * reaped; its exit then fires the GlobalScope watcher that releases
+     * scriptLock. Mirrors the content-lock fix in 4bb8248, on the scriptLock path.
      */
-    @Ignore(
-        "Documents a real lock leak: cancelling a render does not reap the kotlin " +
-            "subprocess, so scriptLock is held until the 5-min executeTimeout. " +
-            "Reaping-on-cancel is a production design change (issue #4)."
-    )
     @Test
     fun cancelMidRenderReleasesScriptLock() = runBlocking {
         compile(SLOW_BUILD_SCRIPT)
@@ -260,45 +246,37 @@ class SubprocessFailureTest {
     }
 
     /**
-     * A script that blocks forever. ScriptManager arms an `executeTimeout`
-     * (config: 5 minutes) force-kill ONLY after host-service init succeeds, so a
-     * script that finishes init but then hangs in a build will eventually be
-     * killed — but the default 5-minute window is far too long for a unit test,
-     * and there is NO timeout guarding init itself or the ExecuteTask flow as a
-     * whole.
+     * A script that blocks forever inside a build target. The init handshake is
+     * now bounded by a withTimeout(executeTimeout) in ScriptManager.getScript,
+     * and the build phase by the post-init force-kill (issue #4).
      *
-     * This is left @Ignore deliberately: enforcing a short, test-suitable render
-     * timeout (or any timeout around getScript's init handshake) is a production
-     * design decision (see issue #4 "Subprocess hangs past timeout"), not
-     * something to bolt on from a test. Documented gap:
-     *   - config.executeTimeout (5m) only covers the post-init build phase.
-     *   - A hang inside service.initialize()/initializeHostServices() is
-     *     unguarded and would wedge the render's contentFileLock indefinitely.
+     * Still @Ignore: with a short executeTimeout the force-kill does fire, but
+     * render() does not reliably unblock within a test window — ExecuteTask's
+     * in-flight ksrpc build call doesn't promptly surface the killed
+     * subprocess. Quantifying/fixing that ExecuteTask-unblock-after-kill timing
+     * is a separate piece of work; the init-handshake bound (the gap this issue
+     * named) is fixed in production.
      */
     @Ignore(
-        "Documents missing render timeout: config.executeTimeout (5m) only guards " +
-            "the post-init build phase, and a hang during getScript init is unguarded. " +
-            "Adding a test-suitable timeout is a production design call (issue #4)."
+        "Init-handshake hang is now bounded in production; this build-phase-hang " +
+            "case still doesn't unblock render() promptly after force-kill " +
+            "(ExecuteTask ksrpc-call-after-kill timing — separate work)."
     )
     @Test
     fun hangingScriptIsKilledByTimeout() = runBlocking {
         compile(HANG_SCRIPT)
-        val lock = scriptLock()
+        val shortCfg = Config(env!!.tempDir, executeTimeout = 10.seconds)
+        val lock = scriptLock(shortCfg)
 
-        // If a (short) timeout existed, this would complete via force-kill and
-        // the lock would release. With today's behaviour it would block for the
-        // full 5-minute executeTimeout (and only if init even completes), which
-        // is why the test is disabled rather than asserting against a value that
-        // does not exist yet.
-        val finished = withTimeoutOrNull(30_000) {
+        val finished = withTimeoutOrNull(40_000) {
             try {
-                render()
+                render(shortCfg)
             } catch (t: Throwable) {
-                // any surfaced failure is acceptable for this gap test
+                // force-kill surfaces as a failure/cancellation — acceptable
             }
             true
         }
-        assertNotNull(finished, "Hanging script was not killed within a reasonable window")
+        assertNotNull(finished, "Hanging script was not killed within the window")
         assertTrue(awaitUnlocked(lock), "scriptLock must release after a hanging script is killed")
     }
 
@@ -306,11 +284,11 @@ class SubprocessFailureTest {
 
     private fun config(): Config = env!!.config
 
-    private fun controller() = KonstructorManager(config()).controllerFor(WS, K)
+    private fun controller(cfg: Config = config()) = KonstructorManager(cfg).controllerFor(WS, K)
 
-    private fun scriptLock() = controller().scriptLock
+    private fun scriptLock(cfg: Config = config()) = controller(cfg).scriptLock
 
-    private fun paths(): PathController.Paths = PathController(config())[WS, K]
+    private fun paths(cfg: Config = config()): PathController.Paths = PathController(cfg)[WS, K]
 
     private suspend fun compile(script: String) {
         val paths = paths()
@@ -319,13 +297,13 @@ class SubprocessFailureTest {
         assertEquals(SUCCESS, result.status, "Setup compile failed: $result")
     }
 
-    private suspend fun render(): List<String> {
-        val paths = paths()
+    private suspend fun render(cfg: Config = config()): List<String> {
+        val paths = paths(cfg)
         paths.renderOutput.mkdirs()
-        val script = ScriptManager(config()).getScript(paths, "failure-test")
-        val (result, executed) = ExecuteTask(config(), script, extraTargets = emptyList()).execute()
+        val script = ScriptManager(cfg).getScript(paths, "failure-test")
+        val (result, executed) = ExecuteTask(cfg, script, extraTargets = emptyList()).execute()
         paths.renderResultFile.outputStream().use { out ->
-            config().json.encodeToStream(result, out)
+            cfg.json.encodeToStream(result, out)
         }
         return executed
     }
