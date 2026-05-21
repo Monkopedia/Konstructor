@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionType
 import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.frontend.ui.dialogs.pickFile
 import com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
@@ -94,10 +95,10 @@ fun NavigationPane(modifier: Modifier = Modifier) {
                 onEditKonstruction = { k -> dialogVm.showEditKonstructionDialog(k) },
                 onAddKonstruction = { dialogVm.showCreateKonstructionDialog(space.id) },
                 onUploadStl = {
-                    kotlinx.browser.window.alert(
-                        "STL upload is not yet available. " +
-                            "Use 'Add new konstruction' to create script-based models."
-                    )
+                    pickFile(accept = ".stl") { fileName, bytes ->
+                        val name = fileName.removeSuffix(".stl")
+                        dialogVm.uploadStl(name = name, workspaceId = space.id, data = bytes)
+                    }
                 }
             )
         }
