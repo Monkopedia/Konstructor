@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import java.time.Duration
+
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
     id("com.monkopedia.ksrpc.plugin")
@@ -63,6 +65,27 @@ kotlin {
 
 kotlin.compilerOptions {
     freeCompilerArgs.add("-Xskip-prerelease-check")
+}
+
+// Forward opt-in flags to the test JVM. Gradle does not propagate -D system
+// properties or -P project properties to forked test workers automatically, so
+// without this the `integration`/`soak` gates always read null and every gated
+// test self-skips. Supports either `-Dintegration=true` or `-Pintegration`.
+tasks.withType<Test>().configureEach {
+    listOf("integration", "soak", "duration").forEach { key ->
+        val value = (project.findProperty(key) as? String)
+            ?: System.getProperty(key)
+        if (value != null) {
+            systemProperty(key, value)
+        }
+    }
+    // Soak tests intentionally run long; never let Gradle's default timeout
+    // (or a stuck subprocess) kill the worker silently.
+    if ((project.findProperty("soak") as? String) != null ||
+        System.getProperty("soak") != null
+    ) {
+        timeout.set(Duration.ofHours(2))
+    }
 }
 
 tasks.withType<

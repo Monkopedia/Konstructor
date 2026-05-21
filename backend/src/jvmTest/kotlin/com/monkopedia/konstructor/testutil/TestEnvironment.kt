@@ -20,6 +20,7 @@ package com.monkopedia.konstructor.testutil
 import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.PathController
 import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.tasks.LibsJar
 import java.io.File
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
@@ -46,5 +47,18 @@ class TestEnvironment : AutoCloseable {
 
     override fun close() {
         tempDir.deleteRecursively()
+        // LibsJar caches the extracted lib.jar path in a process-wide static.
+        // This env extracted it into the temp dir we just deleted, so clear the
+        // cache to stop a later test (possibly with a different Config) from
+        // compiling against the now-missing jar.
+        resetLibsJarCache()
+    }
+
+    companion object {
+        fun resetLibsJarCache() {
+            val field = LibsJar::class.java.getDeclaredField("libsFile")
+            field.isAccessible = true
+            field.set(LibsJar, null)
+        }
     }
 }
