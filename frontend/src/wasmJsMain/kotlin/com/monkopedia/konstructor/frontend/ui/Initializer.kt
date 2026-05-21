@@ -47,24 +47,31 @@ fun Initializer() {
     // Auto-select first workspace on startup
     LaunchedEffect(workspaces) {
         val ws = workspaces
-        if (ws != null && ws.isNotEmpty() && selectedWorkspaceId == null) {
+        if (ws != null && ws.isNotEmpty() && ws.none { it.id == selectedWorkspaceId }) {
             val firstWs = ws.first()
             spaceListVm.selectWorkspace(firstWs.id)
             workspaceVm.loadWorkspace(firstWs.id)
         }
     }
 
-    // Load workspace when selection changes (e.g., from bridge or navigation)
-    LaunchedEffect(selectedWorkspaceId) {
+    // Load the selected workspace when the selection changes, or once the
+    // workspace list first becomes available. `workspaces` is null until the
+    // service connects, so a persisted selection (restored before the
+    // websocket is up) would otherwise call loadWorkspace against a null
+    // service, no-op, and never retry — leaving the workspace empty until a
+    // manual reselect.
+    LaunchedEffect(selectedWorkspaceId, workspaces) {
         val wsId = selectedWorkspaceId
-        if (wsId != null) {
+        if (wsId != null && workspaces != null) {
             workspaceVm.loadWorkspace(wsId)
         }
     }
 
     // Auto-select first konstruction when workspace loads
     LaunchedEffect(konstructions) {
-        if (konstructions.isNotEmpty() && selectedKonstructionId == null) {
+        if (konstructions.isNotEmpty() &&
+            konstructions.none { it.id == selectedKonstructionId }
+        ) {
             workspaceVm.selectKonstruction(konstructions.first().id)
         }
     }
