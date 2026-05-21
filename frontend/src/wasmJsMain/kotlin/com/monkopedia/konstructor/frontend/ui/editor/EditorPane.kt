@@ -18,6 +18,7 @@ package com.monkopedia.konstructor.frontend.ui.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -139,8 +140,8 @@ fun EditorPane(modifier: Modifier = Modifier) {
             }
         }
 
-        // Status footer overlay, pinned to the bottom of the editor pane.
-        val statusModifier = Modifier.align(Alignment.BottomEnd)
+        // Status footer overlay, pinned full-width to the bottom of the pane.
+        val statusModifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
         when (uiState) {
             UiState.LOADING -> StatusBar("Loading...", Color(0xFF64B5F6), statusModifier)
 
