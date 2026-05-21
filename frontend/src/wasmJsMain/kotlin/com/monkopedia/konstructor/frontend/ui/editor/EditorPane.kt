@@ -284,6 +284,9 @@ private fun EditorContent(
 private fun StatusBar(text: String, color: Color, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
+            // Opaque surface base so editor content doesn't bleed through the
+            // footer overlay, with the status color as a subtle tint on top.
+            .background(MaterialTheme.colorScheme.surface)
             .background(color.copy(alpha = 0.2f))
             .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
