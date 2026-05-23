@@ -33,9 +33,17 @@ A Gradle multi-module project (version catalog in `gradle/libs.versions.toml`):
 | **backend** | JVM (Ktor) | Serves the frontend, manages workspaces/konstructions, compiles scripts, and talks to the frontend over WebSockets. |
 | **e2e** | JVM | Playwright end-to-end tests. |
 
-Konstructor is built on a stack of the author's own libraries: **kcsg** (geometry),
-**ksrpc** (RPC over WebSockets), **hauler** (structured logging), and **kodemirror** (a Compose
-Multiplatform CodeMirror wrapper).
+All cross-process communication runs over **ksrpc**: the same typed service interfaces carry calls
+between the frontend and backend over WebSockets *and* between the backend and the sandboxed Kotlin
+subprocess that compiles and executes each user script — so the editor, the renderer, and the script
+runner all talk through one RPC layer.
+
+Konstructor is built on a stack of the author's own libraries:
+[**kcsg**](https://github.com/Monkopedia/KCSG) (geometry),
+[**ksrpc**](https://github.com/Monkopedia/ksrpc) (RPC over WebSockets),
+[**hauler**](https://github.com/Monkopedia/hauler) (structured logging), and
+[**kodemirror**](https://github.com/Monkopedia/kodemirror) (a Compose Multiplatform CodeMirror
+wrapper that provides the script editor).
 
 ## Build & run
 
