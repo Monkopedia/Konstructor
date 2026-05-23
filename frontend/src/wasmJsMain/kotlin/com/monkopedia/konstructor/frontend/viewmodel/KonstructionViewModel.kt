@@ -88,6 +88,10 @@ class KonstructionViewModel(
     private var konstructionService: KonstructionService? = null
     private var listenerKey: String? = null
 
+    // Targets currently being auto-fetched/built via setTargetEnabled, to avoid
+    // kicking off duplicate work for the same target.
+    private val inFlightEnables = mutableSetOf<String>()
+
     init {
         // Re-derive enabled-rendered targets whenever displays change
         viewModelScope.launch {
@@ -360,8 +364,47 @@ class KonstructionViewModel(
     suspend fun getKonstructedPath(target: String): String? =
         konstructionService?.konstructed(target)
 
-    fun setTargetEnabled(name: String, enabled: Boolean) =
+    fun setTargetEnabled(name: String, enabled: Boolean) {
+        // Update the toggle state immediately.
         targetDisplayRepo.setEnabled(name, enabled)
+
+        // Enabling a target that has no current render: fetch the existing render
+        // if one is already built, otherwise build it so it shows up. (Disabling
+        // skips builds, so a previously-disabled target may never have been built.)
+        if (!enabled) return
+        if (renderPaths.value.containsKey(name)) return
+        val ks = konstructionService ?: return
+        if (!inFlightEnables.add(name)) return
+
+        viewModelScope.launch {
+            try {
+                val existing = try {
+                    ks.konstructed(name)
+                } catch (_: Exception) {
+                    null
+                }
+                if (existing != null) {
+                    // Render already exists — surface it without rebuilding.
+                    val fresh = freshen(existing)
+                    renderPaths.value = renderPaths.value + (name to fresh)
+                    _renderPath.value = fresh
+                    recomputeEnabledTargets()
+                } else {
+                    // Not built yet — build it. onRenderChanged will populate
+                    // renderPaths, and onTaskComplete resets _state to DEFAULT.
+                    _state.value = UiState.EXECUTING
+                    try {
+                        val result = ks.konstruct(name)
+                        _messages.value = result.messages
+                    } catch (_: Exception) {
+                        _state.value = UiState.DEFAULT
+                    }
+                }
+            } finally {
+                inFlightEnables.remove(name)
+            }
+        }
+    }
 
     fun setTargetColor(name: String, color: String) = targetDisplayRepo.setColor(name, color)
 
