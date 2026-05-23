@@ -193,11 +193,16 @@ class KonstructionViewModel(
                     targetDisplayRepo.mergeTargets(info.targets.map { it.name })
                     when (info.dirtyState) {
                         DirtyState.NEEDS_EXEC -> {
-                            _state.value = UiState.EXECUTING
-                            try {
-                                ks.requestKonstructs(info.targets.map { it.name })
-                            } catch (_: Exception) {
+                            val targets = enabledTargets(info.targets.map { it.name })
+                            if (targets.isEmpty()) {
                                 _state.value = UiState.DEFAULT
+                            } else {
+                                _state.value = UiState.EXECUTING
+                                try {
+                                    ks.requestKonstructs(targets)
+                                } catch (_: Exception) {
+                                    _state.value = UiState.DEFAULT
+                                }
                             }
                         }
 
@@ -305,14 +310,19 @@ class KonstructionViewModel(
                 return@launch
             }
 
-            // Auto-build all export targets after successful compile.
-            // Don't set DEFAULT here — onTaskComplete callback will do it.
-            _state.value = UiState.EXECUTING
-            try {
-                val targets = _info.value?.targets?.map { it.name } ?: emptyList()
-                ks.requestKonstructs(targets)
-            } catch (_: Exception) {
+            // Auto-build the enabled export targets after a successful compile.
+            // Don't set DEFAULT here — onTaskComplete callback will do it (unless
+            // there's nothing to build, in which case settle the state now).
+            val targets = enabledTargets(_info.value?.targets?.map { it.name } ?: emptyList())
+            if (targets.isEmpty()) {
                 _state.value = UiState.DEFAULT
+            } else {
+                _state.value = UiState.EXECUTING
+                try {
+                    ks.requestKonstructs(targets)
+                } catch (_: Exception) {
+                    _state.value = UiState.DEFAULT
+                }
             }
         }
     }
@@ -354,6 +364,16 @@ class KonstructionViewModel(
         targetDisplayRepo.setEnabled(name, enabled)
 
     fun setTargetColor(name: String, color: String) = targetDisplayRepo.setColor(name, color)
+
+    /**
+     * Restrict a build request to the targets the user has enabled for display —
+     * disabling a target should also skip rebuilding it on subsequent saves.
+     * Targets not yet tracked (e.g. just created by an edit) default to enabled.
+     */
+    private fun enabledTargets(targets: List<String>): List<String> {
+        val displays = targetDisplayRepo.displays.value
+        return targets.filter { displays[it]?.isEnabled ?: true }
+    }
 
     private fun recomputeEnabledTargets() {
         val displays = targetDisplayRepo.displays.value
