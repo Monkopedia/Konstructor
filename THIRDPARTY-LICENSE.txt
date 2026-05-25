@@ -1,0 +1,17 @@
+Third-party assets bundled or depicted in this repository
+=========================================================
+
+Kodee (Kotlin mascot)
+---------------------
+The Kodee model depicted in this project's documentation/screenshots
+(docs/images/) is an adaptation of Kodee, the Kotlin mascot.
+
+    "Kodee by JetBrains s.r.o. is licensed under CC BY 4.0."
+    https://creativecommons.org/licenses/by/4.0/
+
+Changes were made: the figure was traced from the official Kodee SVG and
+extruded into a 3D relief, then rendered in Konstructor. The model source is
+distributed as a sample in the kcsg repository
+(https://github.com/Monkopedia/KCSG).
+
+This project is not affiliated with, sponsored by, or endorsed by JetBrains.
