@@ -41,7 +41,7 @@ runner all talk through one RPC layer.
 Konstructor is built on a stack of the author's own libraries:
 [**kcsg**](https://github.com/Monkopedia/KCSG) (geometry),
 [**ksrpc**](https://github.com/Monkopedia/ksrpc) (RPC over WebSockets),
-[**hauler**](https://github.com/Monkopedia/hauler) (structured logging), and
+[**hauler**](https://github.com/Monkopedia/hauler) (remote logging), and
 [**kodemirror**](https://github.com/Monkopedia/kodemirror) (a Compose Multiplatform CodeMirror
 wrapper that provides the script editor).
 
