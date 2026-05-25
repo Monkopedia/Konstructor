@@ -25,8 +25,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -85,15 +86,22 @@ fun ContentPane(modifier: Modifier = Modifier) {
     val settingsVm = koinInject<SettingsViewModel>()
     val codePaneMode by settingsVm.codePaneMode.collectAsState()
 
-    Column(modifier = modifier) {
-        TopBar()
+    // Scaffold gives the content lambda a height bounded to "screen minus
+    // TopBar" (via innerPadding + bounded constraints). This is what lets
+    // child panes (and kodemirror) scroll within the viewport instead of
+    // overflowing it — a Column child would be measured with an unbounded
+    // vertical constraint, making fillMaxSize a no-op on the main axis.
+    Scaffold(
+        modifier = modifier,
+        topBar = { TopBar() }
+    ) { innerPadding ->
         AnimatedContent(
             targetState = codePaneMode,
             transitionSpec = {
                 val (enter, exit) = transitionSpec(initialState, targetState)
                 enter togetherWith exit
             },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.padding(innerPadding).fillMaxSize()
         ) { mode ->
             when (mode) {
                 CodePaneMode.EDITOR -> EditorPane(modifier = Modifier.fillMaxSize())

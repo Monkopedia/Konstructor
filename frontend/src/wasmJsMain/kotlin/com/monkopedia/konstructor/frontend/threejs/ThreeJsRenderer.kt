@@ -159,15 +159,16 @@ class ThreeJsRenderer(private val canvasId: String) {
             if (disposed || loadedUrls[name] != url) return
 
             // 2. Yield so Compose/animation can paint a frame before the heavy
-            // synchronous geometry work begins (computeVertexNormals/center
-            // iterate every vertex and cannot be made non-blocking without a
-            // Web Worker, but yielding keeps the UI from pileup-freezing).
+            // synchronous geometry work begins (computeVertexNormals iterates
+            // every vertex and cannot be made non-blocking without a Web Worker,
+            // but yielding keeps the UI from pileup-freezing).
+            //
+            // Do NOT center() the geometry: each target is its own mesh, and
+            // re-centering every mesh to its own centroid discards the relative
+            // positions between targets. Konstructions rely on multiple elements
+            // appearing at their authored offsets.
             yield()
             geometry.computeVertexNormals()
-            if (disposed || loadedUrls[name] != url) return
-
-            yield()
-            geometry.center()
             if (disposed || loadedUrls[name] != url) return
 
             yield()
