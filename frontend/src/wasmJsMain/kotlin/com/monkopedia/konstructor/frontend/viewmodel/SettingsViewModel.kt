@@ -76,7 +76,7 @@ class SettingsViewModel {
     val codePaneMode: StateFlow<CodePaneMode> = _codePaneMode.asStateFlow()
 
     private val editorThemeStore =
-        PersistedStateFlow.enum("editorTheme", EditorThemeName.DRACULA)
+        PersistedStateFlow.enum("editorTheme", EditorThemeName.ONE_DARK)
     private val keymapStore =
         PersistedStateFlow.enum("keymap", KeymapName.VIM)
     private val showCodeLeftStore =
