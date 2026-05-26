@@ -88,6 +88,10 @@ class KonstructionViewModel(
     private var konstructionService: KonstructionService? = null
     private var listenerKey: String? = null
 
+    // Targets currently being auto-fetched/built via setTargetEnabled, to avoid
+    // kicking off duplicate work for the same target.
+    private val inFlightEnables = mutableSetOf<String>()
+
     init {
         // Re-derive enabled-rendered targets whenever displays change
         viewModelScope.launch {
@@ -193,11 +197,19 @@ class KonstructionViewModel(
                     targetDisplayRepo.mergeTargets(info.targets.map { it.name })
                     when (info.dirtyState) {
                         DirtyState.NEEDS_EXEC -> {
-                            _state.value = UiState.EXECUTING
-                            try {
-                                ks.requestKonstructs(info.targets.map { it.name })
-                            } catch (_: Exception) {
+                            val all = info.targets.map { it.name }
+                            val targets = buildTargets(all)
+                            if (targets == null) {
+                                // Every known target is disabled — nothing to
+                                // build, settle the UI instead of spinning.
                                 _state.value = UiState.DEFAULT
+                            } else {
+                                _state.value = UiState.EXECUTING
+                                try {
+                                    ks.requestKonstructs(targets)
+                                } catch (_: Exception) {
+                                    _state.value = UiState.DEFAULT
+                                }
                             }
                         }
 
@@ -305,14 +317,20 @@ class KonstructionViewModel(
                 return@launch
             }
 
-            // Auto-build all export targets after successful compile.
-            // Don't set DEFAULT here — onTaskComplete callback will do it.
-            _state.value = UiState.EXECUTING
-            try {
-                val targets = _info.value?.targets?.map { it.name } ?: emptyList()
-                ks.requestKonstructs(targets)
-            } catch (_: Exception) {
+            // Auto-build the enabled export targets after a successful compile.
+            // Don't set DEFAULT here — onTaskComplete callback will do it (unless
+            // every known target is disabled, in which case settle the state now).
+            val all = _info.value?.targets?.map { it.name } ?: emptyList()
+            val targets = buildTargets(all)
+            if (targets == null) {
                 _state.value = UiState.DEFAULT
+            } else {
+                _state.value = UiState.EXECUTING
+                try {
+                    ks.requestKonstructs(targets)
+                } catch (_: Exception) {
+                    _state.value = UiState.DEFAULT
+                }
             }
         }
     }
@@ -350,10 +368,72 @@ class KonstructionViewModel(
     suspend fun getKonstructedPath(target: String): String? =
         konstructionService?.konstructed(target)
 
-    fun setTargetEnabled(name: String, enabled: Boolean) =
+    fun setTargetEnabled(name: String, enabled: Boolean) {
+        // Update the toggle state immediately.
         targetDisplayRepo.setEnabled(name, enabled)
 
+        // Enabling a target that has no current render: fetch the existing render
+        // if one is already built, otherwise build it so it shows up. (Disabling
+        // skips builds, so a previously-disabled target may never have been built.)
+        if (!enabled) return
+        if (renderPaths.value.containsKey(name)) return
+        val ks = konstructionService ?: return
+        if (!inFlightEnables.add(name)) return
+
+        viewModelScope.launch {
+            try {
+                val existing = try {
+                    ks.konstructed(name)
+                } catch (_: Exception) {
+                    null
+                }
+                if (existing != null) {
+                    // Render already exists — surface it without rebuilding.
+                    val fresh = freshen(existing)
+                    renderPaths.value = renderPaths.value + (name to fresh)
+                    _renderPath.value = fresh
+                    recomputeEnabledTargets()
+                } else {
+                    // Not built yet — build it. onRenderChanged will populate
+                    // renderPaths, and onTaskComplete resets _state to DEFAULT.
+                    _state.value = UiState.EXECUTING
+                    try {
+                        val result = ks.konstruct(name)
+                        _messages.value = result.messages
+                    } catch (_: Exception) {
+                        _state.value = UiState.DEFAULT
+                    }
+                }
+            } finally {
+                inFlightEnables.remove(name)
+            }
+        }
+    }
+
     fun setTargetColor(name: String, color: String) = targetDisplayRepo.setColor(name, color)
+
+    /**
+     * Decide which targets to request for a build, given the targets currently
+     * known to exist (`known`).
+     *
+     * Returns:
+     *  - `known` filtered to the user-enabled targets when at least one is
+     *    enabled (untracked targets default to enabled, preserving the
+     *    enabled-by-default behavior — so disabling a target skips rebuilding it);
+     *  - an empty list when `known` is itself empty. A fresh konstruction has no
+     *    discovered targets yet — targets are only surfaced by the server's
+     *    execute pass — so we MUST still request the (empty) build to trigger
+     *    discovery. Short-circuiting here was the #7 regression: it skipped the
+     *    discovery build and `state.targets` never populated;
+     *  - `null` only when targets are known but every one is disabled, signalling
+     *    the caller to settle the UI rather than spin on an empty build.
+     */
+    private fun buildTargets(known: List<String>): List<String>? {
+        if (known.isEmpty()) return emptyList()
+        val displays = targetDisplayRepo.displays.value
+        val enabled = known.filter { displays[it]?.isEnabled ?: true }
+        return enabled.ifEmpty { null }
+    }
 
     private fun recomputeEnabledTargets() {
         val displays = targetDisplayRepo.displays.value
