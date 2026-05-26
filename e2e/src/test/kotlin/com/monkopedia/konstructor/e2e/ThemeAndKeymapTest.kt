@@ -78,9 +78,9 @@ class ThemeAndKeymapTest : BaseE2eTest() {
     fun testThemeSwitching() {
         setupWorkspaceWithCode()
 
-        // Default should be Dracula
-        assertEquals("DRACULA", bridgeStateString("editorTheme"))
-        screenshot("theme-dracula")
+        // Default should be One Dark
+        assertEquals("ONE_DARK", bridgeStateString("editorTheme"))
+        screenshot("theme-one-dark-default")
 
         // Switch to One Dark
         bridgeAction("setEditorTheme", "ONE_DARK")

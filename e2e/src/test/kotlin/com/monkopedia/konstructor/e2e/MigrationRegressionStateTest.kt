@@ -53,7 +53,7 @@ class MigrationRegressionStateTest : BaseE2eTest() {
 
     /**
      * Editor theme + keymap are persisted enums. A fresh page load must restore
-     * the user's choices rather than reverting to the DRACULA/VIM defaults.
+     * the user's choices rather than reverting to the ONE_DARK/VIM defaults.
      */
     @Test
     @MigrationRegression(9, "Editor theme and keymap survive a page reload")
@@ -61,8 +61,8 @@ class MigrationRegressionStateTest : BaseE2eTest() {
         loadApp()
         waitForBridge()
 
-        // Defaults are DRACULA / VIM; pick something else.
-        assertEquals("DRACULA", bridgeStateString("editorTheme"))
+        // Defaults are ONE_DARK / VIM; pick something else.
+        assertEquals("ONE_DARK", bridgeStateString("editorTheme"))
         assertEquals("VIM", bridgeStateString("keymap"))
 
         bridgeAction("setEditorTheme", "SOLARIZED_LIGHT")
