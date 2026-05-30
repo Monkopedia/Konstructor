@@ -104,6 +104,24 @@ class KonstructionViewModel(
             _state.value = UiState.LOADING
             _renderPath.value = null
             renderPaths.value = emptyMap()
+            // Drop any in-flight enable bookkeeping from the previous
+            // konstruction — keyed by target name on this singleton, a leftover
+            // entry could otherwise suppress a legitimate enable after switching.
+            inFlightEnables.clear()
+            // Unregister the previous konstruction's listener before wiring the
+            // new one, so a late callback from the de-selected konstruction can't
+            // keep mutating the now-shared flows. Capture the old refs first,
+            // clear them, then unregister.
+            val previousKs = konstructionService
+            val previousKey = listenerKey
+            konstructionService = null
+            listenerKey = null
+            if (previousKs != null && previousKey != null) {
+                try {
+                    previousKs.unregister(previousKey)
+                } catch (_: Exception) {
+                }
+            }
             targetDisplayRepo.activate(konstruction.workspaceId, konstruction.id)
             recomputeEnabledTargets()
             val service = serviceHolder.service.value
@@ -148,16 +166,20 @@ class KonstructionViewModel(
                             }
                         }.awaitAll()
                     }
-                    val newPaths = renderPaths.value.toMutableMap()
-                    for ((name, path) in paths) {
-                        if (path != null) {
-                            val fresh = freshen(path)
-                            newPaths[name] = fresh
-                            _renderPath.value = fresh
+                    // Re-check selection: a switch may have landed while the
+                    // konstructed() calls above were in flight.
+                    if (ks === konstructionService) {
+                        val newPaths = renderPaths.value.toMutableMap()
+                        for ((name, path) in paths) {
+                            if (path != null) {
+                                val fresh = freshen(path)
+                                newPaths[name] = fresh
+                                _renderPath.value = fresh
+                            }
                         }
+                        renderPaths.value = newPaths
+                        recomputeEnabledTargets()
                     }
-                    renderPaths.value = newPaths
-                    recomputeEnabledTargets()
                 } else {
                     autoCompileAndBuild(ks)
                 }
@@ -193,6 +215,8 @@ class KonstructionViewModel(
                     )
 
                 override suspend fun onInfoChanged(info: KonstructionInfo) {
+                    // Ignore late callbacks from a de-selected konstruction.
+                    if (ks !== konstructionService) return
                     _info.value = info
                     targetDisplayRepo.mergeTargets(info.targets.map { it.name })
                     when (info.dirtyState) {
@@ -227,16 +251,20 @@ class KonstructionViewModel(
                                     }
                                 }.awaitAll()
                             }
-                            val newPaths = renderPaths.value.toMutableMap()
-                            for ((name, path) in paths) {
-                                if (path != null) {
-                                    val fresh = freshen(path)
-                                    newPaths[name] = fresh
-                                    _renderPath.value = fresh
+                            // Re-check selection: a switch may have landed while
+                            // the konstructed() calls above were in flight.
+                            if (ks === konstructionService) {
+                                val newPaths = renderPaths.value.toMutableMap()
+                                for ((name, path) in paths) {
+                                    if (path != null) {
+                                        val fresh = freshen(path)
+                                        newPaths[name] = fresh
+                                        _renderPath.value = fresh
+                                    }
                                 }
+                                renderPaths.value = newPaths
+                                recomputeEnabledTargets()
                             }
-                            renderPaths.value = newPaths
-                            recomputeEnabledTargets()
                         }
 
                         else -> { /* other dirty states: no-op */ }
@@ -244,10 +272,12 @@ class KonstructionViewModel(
                 }
 
                 override suspend fun onDirtyStateChanged(state: DirtyState) {
+                    if (ks !== konstructionService) return
                     _info.value = _info.value?.copy(dirtyState = state)
                 }
 
                 override suspend fun onTargetChanged(target: KonstructionTarget) {
+                    if (ks !== konstructionService) return
                     val info = _info.value ?: return
                     val newTargets = info.targets.map {
                         if (it.name == target.name) target else it
@@ -256,6 +286,7 @@ class KonstructionViewModel(
                 }
 
                 override suspend fun onRenderChanged(render: KonstructionRender) {
+                    if (ks !== konstructionService) return
                     val path = render.renderPath
                     if (path != null) {
                         val fresh = freshen(path)
@@ -269,6 +300,7 @@ class KonstructionViewModel(
                 }
 
                 override suspend fun onContentChange(u: Unit) {
+                    if (ks !== konstructionService) return
                     try {
                         _content.value = ks.fetch()
                     } catch (_: Exception) {
@@ -276,6 +308,7 @@ class KonstructionViewModel(
                 }
 
                 override suspend fun onTaskComplete(taskResult: TaskResult) {
+                    if (ks !== konstructionService) return
                     _messages.value = taskResult.messages
                     _state.value = UiState.DEFAULT
                 }
@@ -387,6 +420,10 @@ class KonstructionViewModel(
                 } catch (_: Exception) {
                     null
                 }
+                // A switch may have landed while konstructed() was in flight;
+                // don't write the de-selected konstruction's render into the
+                // now-current view.
+                if (ks !== konstructionService) return@launch
                 if (existing != null) {
                     // Render already exists — surface it without rebuilding.
                     val fresh = freshen(existing)
