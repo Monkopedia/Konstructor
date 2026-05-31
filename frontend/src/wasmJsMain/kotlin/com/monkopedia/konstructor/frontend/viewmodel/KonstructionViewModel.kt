@@ -154,32 +154,7 @@ class KonstructionViewModel(
                 // If already CLEAN, fetch existing render paths in parallel;
                 // otherwise trigger a compile/build cycle.
                 if (info != null && info.dirtyState == DirtyState.CLEAN) {
-                    val cleanTargets = info.targets.filter { it.state == DirtyState.CLEAN }
-                    val paths = coroutineScope {
-                        cleanTargets.map { target ->
-                            async {
-                                try {
-                                    target.name to ks.konstructed(target.name)
-                                } catch (_: Exception) {
-                                    target.name to null
-                                }
-                            }
-                        }.awaitAll()
-                    }
-                    // Re-check selection: a switch may have landed while the
-                    // konstructed() calls above were in flight.
-                    if (ks === konstructionService) {
-                        val newPaths = renderPaths.value.toMutableMap()
-                        for ((name, path) in paths) {
-                            if (path != null) {
-                                val fresh = freshen(path)
-                                newPaths[name] = fresh
-                                _renderPath.value = fresh
-                            }
-                        }
-                        renderPaths.value = newPaths
-                        recomputeEnabledTargets()
-                    }
+                    applyCleanRenders(ks, info)
                 } else {
                     autoCompileAndBuild(ks)
                 }
@@ -202,121 +177,165 @@ class KonstructionViewModel(
         }
     }
 
-    private suspend fun registerListener(ks: KonstructionService) {
-        try {
-            val listener = object : KonstructionListener {
-                override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> =
-                    listOf(
-                        KonstructionCallbacks.INFO_CHANGE,
-                        KonstructionCallbacks.DIRTY_CHANGE,
-                        KonstructionCallbacks.CONTENT_CHANGE,
-                        KonstructionCallbacks.TASK_COMPLETE,
-                        KonstructionCallbacks.RENDER_CHANGE
-                    )
+    /**
+     * Run [block] only if [ks] is still the selected konstruction. Used after a
+     * suspending call to drop work for a service that was de-selected while the
+     * call was in flight (a switch landing mid-await).
+     */
+    private suspend inline fun runIfCurrent(ks: KonstructionService, block: () -> Unit) {
+        if (ks === konstructionService) block()
+    }
 
-                override suspend fun onInfoChanged(info: KonstructionInfo) {
-                    // Ignore late callbacks from a de-selected konstruction.
-                    if (ks !== konstructionService) return
-                    _info.value = info
-                    targetDisplayRepo.mergeTargets(info.targets.map { it.name })
-                    when (info.dirtyState) {
-                        DirtyState.NEEDS_EXEC -> {
-                            val all = info.targets.map { it.name }
-                            val targets = buildTargets(all)
-                            if (targets == null) {
-                                // Every known target is disabled — nothing to
-                                // build, settle the UI instead of spinning.
-                                _state.value = UiState.DEFAULT
-                            } else {
-                                _state.value = UiState.EXECUTING
-                                try {
-                                    ks.requestKonstructs(targets)
-                                } catch (_: Exception) {
-                                    _state.value = UiState.DEFAULT
-                                }
-                            }
-                        }
-
-                        DirtyState.CLEAN -> {
-                            _state.value = UiState.DEFAULT
-                            val cleanTargets = info.targets.filter { it.state == DirtyState.CLEAN }
-                            val paths = coroutineScope {
-                                cleanTargets.map { target ->
-                                    async {
-                                        try {
-                                            target.name to ks.konstructed(target.name)
-                                        } catch (_: Exception) {
-                                            target.name to null
-                                        }
-                                    }
-                                }.awaitAll()
-                            }
-                            // Re-check selection: a switch may have landed while
-                            // the konstructed() calls above were in flight.
-                            if (ks === konstructionService) {
-                                val newPaths = renderPaths.value.toMutableMap()
-                                for ((name, path) in paths) {
-                                    if (path != null) {
-                                        val fresh = freshen(path)
-                                        newPaths[name] = fresh
-                                        _renderPath.value = fresh
-                                    }
-                                }
-                                renderPaths.value = newPaths
-                                recomputeEnabledTargets()
-                            }
-                        }
-
-                        else -> { /* other dirty states: no-op */ }
-                    }
-                }
-
-                override suspend fun onDirtyStateChanged(state: DirtyState) {
-                    if (ks !== konstructionService) return
-                    _info.value = _info.value?.copy(dirtyState = state)
-                }
-
-                override suspend fun onTargetChanged(target: KonstructionTarget) {
-                    if (ks !== konstructionService) return
-                    val info = _info.value ?: return
-                    val newTargets = info.targets.map {
-                        if (it.name == target.name) target else it
-                    }
-                    _info.value = info.copy(targets = newTargets)
-                }
-
-                override suspend fun onRenderChanged(render: KonstructionRender) {
-                    if (ks !== konstructionService) return
-                    val path = render.renderPath
-                    if (path != null) {
-                        val fresh = freshen(path)
-                        _renderPath.value = fresh
-                        renderPaths.value = renderPaths.value + (render.name to fresh)
-                    } else {
-                        _renderPath.value = null
-                        renderPaths.value = renderPaths.value - render.name
-                    }
-                    recomputeEnabledTargets()
-                }
-
-                override suspend fun onContentChange(u: Unit) {
-                    if (ks !== konstructionService) return
+    /**
+     * Fetch the render paths of [info]'s CLEAN targets in parallel and, if [ks]
+     * is still selected once they resolve, publish them. Shared by the initial
+     * load and the onInfoChanged CLEAN transition.
+     */
+    private suspend fun applyCleanRenders(ks: KonstructionService, info: KonstructionInfo) {
+        val cleanTargets = info.targets.filter { it.state == DirtyState.CLEAN }
+        val paths = coroutineScope {
+            cleanTargets.map { target ->
+                async {
                     try {
-                        _content.value = ks.fetch()
+                        target.name to ks.konstructed(target.name)
                     } catch (_: Exception) {
+                        target.name to null
                     }
                 }
-
-                override suspend fun onTaskComplete(taskResult: TaskResult) {
-                    if (ks !== konstructionService) return
-                    _messages.value = taskResult.messages
-                    _state.value = UiState.DEFAULT
+            }.awaitAll()
+        }
+        runIfCurrent(ks) {
+            val newPaths = renderPaths.value.toMutableMap()
+            for ((name, path) in paths) {
+                if (path != null) {
+                    val fresh = freshen(path)
+                    newPaths[name] = fresh
+                    _renderPath.value = fresh
                 }
             }
-            listenerKey = ks.register(listener)
+            renderPaths.value = newPaths
+            recomputeEnabledTargets()
+        }
+    }
+
+    private suspend fun registerListener(ks: KonstructionService) {
+        try {
+            listenerKey = ks.register(guardStale(ks, listenerFor(ks)))
         } catch (_: Exception) {
         }
     }
+
+    /**
+     * The state-mutating listener for [ks]. Assumes [ks] is the current
+     * selection — staleness is filtered upstream by [guardStale] — so the
+     * notification callbacks here carry no identity guard of their own.
+     */
+    private fun listenerFor(ks: KonstructionService) = object : KonstructionListener {
+        override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> = listOf(
+            KonstructionCallbacks.INFO_CHANGE,
+            KonstructionCallbacks.DIRTY_CHANGE,
+            KonstructionCallbacks.CONTENT_CHANGE,
+            KonstructionCallbacks.TASK_COMPLETE,
+            KonstructionCallbacks.RENDER_CHANGE
+        )
+
+        override suspend fun onInfoChanged(info: KonstructionInfo) {
+            _info.value = info
+            targetDisplayRepo.mergeTargets(info.targets.map { it.name })
+            when (info.dirtyState) {
+                DirtyState.NEEDS_EXEC -> {
+                    val all = info.targets.map { it.name }
+                    val targets = buildTargets(all)
+                    if (targets == null) {
+                        // Every known target is disabled — nothing to
+                        // build, settle the UI instead of spinning.
+                        _state.value = UiState.DEFAULT
+                    } else {
+                        _state.value = UiState.EXECUTING
+                        try {
+                            ks.requestKonstructs(targets)
+                        } catch (_: Exception) {
+                            _state.value = UiState.DEFAULT
+                        }
+                    }
+                }
+
+                DirtyState.CLEAN -> {
+                    _state.value = UiState.DEFAULT
+                    applyCleanRenders(ks, info)
+                }
+
+                else -> { /* other dirty states: no-op */ }
+            }
+        }
+
+        override suspend fun onDirtyStateChanged(state: DirtyState) {
+            _info.value = _info.value?.copy(dirtyState = state)
+        }
+
+        override suspend fun onTargetChanged(target: KonstructionTarget) {
+            val info = _info.value ?: return
+            val newTargets = info.targets.map {
+                if (it.name == target.name) target else it
+            }
+            _info.value = info.copy(targets = newTargets)
+        }
+
+        override suspend fun onRenderChanged(render: KonstructionRender) {
+            val path = render.renderPath
+            if (path != null) {
+                val fresh = freshen(path)
+                _renderPath.value = fresh
+                renderPaths.value = renderPaths.value + (render.name to fresh)
+            } else {
+                _renderPath.value = null
+                renderPaths.value = renderPaths.value - render.name
+            }
+            recomputeEnabledTargets()
+        }
+
+        override suspend fun onContentChange(u: Unit) {
+            try {
+                _content.value = ks.fetch()
+            } catch (_: Exception) {
+            }
+        }
+
+        override suspend fun onTaskComplete(taskResult: TaskResult) {
+            _messages.value = taskResult.messages
+            _state.value = UiState.DEFAULT
+        }
+    }
+
+    /**
+     * Wrap [delegate] so its notification callbacks fire only while [ks] is the
+     * selected konstruction; callbacks arriving for a de-selected service (a
+     * late delivery after a switch) are dropped centrally. The pure-query
+     * [requestedCallbacks] is always forwarded, as it mutates no state.
+     */
+    private fun guardStale(ks: KonstructionService, delegate: KonstructionListener) =
+        object : KonstructionListener {
+            override suspend fun requestedCallbacks(u: Unit): List<KonstructionCallbacks> =
+                delegate.requestedCallbacks(u)
+
+            override suspend fun onInfoChanged(info: KonstructionInfo) =
+                runIfCurrent(ks) { delegate.onInfoChanged(info) }
+
+            override suspend fun onDirtyStateChanged(state: DirtyState) =
+                runIfCurrent(ks) { delegate.onDirtyStateChanged(state) }
+
+            override suspend fun onTargetChanged(target: KonstructionTarget) =
+                runIfCurrent(ks) { delegate.onTargetChanged(target) }
+
+            override suspend fun onRenderChanged(render: KonstructionRender) =
+                runIfCurrent(ks) { delegate.onRenderChanged(render) }
+
+            override suspend fun onContentChange(u: Unit) =
+                runIfCurrent(ks) { delegate.onContentChange(u) }
+
+            override suspend fun onTaskComplete(taskResult: TaskResult) =
+                runIfCurrent(ks) { delegate.onTaskComplete(taskResult) }
+        }
 
     /**
      * Save content, then auto-compile and auto-build (matching old behavior).
@@ -423,22 +442,23 @@ class KonstructionViewModel(
                 // A switch may have landed while konstructed() was in flight;
                 // don't write the de-selected konstruction's render into the
                 // now-current view.
-                if (ks !== konstructionService) return@launch
-                if (existing != null) {
-                    // Render already exists — surface it without rebuilding.
-                    val fresh = freshen(existing)
-                    renderPaths.value = renderPaths.value + (name to fresh)
-                    _renderPath.value = fresh
-                    recomputeEnabledTargets()
-                } else {
-                    // Not built yet — build it. onRenderChanged will populate
-                    // renderPaths, and onTaskComplete resets _state to DEFAULT.
-                    _state.value = UiState.EXECUTING
-                    try {
-                        val result = ks.konstruct(name)
-                        _messages.value = result.messages
-                    } catch (_: Exception) {
-                        _state.value = UiState.DEFAULT
+                runIfCurrent(ks) {
+                    if (existing != null) {
+                        // Render already exists — surface it without rebuilding.
+                        val fresh = freshen(existing)
+                        renderPaths.value = renderPaths.value + (name to fresh)
+                        _renderPath.value = fresh
+                        recomputeEnabledTargets()
+                    } else {
+                        // Not built yet — build it. onRenderChanged will populate
+                        // renderPaths, and onTaskComplete resets _state to DEFAULT.
+                        _state.value = UiState.EXECUTING
+                        try {
+                            val result = ks.konstruct(name)
+                            _messages.value = result.messages
+                        } catch (_: Exception) {
+                            _state.value = UiState.DEFAULT
+                        }
                     }
                 }
             } finally {
