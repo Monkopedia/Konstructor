@@ -70,6 +70,7 @@ import com.monkopedia.kodemirror.themonedark.oneDark
 import com.monkopedia.kodemirror.view.KodeMirror
 import com.monkopedia.kodemirror.view.editorContentStyle
 import com.monkopedia.kodemirror.view.keymapOf
+import com.monkopedia.kodemirror.view.lineWrapping
 import com.monkopedia.kodemirror.view.onSave
 import com.monkopedia.kodemirror.view.saveKeymap
 import com.monkopedia.konstructor.common.KonstructionType
@@ -236,7 +237,7 @@ private fun EditorContent(
             config = LintConfig(delay = 0)
         )
         val extensions = basicSetup + themeExt + fontExt + kotlinLang +
-            keymapExt + saveKeymap + saveExt + lintExt + lintGutter()
+            keymapExt + saveKeymap + saveExt + lintExt + lintGutter() + lineWrapping
         val config = com.monkopedia.kodemirror.state.EditorStateConfig(
             doc = content.asDoc(),
             extensions = extensions
