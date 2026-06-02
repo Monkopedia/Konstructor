@@ -79,6 +79,8 @@ class SettingsViewModel {
         PersistedStateFlow.enum("editorTheme", EditorThemeName.ONE_DARK)
     private val keymapStore =
         PersistedStateFlow.enum("keymap", KeymapName.VIM)
+    private val vimDisplayLineMotionStore =
+        PersistedStateFlow.boolean("vimDisplayLineMotion", false)
     private val showCodeLeftStore =
         PersistedStateFlow.boolean("showCodeLeft", false)
     private val showFpsStore =
@@ -96,6 +98,7 @@ class SettingsViewModel {
 
     val editorTheme: StateFlow<EditorThemeName> = editorThemeStore.flow
     val keymap: StateFlow<KeymapName> = keymapStore.flow
+    val vimDisplayLineMotion: StateFlow<Boolean> = vimDisplayLineMotionStore.flow
     val showCodeLeft: StateFlow<Boolean> = showCodeLeftStore.flow
     val showFps: StateFlow<Boolean> = showFpsStore.flow
     val showCameraWidget: StateFlow<Boolean> = showCameraWidgetStore.flow
@@ -107,6 +110,7 @@ class SettingsViewModel {
     }
     fun setEditorTheme(theme: EditorThemeName) = editorThemeStore.set(theme)
     fun setKeymap(keymap: KeymapName) = keymapStore.set(keymap)
+    fun setVimDisplayLineMotion(value: Boolean) = vimDisplayLineMotionStore.set(value)
     fun setShowCodeLeft(value: Boolean) = showCodeLeftStore.set(value)
     fun setShowFps(value: Boolean) = showFpsStore.set(value)
     fun setShowCameraWidget(value: Boolean) = showCameraWidgetStore.set(value)

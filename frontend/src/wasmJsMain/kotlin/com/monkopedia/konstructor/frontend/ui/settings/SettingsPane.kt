@@ -50,6 +50,7 @@ fun SettingsPane(modifier: Modifier = Modifier) {
     val showCameraWidget by settingsVm.showCameraWidget.collectAsState()
     val editorTheme by settingsVm.editorTheme.collectAsState()
     val keymap by settingsVm.keymap.collectAsState()
+    val vimDisplayLineMotion by settingsVm.vimDisplayLineMotion.collectAsState()
 
     Column(
         modifier = modifier.padding(16.dp),
@@ -79,6 +80,16 @@ fun SettingsPane(modifier: Modifier = Modifier) {
                 settingsVm.setKeymap(KeymapName.entries[index])
             }
         )
+
+        // Only meaningful for the Vim keymap, where it remaps j/k to gj/gk so
+        // vertical motion follows wrapped display lines instead of logical lines.
+        if (keymap == KeymapName.VIM) {
+            SettingSwitchRow(
+                label = "Vim display-line motion (j/k → gj/gk)",
+                checked = vimDisplayLineMotion,
+                onCheckedChange = { settingsVm.setVimDisplayLineMotion(it) }
+            )
+        }
 
         SettingSwitchRow(
             label = "Show code on left",

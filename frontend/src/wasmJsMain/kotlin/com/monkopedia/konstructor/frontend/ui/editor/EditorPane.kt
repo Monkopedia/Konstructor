@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -176,6 +177,27 @@ private fun EditorContent(
     val settingsVm = koinInject<SettingsViewModel>()
     val themeName by settingsVm.editorTheme.collectAsState()
     val keymapName by settingsVm.keymap.collectAsState()
+    val vimDisplayLineMotion by settingsVm.vimDisplayLineMotion.collectAsState()
+
+    // The Vim mapping engine is a global singleton, so apply/restore the j/k →
+    // gj/gk remapping imperatively (rather than as an editor extension) and tie
+    // its lifetime to this effect. A null context covers normal + visual modes
+    // (insert is excluded by the engine), so vertical motion follows wrapped
+    // display lines. Cleanup runs when the keymap leaves Vim, the setting turns
+    // off, or the editor disposes — keeping it from leaking across switches.
+    DisposableEffect(keymapName, vimDisplayLineMotion) {
+        val mapped = keymapName == KeymapName.VIM && vimDisplayLineMotion
+        if (mapped) {
+            com.monkopedia.kodemirror.vim.Vim.map("j", "gj")
+            com.monkopedia.kodemirror.vim.Vim.map("k", "gk")
+        }
+        onDispose {
+            if (mapped) {
+                com.monkopedia.kodemirror.vim.Vim.unmap("j")
+                com.monkopedia.kodemirror.vim.Vim.unmap("k")
+            }
+        }
+    }
 
     val kotlinLang = remember { StreamLanguage.define(kotlin).extension }
 
