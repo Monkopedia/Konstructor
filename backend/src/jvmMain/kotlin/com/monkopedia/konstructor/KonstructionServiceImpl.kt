@@ -40,7 +40,7 @@ import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.logging.LoggingService
 import com.monkopedia.konstructor.logging.WarehouseWrapper
 import com.monkopedia.konstructor.logging.callContext
-import com.monkopedia.konstructor.lsp.StubLanguageServer
+import com.monkopedia.konstructor.lsp.BridgeLanguageServer
 import com.monkopedia.lsp.KsrpcLanguageClient
 import com.monkopedia.lsp.KsrpcLanguageServer
 import io.ktor.utils.io.ByteReadChannel
@@ -61,8 +61,8 @@ import kotlinx.coroutines.withTimeout
 
 class KonstructionServiceImpl(
     private val config: Config,
-    workspaceId: String,
-    id: String,
+    private val workspaceId: String,
+    private val id: String,
     private val warehouseWrapper: WarehouseWrapper,
     private val onClose: suspend () -> Unit
 ) : KonstructionService,
@@ -86,12 +86,15 @@ class KonstructionServiceImpl(
 
     override suspend fun lsp(client: KsrpcLanguageClient): KsrpcLanguageServer =
         callContext("lsp", baseCallSign = konstructionController.callSign) {
-            // Phase 1: hand back a stub server that holds onto the editor's
-            // client (passed as a ksrpc param, so its publishDiagnostics channel
-            // is multiplexed onto the same WebSocket) and pushes one canned
-            // diagnostic on didOpen. The real Kotlin engine lands in epic #35
-            // Phase 2.
-            StubLanguageServer(client)
+            // Phase 2 (epic #35): a real bridge from this nested-ksrpc leg to a warm
+            // JetBrains kotlin-lsp subprocess. The editor's [client] (passed as a ksrpc
+            // param, so its publishDiagnostics channel rides the same WebSocket) is
+            // stashed and the bridge forwards real kcsg-aware diagnostics to it.
+            //
+            // Still wholly flag-gated on the frontend (lspEnabled, default OFF) and the
+            // bridge degrades to an inert server when no kotlin-lsp binary is configured
+            // (CI), so the absence of the engine never crashes konstructor.
+            BridgeLanguageServer(config, workspaceId, id, client)
         }
 
     override suspend fun close() =

@@ -234,7 +234,7 @@ private fun EditorContent(
             editorLspClient.bind(lspClient.languageClient)
             lspClient.initialize()
             value = languageServerSupport(lspClient, uri, "kotlin")
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             value = null
         }
     }.value
