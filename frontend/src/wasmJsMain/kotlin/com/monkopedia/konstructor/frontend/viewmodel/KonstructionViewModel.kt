@@ -33,8 +33,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class UiState {
@@ -61,6 +64,44 @@ class KonstructionViewModel(
 
     private val _messages = MutableStateFlow<List<TaskMessage>>(emptyList())
     val messages: StateFlow<List<TaskMessage>> = _messages.asStateFlow()
+
+    // The editor's current primary-cursor line (1-based; 0 = unknown / no
+    // cursor yet). Pushed in from the EditorPane's selection listener so the
+    // context-aware footer (and the e2e bridge) can map the cursor onto the
+    // diagnostic, if any, covering that line.
+    private val _cursorLine = MutableStateFlow(0)
+    val cursorLine: StateFlow<Int> = _cursorLine.asStateFlow()
+
+    /**
+     * The compiler message whose [TaskMessage.line] matches the current cursor
+     * line, or null when the cursor is not on a line that has a message. This is
+     * the text the editor footer surfaces — restoring the pre-migration
+     * cursor-line error behavior. Recomputed whenever messages or the cursor
+     * move.
+     */
+    val activeMessage: StateFlow<TaskMessage?> =
+        combine(_messages, _cursorLine) { messages, line ->
+            if (line < 1) null else messages.firstOrNull { it.line == line }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // Set by the EditorPane once a session exists so external callers (the e2e
+    // bridge) can drive the cursor to a given 1-based line deterministically.
+    private var cursorMover: ((Int) -> Unit)? = null
+
+    /** Register the callback the editor uses to move its cursor to a line. */
+    fun setCursorMover(mover: ((Int) -> Unit)?) {
+        cursorMover = mover
+    }
+
+    /** Report the editor's current 1-based primary-cursor line. */
+    fun updateCursorLine(line: Int) {
+        _cursorLine.value = line
+    }
+
+    /** Drive the editor cursor to [line] (1-based), if a mover is registered. */
+    fun moveCursorToLine(line: Int) {
+        cursorMover?.invoke(line)
+    }
 
     private val _renderPath = MutableStateFlow<String?>(null)
     val renderPath: StateFlow<String?> = _renderPath.asStateFlow()
@@ -103,6 +144,7 @@ class KonstructionViewModel(
         viewModelScope.launch {
             _state.value = UiState.LOADING
             _renderPath.value = null
+            _cursorLine.value = 0
             renderPaths.value = emptyMap()
             // Drop any in-flight enable bookkeeping from the previous
             // konstruction — keyed by target name on this singleton, a leftover

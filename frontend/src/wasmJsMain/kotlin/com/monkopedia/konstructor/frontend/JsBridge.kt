@@ -303,6 +303,18 @@ object JsBridge {
                 }
             }
         }
+        // Move the editor cursor to a 1-based line (issue #33). The editor draws
+        // to a canvas with no DOM, so the e2e harness drives cursor moves through
+        // this action rather than Playwright clicks. The selection listener then
+        // updates cursorLine/footerError, which feeds back into the snapshot.
+        exposeAction("moveCursorToLine") { lineStr ->
+            try {
+                konstructionVm?.moveCursorToLine(lineStr.trim().toInt())
+                incrementVersion()
+            } catch (e: Exception) {
+                setError("moveCursorToLine failed: ${e.message}")
+            }
+        }
 
         val refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
         refreshTriggerRef = refreshTrigger
@@ -321,6 +333,17 @@ object JsBridge {
         if (konstructionVm != null) {
             scope.launch {
                 konstructionVm.targetDisplays.collect { refreshTrigger.value++ }
+            }
+            // Re-snapshot when diagnostics or the cursor's active error change so
+            // the error-footer surface (issue #33) stays current for e2e reads.
+            scope.launch {
+                konstructionVm.messages.collect { refreshTrigger.value++ }
+            }
+            scope.launch {
+                konstructionVm.cursorLine.collect { refreshTrigger.value++ }
+            }
+            scope.launch {
+                konstructionVm.activeMessage.collect { refreshTrigger.value++ }
             }
         }
 
@@ -395,6 +418,15 @@ object JsBridge {
                 isEnabled = display.isEnabled
             )
         } ?: emptyList()
+        val diagnostics = konstructionVm?.messages?.value
+            ?.mapNotNull { msg ->
+                val line = msg.line ?: return@mapNotNull null
+                DiagnosticSnapshot(
+                    line = line,
+                    message = msg.message,
+                    importance = msg.importance.name
+                )
+            } ?: emptyList()
         return AppStateSnapshot(
             ready = true,
             connected = connected,
@@ -412,7 +444,10 @@ object JsBridge {
             },
             konstructionCount = konNames.size,
             konstructionNames = konNames,
-            targets = targets
+            targets = targets,
+            diagnostics = diagnostics,
+            cursorLine = konstructionVm?.cursorLine?.value ?: 0,
+            footerError = konstructionVm?.activeMessage?.value?.message
         )
     }
 
