@@ -129,6 +129,23 @@ class KonstructionViewModel(
     private var konstructionService: KonstructionService? = null
     private var listenerKey: String? = null
 
+    /**
+     * The currently-loaded konstruction (set in [loadKonstruction]), exposed so
+     * the editor can open a flag-gated LSP session against the right service +
+     * derive a stable document URI. Null until a konstruction is loaded.
+     */
+    private val _currentKonstruction = MutableStateFlow<Konstruction?>(null)
+    val currentKonstruction: StateFlow<Konstruction?> = _currentKonstruction.asStateFlow()
+
+    /**
+     * The [KonstructionService] for the currently-loaded konstruction, or null.
+     * Read by the editor's flag-gated LSP wiring to call
+     * [KonstructionService.lsp]. Identity matches the service captured during
+     * [loadKonstruction].
+     */
+    val currentService: KonstructionService?
+        get() = konstructionService
+
     // Targets currently being auto-fetched/built via setTargetEnabled, to avoid
     // kicking off duplicate work for the same target.
     private val inFlightEnables = mutableSetOf<String>()
@@ -158,6 +175,7 @@ class KonstructionViewModel(
             val previousKey = listenerKey
             konstructionService = null
             listenerKey = null
+            _currentKonstruction.value = null
             if (previousKs != null && previousKey != null) {
                 try {
                     previousKs.unregister(previousKey)
@@ -174,6 +192,7 @@ class KonstructionViewModel(
             try {
                 val ks = service.konstruction(konstruction)
                 konstructionService = ks
+                _currentKonstruction.value = konstruction
 
                 // STL files: show directly in 3D pane, no editor content
                 if (konstruction.type == KonstructionType.STL) {

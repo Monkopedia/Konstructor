@@ -20,6 +20,8 @@ import com.monkopedia.ksrpc.RpcBidiService
 import com.monkopedia.ksrpc.RpcService
 import com.monkopedia.ksrpc.annotation.KsMethod
 import com.monkopedia.ksrpc.annotation.KsService
+import com.monkopedia.lsp.KsrpcLanguageClient
+import com.monkopedia.lsp.KsrpcLanguageServer
 import io.ktor.utils.io.ByteReadChannel
 
 @KsService
@@ -68,6 +70,21 @@ interface KonstructionService : RpcBidiService {
 
     @KsMethod("/logging")
     suspend fun getShipper(u: Unit = Unit): Shipper
+
+    /**
+     * Open an LSP session for this konstruction, behind the editor's LSP flag.
+     *
+     * This is a nested ksrpc sub-service: it both *returns* a sub-service
+     * ([KsrpcLanguageServer], client→server) and *accepts* one as a param
+     * ([KsrpcLanguageClient], server→client) — ksrpc multiplexes the reverse
+     * `publishDiagnostics` channel onto the same WebSocket, so no second
+     * connection is needed. Because this method both returns and accepts a
+     * sub-service, [KonstructionService] must extend [RpcBidiService] (the
+     * ksrpc compile-time tier); the passed/returned types stay plain
+     * [RpcService].
+     */
+    @KsMethod("/lsp")
+    suspend fun lsp(client: KsrpcLanguageClient): KsrpcLanguageServer
 }
 
 @KsService

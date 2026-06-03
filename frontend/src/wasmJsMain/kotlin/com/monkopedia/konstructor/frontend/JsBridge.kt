@@ -95,6 +95,10 @@ object JsBridge {
             )
             incrementVersion()
         }
+        exposeAction("setLspEnabled") { enabled ->
+            settingsVm.setLspEnabled(enabled.toBoolean())
+            incrementVersion()
+        }
         exposeAction("setTargetEnabled") { argJson ->
             try {
                 val args = json.decodeFromString<JsonObject>(argJson)
@@ -513,6 +517,24 @@ private external fun setError(error: String)
 
 @JsFun("(s) => { globalThis.__konstructor.lastResult = JSON.parse(s); }")
 private external fun setLastResult(resultJson: String)
+
+/**
+ * Record the most recent LSP `publishDiagnostics` round-trip on the JS bridge so
+ * Playwright e2e tests can assert the flag-ON LSP pipe delivered diagnostics
+ * from the backend to the editor. No-op effect on the editor itself — this is
+ * purely an observation hook (see EditorPane's LSP wiring).
+ */
+fun reportLspDiagnostics(uri: String, count: Int) {
+    setLspDiagnostics(uri, count)
+    incrementVersion()
+}
+
+@JsFun(
+    "(uri, count) => { " +
+        "globalThis.__konstructor.lspDiagnostics = { uri: uri, count: count }; " +
+        "}"
+)
+private external fun setLspDiagnostics(uri: String, count: Int)
 
 private fun exposeAction(name: String, action: (String) -> Unit) {
     exposeActionJs(name, action)

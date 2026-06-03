@@ -28,8 +28,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,6 +47,9 @@ import com.monkopedia.kodemirror.lint.LintConfig
 import com.monkopedia.kodemirror.lint.forceLinting
 import com.monkopedia.kodemirror.lint.lintGutter
 import com.monkopedia.kodemirror.lint.linter
+import com.monkopedia.kodemirror.lsp.LSPClient
+import com.monkopedia.kodemirror.lsp.LSPClientConfig
+import com.monkopedia.kodemirror.lsp.languageServerSupport
 import com.monkopedia.kodemirror.materialtheme.rememberMaterialEditorTheme
 import com.monkopedia.kodemirror.state.Extension
 import com.monkopedia.kodemirror.state.LineNumber
@@ -77,6 +82,7 @@ import com.monkopedia.kodemirror.view.onSave
 import com.monkopedia.kodemirror.view.saveKeymap
 import com.monkopedia.kodemirror.view.select
 import com.monkopedia.konstructor.common.KonstructionType
+import com.monkopedia.konstructor.frontend.reportLspDiagnostics
 import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
 import com.monkopedia.konstructor.frontend.viewmodel.KeymapName
 import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
@@ -191,6 +197,47 @@ private fun EditorContent(
     val themeName by settingsVm.editorTheme.collectAsState()
     val keymapName by settingsVm.keymap.collectAsState()
     val vimDisplayLineMotion by settingsVm.vimDisplayLineMotion.collectAsState()
+    val lspEnabled by settingsVm.lspEnabled.collectAsState()
+    // Reactive so the LSP session is (re)built once the konstruction's service
+    // finishes loading, not just when selection changes.
+    val currentKonstruction by konstructionVm.currentKonstruction.collectAsState()
+
+    // Flag-gated LSP editor support (epic #35). When the flag is OFF this stays
+    // null and the editor is byte-for-byte identical to before. When ON, build
+    // the LSP session for the current konstruction and expose its editor
+    // extension; rebuilt whenever the flag or the loaded konstruction changes.
+    val lspExtension: Extension? = produceState<Extension?>(
+        initialValue = null,
+        key1 = lspEnabled,
+        key2 = currentKonstruction
+    ) {
+        value = null
+        if (!lspEnabled) return@produceState
+        val konstruction = currentKonstruction ?: return@produceState
+        val service = konstructionVm.currentService ?: return@produceState
+        // Stable per-konstruction document URI for the LSP session.
+        val uri = "file:///${konstruction.workspaceId}/${konstruction.id}/content.csgs"
+        try {
+            // The editor client receives server→client pushes (publishDiagnostics)
+            // over the reverse channel multiplexed onto the same WebSocket. It is
+            // bound to kodemirror's routing client once the LSPClient exists.
+            val editorLspClient = EditorLspClient(
+                onDiagnostics = { params -> reportLspDiagnostics(uri, params.diagnostics.size) }
+            )
+            // Open the nested ksrpc LSP sub-service; the returned stub IS-A
+            // LanguageServer, so it drops straight into kodemirror's LSPClient.
+            val server = service.lsp(editorLspClient)
+            val lspClient = LSPClient(
+                server = server,
+                config = LSPClientConfig(rootUri = "file:///${konstruction.workspaceId}")
+            )
+            editorLspClient.bind(lspClient.languageClient)
+            lspClient.initialize()
+            value = languageServerSupport(lspClient, uri, "kotlin")
+        } catch (_: Throwable) {
+            value = null
+        }
+    }.value
 
     // The Vim mapping engine is a global singleton, so apply/restore the j/k →
     // gj/gk remapping imperatively (rather than as an editor extension) and tie
@@ -258,8 +305,10 @@ private fun EditorContent(
     // onto up-to-date line positions. Updated below whenever messages change.
     val messagesHolder = remember(selectedKonId) { mutableStateOf<List<Diagnostic>>(emptyList()) }
 
-    // Recreate session when konstruction, theme, or keymap changes
-    val session = remember(selectedKonId, themeName, keymapName, monoFont) {
+    // Recreate session when konstruction, theme, keymap, or LSP support changes.
+    // lspExtension is null with the flag OFF, so the extensions chain (and thus
+    // the session) is unchanged from before in that case.
+    val session = remember(selectedKonId, themeName, keymapName, monoFont, lspExtension) {
         // Lint extension: decorates offending lines (red error / orange warning),
         // adds gutter markers, and shows message text on hover. The source reads
         // pre-built diagnostics from the holder; setDiagnostics-driven updates
@@ -271,8 +320,13 @@ private fun EditorContent(
             source = lintSource,
             config = LintConfig(delay = 0)
         )
-        val extensions = basicSetup + themeExt + fontExt + kotlinLang +
+        var extensions = basicSetup + themeExt + fontExt + kotlinLang +
             keymapExt + saveKeymap + saveExt + lintExt + lintGutter() + lineWrapping
+        // Append LSP editor support only when the flag is on and the session is
+        // ready (lspExtension non-null) — keeps the flag-OFF path identical.
+        if (lspExtension != null) {
+            extensions = extensions + lspExtension
+        }
         val config = com.monkopedia.kodemirror.state.EditorStateConfig(
             doc = content.asDoc(),
             extensions = extensions

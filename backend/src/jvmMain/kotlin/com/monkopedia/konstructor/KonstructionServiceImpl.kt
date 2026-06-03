@@ -40,6 +40,9 @@ import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.logging.LoggingService
 import com.monkopedia.konstructor.logging.WarehouseWrapper
 import com.monkopedia.konstructor.logging.callContext
+import com.monkopedia.konstructor.lsp.StubLanguageServer
+import com.monkopedia.lsp.KsrpcLanguageClient
+import com.monkopedia.lsp.KsrpcLanguageServer
 import io.ktor.utils.io.ByteReadChannel
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.coroutineContext
@@ -80,6 +83,16 @@ class KonstructionServiceImpl(
             info.name
         )
     }
+
+    override suspend fun lsp(client: KsrpcLanguageClient): KsrpcLanguageServer =
+        callContext("lsp", baseCallSign = konstructionController.callSign) {
+            // Phase 1: hand back a stub server that holds onto the editor's
+            // client (passed as a ksrpc param, so its publishDiagnostics channel
+            // is multiplexed onto the same WebSocket) and pushes one canned
+            // diagnostic on didOpen. The real Kotlin engine lands in epic #35
+            // Phase 2.
+            StubLanguageServer(client)
+        }
 
     override suspend fun close() =
         callContext("close", baseCallSign = konstructionController.callSign) {

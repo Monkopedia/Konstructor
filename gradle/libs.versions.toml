@@ -16,6 +16,7 @@ javafx = "0.1.0"
 compose-multiplatform = "1.10.3"
 lifecycle = "2.10.0"
 kodemirror = "0.3.2"
+lsp = "1.0.0"
 spotless = "8.4.0"
 ktlint = "1.8.0"
 
@@ -57,6 +58,7 @@ kotlinx-serialization-cbor = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "kotlin-serialization" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlin-serialization" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlin-coroutines" }
+lsp-ksrpc = { module = "com.monkopedia.lsp:lsp-ksrpc", version.ref = "lsp" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlin-serialization = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }

@@ -47,6 +47,8 @@ kotlin {
         implementation(libs.kotlinx.serialization.cbor)
         implementation(project(":protocol"))
         implementation(project(":lib"))
+        // DefaultLanguageServer + LSP types for the stub LSP server.
+        implementation(libs.lsp.ksrpc)
         implementation(libs.clikt)
         implementation(libs.ktor.server.core)
         implementation(libs.ktor.server.compression)
