@@ -81,6 +81,11 @@ class SettingsViewModel {
         PersistedStateFlow.enum("keymap", KeymapName.VIM)
     private val vimDisplayLineMotionStore =
         PersistedStateFlow.boolean("vimDisplayLineMotion", false)
+
+    // LSP editor support (epic #35). Default OFF: with this off the editor
+    // behaves byte-for-byte as before — no lsp() call, no languageServerSupport.
+    private val lspEnabledStore =
+        PersistedStateFlow.boolean("lspEnabled", false)
     private val showCodeLeftStore =
         PersistedStateFlow.boolean("showCodeLeft", false)
     private val showFpsStore =
@@ -99,6 +104,7 @@ class SettingsViewModel {
     val editorTheme: StateFlow<EditorThemeName> = editorThemeStore.flow
     val keymap: StateFlow<KeymapName> = keymapStore.flow
     val vimDisplayLineMotion: StateFlow<Boolean> = vimDisplayLineMotionStore.flow
+    val lspEnabled: StateFlow<Boolean> = lspEnabledStore.flow
     val showCodeLeft: StateFlow<Boolean> = showCodeLeftStore.flow
     val showFps: StateFlow<Boolean> = showFpsStore.flow
     val showCameraWidget: StateFlow<Boolean> = showCameraWidgetStore.flow
@@ -111,6 +117,7 @@ class SettingsViewModel {
     fun setEditorTheme(theme: EditorThemeName) = editorThemeStore.set(theme)
     fun setKeymap(keymap: KeymapName) = keymapStore.set(keymap)
     fun setVimDisplayLineMotion(value: Boolean) = vimDisplayLineMotionStore.set(value)
+    fun setLspEnabled(value: Boolean) = lspEnabledStore.set(value)
     fun setShowCodeLeft(value: Boolean) = showCodeLeftStore.set(value)
     fun setShowFps(value: Boolean) = showFpsStore.set(value)
     fun setShowCameraWidget(value: Boolean) = showCameraWidgetStore.set(value)

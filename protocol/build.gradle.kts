@@ -33,6 +33,10 @@ kotlin {
     sourceSets["commonMain"].dependencies {
         api(libs.ksrpc.core)
         api(libs.ksrpc.binary.ktor)
+        // LSP @KsService interfaces (KsrpcLanguageServer / KsrpcLanguageClient)
+        // appear in the public KonstructionService surface (the /lsp sub-service)
+        // — must be api so consumers don't have to redeclare lsp-ksrpc.
+        api(libs.lsp.ksrpc)
         api(libs.hauler)
         api(libs.kotlinx.datetime)
         // ByteReadChannel is in the public KonstructionService surface —
