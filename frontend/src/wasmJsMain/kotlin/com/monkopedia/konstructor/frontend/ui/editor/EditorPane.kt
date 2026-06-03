@@ -47,6 +47,7 @@ import com.monkopedia.kodemirror.lint.lintGutter
 import com.monkopedia.kodemirror.lint.linter
 import com.monkopedia.kodemirror.materialtheme.rememberMaterialEditorTheme
 import com.monkopedia.kodemirror.state.Extension
+import com.monkopedia.kodemirror.state.LineNumber
 import com.monkopedia.kodemirror.state.asDoc
 import com.monkopedia.kodemirror.state.asInsert
 import com.monkopedia.kodemirror.state.extensionListOf
@@ -74,6 +75,7 @@ import com.monkopedia.kodemirror.view.keymapOf
 import com.monkopedia.kodemirror.view.lineWrapping
 import com.monkopedia.kodemirror.view.onSave
 import com.monkopedia.kodemirror.view.saveKeymap
+import com.monkopedia.kodemirror.view.select
 import com.monkopedia.konstructor.common.KonstructionType
 import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
 import com.monkopedia.konstructor.frontend.viewmodel.KeymapName
@@ -95,6 +97,7 @@ fun EditorPane(modifier: Modifier = Modifier) {
     val content by konstructionVm.content.collectAsState()
     val uiState by konstructionVm.state.collectAsState()
     val messages by konstructionVm.messages.collectAsState()
+    val activeMessage by konstructionVm.activeMessage.collectAsState()
 
     // Load konstruction content when selection changes
     LaunchedEffect(selectedKonId, konstructions) {
@@ -154,8 +157,18 @@ fun EditorPane(modifier: Modifier = Modifier) {
             UiState.EXECUTING -> StatusBar("Executing...", Color(0xFFFFB74D), statusModifier)
 
             UiState.DEFAULT -> {
-                if (messages.isNotEmpty()) {
-                    StatusBar(
+                // Context-aware footer (restores pre-migration behavior): when the
+                // cursor sits on a line that has a compiler message, show that
+                // message's text; otherwise fall back to the message count.
+                val active = activeMessage
+                when {
+                    active != null -> StatusBar(
+                        active.message,
+                        Color(0xFFEF5350),
+                        statusModifier
+                    )
+
+                    messages.isNotEmpty() -> StatusBar(
                         "${messages.size} message(s)",
                         Color(0xFFEF5350),
                         statusModifier
@@ -264,9 +277,32 @@ private fun EditorContent(
             doc = content.asDoc(),
             extensions = extensions
         )
+        // Report the primary cursor's 1-based line to the view model on every
+        // transaction (cursor move, edit, etc.). The view model maps that line
+        // onto the diagnostics to drive the context-aware footer, restoring the
+        // pre-migration cursor-line error. We use the session's onUpdate callback
+        // (fired for every dispatched transaction) and read the resulting state's
+        // selection head, resolving it to a line via the document.
         com.monkopedia.kodemirror.view.EditorSession(
             com.monkopedia.kodemirror.state.EditorState.create(config)
-        )
+        ) { tr ->
+            val state = tr.state
+            val line = state.doc.lineAt(state.selection.main.head).number.value
+            konstructionVm.updateCursorLine(line)
+        }
+    }
+
+    // Register a cursor mover so external callers (the e2e bridge) can drive the
+    // cursor to a 1-based line deterministically — the editor renders to a canvas
+    // with no DOM for Playwright to click. Cleared when the session is replaced.
+    DisposableEffect(session, konstructionVm) {
+        konstructionVm.setCursorMover { line ->
+            val doc = session.state.doc
+            val clamped = line.coerceIn(1, doc.lines)
+            val pos = doc.line(LineNumber(clamped)).from
+            session.select(pos)
+        }
+        onDispose { konstructionVm.setCursorMover(null) }
     }
 
     // Push compiler messages into the editor as diagnostics. Diagnostics are

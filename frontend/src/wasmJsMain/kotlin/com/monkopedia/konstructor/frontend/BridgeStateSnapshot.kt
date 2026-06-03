@@ -28,6 +28,14 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class TargetSnapshot(val name: String, val color: String, val isEnabled: Boolean)
 
+/**
+ * A single compiler diagnostic surfaced in the editor, as the e2e tests see it:
+ * the 1-based user-content [line] (already offset back past the wrapped `.kt`
+ * header), the [message] text, and the [importance] (ERROR/WARNING/INFO).
+ */
+@Serializable
+data class DiagnosticSnapshot(val line: Int, val message: String, val importance: String)
+
 @Serializable
 data class AppStateSnapshot(
     val ready: Boolean = false,
@@ -42,5 +50,11 @@ data class AppStateSnapshot(
     val screen: String = "loading",
     val konstructionCount: Int = 0,
     val konstructionNames: List<String> = emptyList(),
-    val targets: List<TargetSnapshot> = emptyList()
+    val targets: List<TargetSnapshot> = emptyList(),
+    // Editor error-footer surface (issue #33): the current diagnostics, the
+    // editor's 1-based cursor line, and the footer text the editor shows for the
+    // cursor's line (null when the cursor is not on a line with a message).
+    val diagnostics: List<DiagnosticSnapshot> = emptyList(),
+    val cursorLine: Int = 0,
+    val footerError: String? = null
 )
