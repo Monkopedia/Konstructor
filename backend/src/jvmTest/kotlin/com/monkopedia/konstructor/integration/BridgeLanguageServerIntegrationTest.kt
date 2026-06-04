@@ -154,13 +154,33 @@ class BridgeLanguageServerIntegrationTest {
             "expected at least one diagnostic for the deliberate error; got none"
         )
         System.err.println("REAL-ENGINE diagnostics (${received.diagnostics.size}): $messages")
+        val unresolved = received.diagnostics.firstOrNull {
+            it.message.contains("thisSymbolDoesNotExist123") ||
+                it.message.contains("unresolved", ignoreCase = true) ||
+                it.message.contains("cannot access", ignoreCase = true)
+        }
         assertTrue(
-            received.diagnostics.any {
-                it.message.contains("thisSymbolDoesNotExist123") ||
-                    it.message.contains("unresolved", ignoreCase = true) ||
-                    it.message.contains("cannot access", ignoreCase = true)
-            },
+            unresolved != null,
             "expected the unresolved-reference error to be reported; got: $messages"
         )
+        // Phase 3 (#38): the deliberate error is on csgs line index 1 (the `val broken`
+        // line, 0-based). The engine reports it on wrapped line `1 + headerLines`; after
+        // the translation it MUST land back on csgs line 1 (not N+headerLines). This is
+        // the real-engine half of the round-trip guard.
+        System.err.println(
+            "REAL-ENGINE unresolved-ref range: ${unresolved.range.start.line.toInt()}.." +
+                "${unresolved.range.end.line.toInt()}"
+        )
+        assertTrue(
+            unresolved.range.start.line.toInt() == EXPECTED_CSGS_ERROR_LINE,
+            "translated diagnostic must land on csgs line $EXPECTED_CSGS_ERROR_LINE " +
+                "(the `val broken` line), not the wrapped-.kt line; " +
+                "got line ${unresolved.range.start.line.toInt()}"
+        )
+    }
+
+    private companion object {
+        /** The `val broken = thisSymbolDoesNotExist123` line in [deliberateErrorScript]. */
+        private const val EXPECTED_CSGS_ERROR_LINE = 1
     }
 }

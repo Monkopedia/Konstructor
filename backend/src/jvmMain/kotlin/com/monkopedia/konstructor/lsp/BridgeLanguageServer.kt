@@ -42,9 +42,11 @@ import com.monkopedia.lsp.RelatedFullDocumentDiagnosticReport
 import com.monkopedia.lsp.SignatureHelp
 import com.monkopedia.lsp.SignatureHelpParams
 import com.monkopedia.lsp.TextDocumentCompletionResult
+import com.monkopedia.lsp.TextDocumentContentChangeEventVariant
 import com.monkopedia.lsp.TextDocumentIdentifier
 import com.monkopedia.lsp.TextDocumentItem
 import com.monkopedia.lsp.UnregistrationParams
+import com.monkopedia.lsp.VersionedTextDocumentIdentifier
 import com.monkopedia.lsp.ksrpc.LifecycleState
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
@@ -70,8 +72,10 @@ import kotlinx.serialization.json.JsonNull
  *   document URI).
  * - The subprocess-facing stub is obtained from [KotlinLspProcess.connect], passing
  *   [Forwarder] as the subprocess's client.
- * - Requests are **delegated** to the subprocess stub; positions stay in WRAPPED-`.kt`
- *   space for Phase 2 (the ±3-line translation is Phase 3 / #38).
+ * - Requests are **delegated** to the subprocess stub. Diagnostic ranges coming back are
+ *   translated from WRAPPED-`.kt` space down to csgs space (Phase 3 / #38) via
+ *   [DiagnosticTranslation]; completion/hover positions stay in wrapped space (Phase 4 /
+ *   #39).
  *
  * **Pull→push diagnostics bridge.** kotlin-lsp does NOT proactively push
  * `publishDiagnostics`; it answers PULL `textDocument/diagnostic`. kodemirror's editor
@@ -113,8 +117,8 @@ class BridgeLanguageServer(
     /**
      * The frontend's document URI (`...content.csgs`), captured on the editor's first
      * didOpen. Diagnostics from the subprocess (on the wrapped-`.kt` URI) are rewritten
-     * to this URI so kodemirror routes them to the open editor. Positions stay in
-     * wrapped-`.kt` space for Phase 2.
+     * to this URI so kodemirror routes them to the open editor, and their ranges are
+     * translated to csgs space (Phase 3 / #38).
      */
     @Volatile
     private var frontendUri: String? = null
@@ -130,7 +134,12 @@ class BridgeLanguageServer(
             // Don't push before the editor has sent `initialized` (spec ordering; some
             // clients silently drop early diagnostics).
             lifecycle.awaitInitialized()
-            val mapped = frontendUri?.let { params.copy(uri = it) } ?: params
+            // Rewrite the wrapped-.kt URI back to the editor's csgs URI AND translate every
+            // range from wrapped-.kt space down to csgs space (Phase 3 / #38).
+            val mapped = params.copy(
+                uri = frontendUri ?: params.uri,
+                diagnostics = translateDiagnostics(params.diagnostics)
+            )
             runCatching { frontendClient.textDocumentPublishDiagnostics(mapped) }
                 .onFailure { hauler.error("Failed forwarding diagnostics to editor", it) }
         }
@@ -174,8 +183,10 @@ class BridgeLanguageServer(
         val server = delegate ?: return
         // Remember the editor's URI so subprocess diagnostics get routed back to it.
         frontendUri = params.textDocument.uri
-        // Re-synthesize from the latest content and open the WRAPPED file in the engine.
-        lspWorkspace.synthesize()
+        // Wrap the editor's LIVE csgs content (not just the stored snapshot) into the .kt
+        // form and open the WRAPPED file in the engine, so the engine analyzes what the
+        // user actually has open.
+        lspWorkspace.synthesize(content = params.textDocument.text)
         server.textDocumentDidOpen(
             DidOpenTextDocumentParams(
                 textDocument = TextDocumentItem(
@@ -207,9 +218,11 @@ class BridgeLanguageServer(
                     .getOrNull()
                 if (items != null) {
                     val uri = frontendUri ?: lspWorkspace.documentUri
+                    // Translate wrapped-.kt ranges down to csgs space before pushing up.
+                    val translated = translateDiagnostics(items)
                     runCatching {
                         frontendClient.textDocumentPublishDiagnostics(
-                            PublishDiagnosticsParams(uri = uri, diagnostics = items)
+                            PublishDiagnosticsParams(uri = uri, diagnostics = translated)
                         )
                     }.onFailure { hauler.error("publish diagnostics to editor failed", it) }
                 }
@@ -231,9 +244,30 @@ class BridgeLanguageServer(
     }
 
     override suspend fun textDocumentDidChange(params: DidChangeTextDocumentParams) {
-        // Phase 2 keeps the engine's view in wrapped-.kt space; content sync from the
-        // editor (with the ±3-line translation) is Phase 3. Drop change events for now —
-        // didOpen already seeds the document for diagnostics.
+        val server = delegate ?: return
+        // Full-document sync (v1): the editor sends the whole edited csgs as the change
+        // text (kodemirror full-sync; these files are tiny). Take the last change's text
+        // as the live document, re-wrap it into the .kt form so the engine analyzes the
+        // current content, and forward the WRAPPED text down as a full-document change.
+        val csgsText = params.contentChanges
+            .filterIsInstance<TextDocumentContentChangeEventVariant>()
+            .lastOrNull()?.text ?: return
+        lspWorkspace.synthesize(content = csgsText)
+        runCatching {
+            server.textDocumentDidChange(
+                DidChangeTextDocumentParams(
+                    textDocument = VersionedTextDocumentIdentifier(
+                        uri = lspWorkspace.documentUri,
+                        version = params.textDocument.version
+                    ),
+                    contentChanges = listOf(
+                        TextDocumentContentChangeEventVariant(text = lspWorkspace.wrappedText())
+                    )
+                )
+            )
+        }.onFailure { hauler.error("Failed forwarding didChange to engine", it) }
+        // Refresh diagnostics for the new content (re-poll; same path as didOpen).
+        startDiagnosticsPoll(server)
     }
 
     override suspend fun textDocumentDidClose(params: DidCloseTextDocumentParams) {
@@ -285,6 +319,14 @@ class BridgeLanguageServer(
         }
         delegate = null
     }
+
+    /**
+     * Translate engine diagnostics (wrapped-`.kt` space) down to csgs space, dropping any
+     * that fall in the wrapping header/footer (a synthetic line the user can't fix). See
+     * [DiagnosticTranslation]; the csgs line count is the live document last synthesized.
+     */
+    private fun translateDiagnostics(diagnostics: List<Diagnostic>): List<Diagnostic> =
+        DiagnosticTranslation.translateDiagnostics(diagnostics, lspWorkspace.csgsLineCount())
 
     private fun CompletionParams.onWrappedDocument(): CompletionParams =
         copy(textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri))
