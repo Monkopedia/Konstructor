@@ -18,6 +18,8 @@ package com.monkopedia.konstructor.lsp
 import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.konstructor.Config
+import com.monkopedia.lsp.CompletionItem
+import com.monkopedia.lsp.CompletionItemTextEdit
 import com.monkopedia.lsp.CompletionParams
 import com.monkopedia.lsp.ConfigurationParams
 import com.monkopedia.lsp.DefaultLanguageClient
@@ -33,6 +35,7 @@ import com.monkopedia.lsp.HoverParams
 import com.monkopedia.lsp.InitializeParams
 import com.monkopedia.lsp.InitializeResult
 import com.monkopedia.lsp.InitializedParams
+import com.monkopedia.lsp.InsertReplaceEdit
 import com.monkopedia.lsp.KsrpcLanguageClient
 import com.monkopedia.lsp.KsrpcLanguageServer
 import com.monkopedia.lsp.LSPAny
@@ -45,6 +48,7 @@ import com.monkopedia.lsp.TextDocumentCompletionResult
 import com.monkopedia.lsp.TextDocumentContentChangeEventVariant
 import com.monkopedia.lsp.TextDocumentIdentifier
 import com.monkopedia.lsp.TextDocumentItem
+import com.monkopedia.lsp.TextEdit
 import com.monkopedia.lsp.UnregistrationParams
 import com.monkopedia.lsp.VersionedTextDocumentIdentifier
 import com.monkopedia.lsp.ksrpc.LifecycleState
@@ -74,8 +78,11 @@ import kotlinx.serialization.json.JsonNull
  *   [Forwarder] as the subprocess's client.
  * - Requests are **delegated** to the subprocess stub. Diagnostic ranges coming back are
  *   translated from WRAPPED-`.kt` space down to csgs space (Phase 3 / #38) via
- *   [DiagnosticTranslation]; completion/hover positions stay in wrapped space (Phase 4 /
- *   #39).
+ *   [DiagnosticTranslation]. Completion/hover/signatureHelp (Phase 4 / #39) are
+ *   request/response: the cursor [com.monkopedia.lsp.Position] is translated UP (csgs →
+ *   wrapped) on the way in, and any range in the response (completion `textEdit`, hover
+ *   `range`) is translated back DOWN to csgs space on the way out — same
+ *   [DiagnosticTranslation] header-line offset, so they cannot drift.
  *
  * **Pull→push diagnostics bridge.** kotlin-lsp does NOT proactively push
  * `publishDiagnostics`; it answers PULL `textDocument/diagnostic`. kodemirror's editor
@@ -281,24 +288,69 @@ class BridgeLanguageServer(
         }
     }
 
+    /**
+     * Completion (Phase 4 / #39). The editor sends a cursor [Position] in **csgs** space;
+     * translate it UP to wrapped-`.kt` space (`ktLine = csgsLine + headerLines`) and
+     * retarget the document at the wrapped file before delegating. Completion items can
+     * carry a `textEdit`/`insertReplaceEdit` whose range is in wrapped-`.kt` space; on the
+     * way back, translate every such range DOWN to csgs space (the same Phase 3 mapping the
+     * diagnostics use) so the editor applies the edit on the right line.
+     */
     override suspend fun textDocumentCompletion(
         params: CompletionParams
     ): TextDocumentCompletionResult {
         val server = delegate ?: return super.textDocumentCompletion(params)
-        return server.textDocumentCompletion(params.onWrappedDocument())
+        val result = server.textDocumentCompletion(
+            params.copy(
+                textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
+                position = DiagnosticTranslation.toWrappedPosition(params.position)
+            )
+        )
+        return translateCompletionResult(result)
     }
 
+    /**
+     * Resolve (lazy completion detail). The resolved item may now carry a `textEdit` range
+     * (it is often omitted from the initial list and filled in on resolve); translate it
+     * back to csgs space too.
+     */
+    override suspend fun completionItemResolve(params: CompletionItem): CompletionItem {
+        val server = delegate ?: return super.completionItemResolve(params)
+        return translateCompletionItem(server.completionItemResolve(params))
+    }
+
+    /**
+     * Hover (Phase 4 / #39). Translate the request cursor UP to wrapped space; translate the
+     * response's optional [Hover.range] back DOWN to csgs space so the highlight lands on
+     * the user's line. [Hover.contents] is opaque markup with no positions, so it passes
+     * through untouched.
+     */
     override suspend fun textDocumentHover(params: HoverParams): Hover {
         val server = delegate ?: return super.textDocumentHover(params)
-        return server.textDocumentHover(
-            params.copy(textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri))
+        val hover = server.textDocumentHover(
+            params.copy(
+                textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
+                position = DiagnosticTranslation.toWrappedPosition(params.position)
+            )
         )
+        val range = hover.range?.let {
+            DiagnosticTranslation.translateRange(it, lspWorkspace.csgsLineCount())
+        }
+        return hover.copy(range = range)
     }
 
+    /**
+     * SignatureHelp (Phase 4 / #39). Translate the request cursor UP to wrapped space. The
+     * response ([SignatureHelp]: signatures, parameter offsets, active indices) carries no
+     * document positions, so it passes through unchanged.
+     */
     override suspend fun textDocumentSignatureHelp(params: SignatureHelpParams): SignatureHelp {
         val server = delegate ?: return super.textDocumentSignatureHelp(params)
         return server.textDocumentSignatureHelp(
-            params.copy(textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri))
+            params.copy(
+                textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
+                position = DiagnosticTranslation.toWrappedPosition(params.position)
+            )
         )
     }
 
@@ -328,8 +380,65 @@ class BridgeLanguageServer(
     private fun translateDiagnostics(diagnostics: List<Diagnostic>): List<Diagnostic> =
         DiagnosticTranslation.translateDiagnostics(diagnostics, lspWorkspace.csgsLineCount())
 
-    private fun CompletionParams.onWrappedDocument(): CompletionParams =
-        copy(textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri))
+    /**
+     * Translate every wrapped-`.kt` range carried by a completion result DOWN to csgs
+     * space. The result is one of two ksrpc variants: a bare array of [CompletionItem] or a
+     * [CompletionList]; both reach the items the same way. Items whose edit range maps into
+     * the header/footer are kept but their edit is dropped (no synthetic-line edit ever
+     * reaches the editor) — the editor falls back to plain-text insertion.
+     */
+    private fun translateCompletionResult(
+        result: TextDocumentCompletionResult
+    ): TextDocumentCompletionResult = when (result) {
+        is TextDocumentCompletionResult.CompletionItemArray ->
+            TextDocumentCompletionResult.CompletionItemArray(
+                result.value.map { translateCompletionItem(it) }
+            )
+
+        is TextDocumentCompletionResult.CompletionListValue ->
+            TextDocumentCompletionResult.CompletionListValue(
+                result.value.copy(items = result.value.items.map { translateCompletionItem(it) })
+            )
+    }
+
+    /**
+     * Translate a single completion item's edit ranges from wrapped-`.kt` to csgs space:
+     * the primary [CompletionItem.textEdit] (a `TextEdit` with a `range`, or an
+     * `InsertReplaceEdit` with `insert`+`replace` ranges) and any [additionalTextEdits].
+     * An edit that can't be mapped back (header/footer) is dropped rather than misplaced.
+     */
+    private fun translateCompletionItem(item: CompletionItem): CompletionItem {
+        val csgsLineCount = lspWorkspace.csgsLineCount()
+        val textEdit = item.textEdit?.let { translateCompletionEdit(it, csgsLineCount) }
+        val additional = item.additionalTextEdits?.mapNotNull { edit ->
+            DiagnosticTranslation.translateRange(edit.range, csgsLineCount)
+                ?.let { edit.copy(range = it) }
+        }
+        return item.copy(textEdit = textEdit, additionalTextEdits = additional)
+    }
+
+    /**
+     * Translate the union [CompletionItemTextEdit] (`TextEdit` | `InsertReplaceEdit`) back
+     * to csgs space, returning null (drop the edit) when a range falls in the header/footer.
+     */
+    private fun translateCompletionEdit(
+        edit: CompletionItemTextEdit,
+        csgsLineCount: Int
+    ): CompletionItemTextEdit? = when (edit) {
+        is TextEdit ->
+            DiagnosticTranslation.translateRange(edit.range, csgsLineCount)
+                ?.let { edit.copy(range = it) }
+
+        is InsertReplaceEdit -> {
+            val insert = DiagnosticTranslation.translateRange(edit.insert, csgsLineCount)
+            val replace = DiagnosticTranslation.translateRange(edit.replace, csgsLineCount)
+            if (insert != null && replace != null) {
+                edit.copy(insert = insert, replace = replace)
+            } else {
+                null
+            }
+        }
+    }
 
     private companion object {
         private const val WARMUP_ATTEMPTS = 30

@@ -56,6 +56,26 @@ object DiagnosticTranslation {
     val headerLines: Int = KcsgScript.HEADER.split("\n").size
 
     /**
+     * Translate a csgs-space [Position] (editor space, zero-based) UP to wrapped-`.kt`
+     * space — the **inverse** of [translatePosition], used for LSP **request** positions
+     * (completion/hover/signatureHelp cursors; Phase 4 / #39):
+     *
+     * ```
+     * ktLine = csgsLine + headerLines
+     * ```
+     *
+     * Columns are unchanged (the header adds whole lines at column 0). The cursor always
+     * lives inside the user's content, so — unlike the engine→editor direction — nothing
+     * is dropped: every csgs position maps to a real wrapped line. This is the SAME
+     * [headerLines] source of truth the engine→editor mapping uses, just added instead of
+     * subtracted, so the two directions can never drift apart.
+     */
+    fun toWrappedPosition(position: Position): Position {
+        val ktLine = position.line.toInt() + headerLines
+        return Position(line = ktLine.toUInt(), character = position.character)
+    }
+
+    /**
      * Translate a single engine [Position] (wrapped-`.kt`, zero-based) to csgs space, or
      * return `null` if it falls in the header or in/after the footer.
      *

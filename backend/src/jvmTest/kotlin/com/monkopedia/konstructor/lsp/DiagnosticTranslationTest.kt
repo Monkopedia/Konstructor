@@ -195,6 +195,54 @@ class DiagnosticTranslationTest {
     }
 
     @Test
+    fun `toWrappedPosition adds the header to the line and keeps the column`() {
+        // Phase 4 (#39) request direction: csgs cursor -> wrapped-.kt cursor.
+        val wrapped = DiagnosticTranslation.toWrappedPosition(pos(line = 0, character = 5))
+        assertEquals(
+            headerLines.toUInt(),
+            wrapped.line,
+            "first csgs line maps to first user kt line"
+        )
+        assertEquals(5u, wrapped.character, "columns are unchanged across the wrap")
+
+        val wrapped2 = DiagnosticTranslation.toWrappedPosition(pos(line = 4, character = 12))
+        assertEquals((4 + headerLines).toUInt(), wrapped2.line)
+        assertEquals(12u, wrapped2.character)
+    }
+
+    @Test
+    fun `request-then-response position round-trips back to the same csgs position`() {
+        // The Phase 4 request mapping (toWrappedPosition) and the Phase 3 response mapping
+        // (translatePosition) are exact inverses for any in-content cursor. An off-by-N in
+        // either direction silently targets the wrong line for completion/hover.
+        val csgsLineCount = 10
+        for (csgsLine in 0 until csgsLineCount) {
+            val original = pos(line = csgsLine, character = csgsLine + 1)
+            val wrapped = DiagnosticTranslation.toWrappedPosition(original)
+            // The engine reports it on (csgsLine + headerLines).
+            assertEquals((csgsLine + headerLines).toUInt(), wrapped.line)
+            val back = DiagnosticTranslation.translatePosition(wrapped, csgsLineCount)
+            assertNotNull(back, "an in-content cursor must survive the round-trip")
+            assertEquals(original.line, back.line, "round-trip must preserve the csgs line")
+            assertEquals(original.character, back.character, "round-trip must preserve the column")
+        }
+    }
+
+    @Test
+    fun `toWrappedPosition boundary lines map to the exact user kt lines`() {
+        // First user csgs line -> first wrapped user line (== headerLines).
+        assertEquals(
+            headerLines.toUInt(),
+            DiagnosticTranslation.toWrappedPosition(pos(line = 0)).line
+        )
+        // Last user csgs line of a 3-line doc -> headerLines + 2.
+        assertEquals(
+            (headerLines + 2).toUInt(),
+            DiagnosticTranslation.toWrappedPosition(pos(line = 2)).line
+        )
+    }
+
+    @Test
     fun `translateDiagnostics drops header and footer entries but keeps user ones`() {
         val csgsLineCount = 2
         val all = listOf(
