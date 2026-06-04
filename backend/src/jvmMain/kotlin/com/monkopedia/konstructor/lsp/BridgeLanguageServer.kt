@@ -55,6 +55,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonNull
 
 /**
@@ -332,12 +333,22 @@ class BridgeLanguageServer(
         params: CompletionParams
     ): TextDocumentCompletionResult {
         val server = delegate ?: return super.textDocumentCompletion(params)
-        val result = server.textDocumentCompletion(
-            params.copy(
-                textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
-                position = DiagnosticTranslation.toWrappedPosition(params.position)
+        val result = try {
+            server.textDocumentCompletion(
+                params.copy(
+                    textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
+                    position = DiagnosticTranslation.toWrappedPosition(params.position)
+                )
             )
-        )
+        } catch (e: SerializationException) {
+            // NULL-RESULT GUARD (lsp-types 1.1.0): ~45 spec-nullable LSP results (incl.
+            // completion: `CompletionList | CompletionItem[] | null`) are generated NON-nullable,
+            // so the engine returning `null` throws a decode exception in THIS calling coroutine.
+            // Catching it here is load-bearing: uncaught it cancels the scope shared with the
+            // diagnostics publisher, silently killing ALL updates (the lsp-kotlin maintainer
+            // traced this). Degrade to an empty result. Remove once we bump to fixed lsp-types.
+            return super.textDocumentCompletion(params)
+        }
         return translateCompletionResult(result)
     }
 
@@ -348,7 +359,13 @@ class BridgeLanguageServer(
      */
     override suspend fun completionItemResolve(params: CompletionItem): CompletionItem {
         val server = delegate ?: return super.completionItemResolve(params)
-        return translateCompletionItem(server.completionItemResolve(params))
+        // Null-result guard (see textDocumentCompletion): on a decode failure, return the item
+        // unresolved (it just won't gain lazy detail) rather than cancel the shared scope.
+        return try {
+            translateCompletionItem(server.completionItemResolve(params))
+        } catch (e: SerializationException) {
+            params
+        }
     }
 
     /**
@@ -359,12 +376,20 @@ class BridgeLanguageServer(
      */
     override suspend fun textDocumentHover(params: HoverParams): Hover {
         val server = delegate ?: return super.textDocumentHover(params)
-        val hover = server.textDocumentHover(
-            params.copy(
-                textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
-                position = DiagnosticTranslation.toWrappedPosition(params.position)
+        // Null-result guard (see textDocumentCompletion). Hover is the WORST offender: kotlin-lsp
+        // returns `null` for hover-over-nothing (spec-legal), and the editor fires hover on every
+        // cursor move — so without this catch the decode exception storms and cancels the shared
+        // scope, which is exactly what killed diagnostics + completion on first real use.
+        val hover = try {
+            server.textDocumentHover(
+                params.copy(
+                    textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
+                    position = DiagnosticTranslation.toWrappedPosition(params.position)
+                )
             )
-        )
+        } catch (e: SerializationException) {
+            return super.textDocumentHover(params)
+        }
         val range = hover.range?.let {
             DiagnosticTranslation.translateRange(it, lspWorkspace.csgsLineCount())
         }
@@ -378,12 +403,17 @@ class BridgeLanguageServer(
      */
     override suspend fun textDocumentSignatureHelp(params: SignatureHelpParams): SignatureHelp {
         val server = delegate ?: return super.textDocumentSignatureHelp(params)
-        return server.textDocumentSignatureHelp(
-            params.copy(
-                textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
-                position = DiagnosticTranslation.toWrappedPosition(params.position)
+        // Null-result guard (see textDocumentCompletion): signatureHelp is `SignatureHelp | null`.
+        return try {
+            server.textDocumentSignatureHelp(
+                params.copy(
+                    textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
+                    position = DiagnosticTranslation.toWrappedPosition(params.position)
+                )
             )
-        )
+        } catch (e: SerializationException) {
+            super.textDocumentSignatureHelp(params)
+        }
     }
 
     /**
