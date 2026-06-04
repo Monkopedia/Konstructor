@@ -185,6 +185,81 @@ class BridgeLanguageServerIntegrationTest {
     }
 
     /**
+     * Event-driven path (#43), real engine: after the FIRST diagnostic publish arrives via
+     * the didOpen pull, the bridge must NOT keep re-publishing on a timer (the old blind
+     * poll did, every 15s). With `previousResultId` + the `unchanged`-report skip, a
+     * settled doc stops emitting redundant pushes — so once diagnostics arrive, the publish
+     * count must stabilise over a further window. This is the real-engine half of the
+     * `unchanged`-dedup guard (the CI-runnable half is in [PullDiagnosticsPublisherTest]).
+     */
+    @Test
+    fun realEngineEventDrivenPullDoesNotDoublePublish() = runBlocking {
+        val config = env!!.config
+        val workspaceId = "0"
+        val konstructionId = "0"
+        val paths: PathController.Paths = PathController(config)[workspaceId, konstructionId]
+        paths.contentFile.writeText(deliberateErrorScript)
+        val frontendUri = "file:///$workspaceId/$konstructionId/content.csgs"
+
+        val firstNonEmpty = CompletableDeferred<Unit>()
+        val publishCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val frontendClient = object : DefaultLanguageClient() {
+            override suspend fun textDocumentPublishDiagnostics(params: PublishDiagnosticsParams) {
+                publishCount.incrementAndGet()
+                if (params.diagnostics.isNotEmpty() && !firstNonEmpty.isCompleted) {
+                    firstNonEmpty.complete(Unit)
+                }
+            }
+        }
+
+        val bridge = BridgeLanguageServer(config, workspaceId, konstructionId, frontendClient)
+        bridge.initialize(
+            InitializeParams(
+                capabilities = ClientCapabilities(),
+                processId = ProcessHandle.current().pid().toInt(),
+                rootUri = "file:///$workspaceId"
+            )
+        )
+        bridge.initialized(InitializedParams())
+        bridge.textDocumentDidOpen(
+            DidOpenTextDocumentParams(
+                textDocument = TextDocumentItem(
+                    uri = frontendUri,
+                    languageId = "kotlin",
+                    version = 1,
+                    text = deliberateErrorScript
+                )
+            )
+        )
+
+        val settled = withTimeoutOrNull(180_000) {
+            firstNonEmpty.await()
+            true
+        }
+        assertTrue(settled == true, "no diagnostics flowed from the engine within budget")
+
+        // Snapshot the count, then let the system sit idle: with the event-driven model the
+        // settled doc must not keep republishing on a timer. Allow at most a small grace
+        // (an in-flight backoff pull or a single engine refresh), but NOT a steady stream.
+        val afterSettle = publishCount.get()
+        delay(20_000)
+        val afterIdle = publishCount.get()
+
+        bridge.shutdown()
+        bridge.exit()
+
+        System.err.println(
+            "REAL-ENGINE publishes after settle=$afterSettle, after 20s idle=$afterIdle"
+        )
+        assertTrue(
+            afterIdle - afterSettle <= EVENT_DRIVEN_IDLE_GRACE,
+            "settled diagnostics must not re-publish on a timer; the publish count grew " +
+                "by ${afterIdle - afterSettle} over a 20s idle window " +
+                "(blind-poll regression — the unchanged-skip is not deduping)"
+        )
+    }
+
+    /**
      * A valid csgs whose body sits in the `KcsgScript` receiver scope, so the engine offers
      * the DSL members there (e.g. `cube`, `export`). csgs line index 1 is `val c = cu` — a
      * partial reference we request completion on (the cursor sits right after `cu`).
@@ -357,5 +432,12 @@ class BridgeLanguageServerIntegrationTest {
     private companion object {
         /** The `val broken = thisSymbolDoesNotExist123` line in [deliberateErrorScript]. */
         private const val EXPECTED_CSGS_ERROR_LINE = 1
+
+        /**
+         * Max extra publishes tolerated over a 20s idle window once diagnostics settle: a
+         * straggler backoff pull or a single engine-driven refresh is fine; a steady stream
+         * (the old 15s blind-poll, ~1+ per interval) is a regression.
+         */
+        private const val EVENT_DRIVEN_IDLE_GRACE = 1
     }
 }
