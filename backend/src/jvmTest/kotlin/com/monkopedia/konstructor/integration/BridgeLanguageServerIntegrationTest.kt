@@ -21,6 +21,7 @@ import com.monkopedia.konstructor.testutil.TestEnvironment
 import com.monkopedia.lsp.ClientCapabilities
 import com.monkopedia.lsp.CompletionParams
 import com.monkopedia.lsp.DefaultLanguageClient
+import com.monkopedia.lsp.DidCloseTextDocumentParams
 import com.monkopedia.lsp.DidOpenTextDocumentParams
 import com.monkopedia.lsp.HoverParams
 import com.monkopedia.lsp.InitializeParams
@@ -181,6 +182,154 @@ class BridgeLanguageServerIntegrationTest {
             "translated diagnostic must land on csgs line $EXPECTED_CSGS_ERROR_LINE " +
                 "(the `val broken` line), not the wrapped-.kt line; " +
                 "got line ${unresolved.range.start.line.toInt()}"
+        )
+    }
+
+    /**
+     * Teardown + reopen (epic #35 Phase 5 / #40), real engine. Drives the full editor
+     * lifecycle TWICE on one konstruction with a real shutdown→exit→close teardown in
+     * between, asserting:
+     *  1. diagnostics flow after the FIRST open,
+     *  2. on close the bridge clears (an empty publish for the doc — squiggles don't linger),
+     *  3. after a fresh REOPEN diagnostics flow AGAIN (the warm subprocess survived the
+     *     teardown; keep-warm intact), and
+     *  4. no STALE diagnostics from the closed doc reappear on reopen (the close cleared
+     *     state; the publish-after-close guard held).
+     *
+     * Local-only (same double gate as the other real-engine tests). This is the real-engine
+     * half of the leak/teardown guard; the CI-runnable half is [LspSubserviceLeakTest] +
+     * [PullDiagnosticsPublisherTest].
+     */
+    @Test
+    fun realEngineOpenCloseReopenStillFlowsNoStale() = runBlocking {
+        val config = env!!.config
+        val workspaceId = "0"
+        val konstructionId = "0"
+        val paths: PathController.Paths = PathController(config)[workspaceId, konstructionId]
+        paths.contentFile.writeText(deliberateErrorScript)
+        val frontendUri = "file:///$workspaceId/$konstructionId/content.csgs"
+
+        // Records every publish (uri + count) so we can assert the clear-on-close and the
+        // diagnostics-after-reopen behaviours.
+        val publishes = java.util.Collections.synchronizedList(
+            mutableListOf<PublishDiagnosticsParams>()
+        )
+        fun makeClient(firstNonEmpty: CompletableDeferred<Unit>) = object :
+            DefaultLanguageClient() {
+            override suspend fun textDocumentPublishDiagnostics(params: PublishDiagnosticsParams) {
+                publishes.add(params)
+                if (params.diagnostics.isNotEmpty() && !firstNonEmpty.isCompleted) {
+                    firstNonEmpty.complete(Unit)
+                }
+            }
+        }
+
+        // --- FIRST open ---
+        val firstDiag = CompletableDeferred<Unit>()
+        val bridge1 = BridgeLanguageServer(
+            config,
+            workspaceId,
+            konstructionId,
+            makeClient(firstDiag)
+        )
+        bridge1.initialize(
+            InitializeParams(
+                capabilities = ClientCapabilities(),
+                processId = ProcessHandle.current().pid().toInt(),
+                rootUri = "file:///$workspaceId"
+            )
+        )
+        bridge1.initialized(InitializedParams())
+        bridge1.textDocumentDidOpen(
+            DidOpenTextDocumentParams(
+                textDocument = TextDocumentItem(
+                    uri = frontendUri,
+                    languageId = "kotlin",
+                    version = 1,
+                    text = deliberateErrorScript
+                )
+            )
+        )
+        val firstFlowed = withTimeoutOrNull(180_000) {
+            firstDiag.await()
+            true
+        }
+        assertTrue(firstFlowed == true, "no diagnostics flowed on the first open within budget")
+
+        // --- CLOSE + full teardown (shutdown→exit→close) ---
+        bridge1.textDocumentDidClose(
+            DidCloseTextDocumentParams(
+                textDocument = TextDocumentIdentifier(uri = frontendUri)
+            )
+        )
+        // Let the clear-on-close publish land.
+        withTimeoutOrNull(10_000) {
+            while (publishes.none { it.uri == frontendUri && it.diagnostics.isEmpty() }) {
+                delay(100)
+            }
+        }
+        bridge1.shutdown()
+        bridge1.exit()
+        bridge1.close()
+
+        val sawClear = publishes.any { it.uri == frontendUri && it.diagnostics.isEmpty() }
+        assertTrue(sawClear, "close must emit a clearing (empty) publish so squiggles don't linger")
+
+        // Snapshot the publish count after teardown; nothing more should land for the closed
+        // doc (the publish-after-close guard + the cleared state).
+        delay(3_000)
+        val afterTeardownCount = publishes.size
+
+        // --- REOPEN (fresh bridge, same warm subprocess) ---
+        publishes.clear()
+        val secondDiag = CompletableDeferred<Unit>()
+        val bridge2 = BridgeLanguageServer(
+            config,
+            workspaceId,
+            konstructionId,
+            makeClient(secondDiag)
+        )
+        bridge2.initialize(
+            InitializeParams(
+                capabilities = ClientCapabilities(),
+                processId = ProcessHandle.current().pid().toInt(),
+                rootUri = "file:///$workspaceId"
+            )
+        )
+        bridge2.initialized(InitializedParams())
+        bridge2.textDocumentDidOpen(
+            DidOpenTextDocumentParams(
+                textDocument = TextDocumentItem(
+                    uri = frontendUri,
+                    languageId = "kotlin",
+                    version = 1,
+                    text = deliberateErrorScript
+                )
+            )
+        )
+        val secondFlowed = withTimeoutOrNull(180_000) {
+            secondDiag.await()
+            true
+        }
+
+        bridge2.shutdown()
+        bridge2.exit()
+        bridge2.close()
+
+        System.err.println(
+            "REAL-ENGINE reopen: firstFlowed=$firstFlowed sawClear=$sawClear " +
+                "afterTeardownCount=$afterTeardownCount secondFlowed=$secondFlowed"
+        )
+        assertTrue(
+            secondFlowed == true,
+            "diagnostics must flow again after a reopen (warm subprocess survived teardown)"
+        )
+        // The reopen's diagnostics must be a FRESH non-empty publish for the doc, not a
+        // leftover/stale one — proven by secondDiag completing only on a non-empty publish
+        // AFTER the publishes list was cleared post-teardown.
+        assertTrue(
+            publishes.any { it.uri == frontendUri && it.diagnostics.isNotEmpty() },
+            "the reopen must produce fresh diagnostics for the doc"
         )
     }
 

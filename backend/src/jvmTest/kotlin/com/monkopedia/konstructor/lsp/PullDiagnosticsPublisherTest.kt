@@ -29,6 +29,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 
 /**
@@ -67,7 +68,15 @@ class PullDiagnosticsPublisherTest {
     private class Recorder {
         val pullCalls = CopyOnWriteArrayList<String?>()
         val publishes = CopyOnWriteArrayList<List<Diagnostic>>()
+        val publishUris = CopyOnWriteArrayList<String>()
         var reports: () -> DocumentDiagnosticReport = { error("no report scripted") }
+
+        /**
+         * Optional gate: when non-null, [PullDiagnosticsPublisher.pull] suspends on it before
+         * returning the scripted report — lets a test hold a pull "in flight" across an
+         * onClose to exercise the publish-after-close race guard.
+         */
+        var pullGate: CompletableDeferred<Unit>? = null
     }
 
     // --- pull-mode detection gating ---------------------------------------------------
@@ -211,6 +220,109 @@ class PullDiagnosticsPublisherTest {
         )
     }
 
+    // --- close-time correctness (the 3 maintainer fixes, #40) -------------------------
+
+    @Test
+    fun `onClose clears state and emits an empty publish so squiggles do not linger`() = runTest {
+        val rec = Recorder()
+        rec.reports = { fullReport(resultId = "rid", "boom") }
+        val publisher = newPublisher(rec)
+
+        publisher.onOpen(uri)
+        testScheduler.advanceUntilIdle()
+        val publishesBeforeClose = rec.publishes.size
+
+        publisher.onClose(uri)
+        testScheduler.advanceUntilIdle()
+
+        // A clearing publish for the closed doc must have been emitted...
+        assertEquals(
+            publishesBeforeClose + 1,
+            rec.publishes.size,
+            "onClose must emit one clearing publish"
+        )
+        assertEquals(uri, rec.publishUris.last(), "the clearing publish targets the closed uri")
+        assertTrue(
+            rec.publishes.last().isEmpty(),
+            "the clearing publish must carry an EMPTY diagnostics list"
+        )
+
+        // ...and the doc state must be gone: a later change must pull with NO previousResultId
+        // (the resultId was cleared), proving onClose forgot the doc.
+        rec.reports = { fullReport(resultId = "rid2", "again") }
+        publisher.onChange(uri)
+        testScheduler.advanceUntilIdle()
+        assertEquals(
+            null,
+            rec.pullCalls.last(),
+            "after close the resultId is cleared, so the next pull threads no previousResultId"
+        )
+    }
+
+    @Test
+    fun `an in-flight pull that finishes after close does not publish`() = runTest {
+        val rec = Recorder()
+        val gate = CompletableDeferred<Unit>()
+        rec.pullGate = gate
+        rec.reports = { fullReport(resultId = "rid", "boom") }
+        val publisher = newPublisher(rec)
+
+        // Start a change-triggered pull and let it reach the (gated) pull seam, then hold it.
+        publisher.onChange(uri)
+        testScheduler.advanceUntilIdle()
+        assertEquals(1, rec.pullCalls.size, "the change pull reached the pull seam")
+        // Nothing published yet (pull is suspended on the gate); also no clearing publish yet.
+        val publishesWhileInFlight = rec.publishes.size
+
+        // The doc closes while the pull is still in flight. This drops it from openDocs and
+        // emits the clear-on-close publish.
+        publisher.onClose(uri)
+        testScheduler.advanceUntilIdle()
+        val afterClose = rec.publishes.size
+
+        // Now let the in-flight pull complete: its (now-stale) full report must NOT publish,
+        // because the doc is no longer open.
+        gate.complete(Unit)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(
+            afterClose,
+            rec.publishes.size,
+            "a pull that completes AFTER close must not publish stale diagnostics for the doc"
+        )
+        // The only diagnostics-bearing publish must have been the clearing (empty) one.
+        assertTrue(
+            rec.publishes.all { it.isEmpty() },
+            "no non-empty publish should reach a closed doc; got ${rec.publishes}"
+        )
+        // Sanity: we did exercise the in-flight path (a publish happened only at/after close).
+        assertTrue(publishesWhileInFlight <= afterClose)
+    }
+
+    @Test
+    fun `onOpen and onClose keyed by the same uri fully release the doc`() = runTest {
+        val rec = Recorder()
+        rec.reports = { fullReport(resultId = "rid", "boom") }
+        val publisher = newPublisher(rec)
+
+        // Open and close with the SAME uri (the contract: all lifecycle callbacks key by one
+        // uri space). A subsequent refresh must NOT re-pull — the doc left openDocs.
+        publisher.onOpen(uri)
+        testScheduler.advanceUntilIdle()
+        val afterOpen = rec.pullCalls.size
+
+        publisher.onClose(uri)
+        testScheduler.advanceUntilIdle()
+
+        publisher.onRefresh()
+        testScheduler.advanceUntilIdle()
+        assertEquals(
+            afterOpen,
+            rec.pullCalls.size,
+            "a consistently-keyed close removes the doc; refresh must not re-pull it (no leak)"
+        )
+    }
+
     private fun kotlinx.coroutines.CoroutineScope.newPublisher(
         rec: Recorder,
         provider: com.monkopedia.lsp.ServerCapabilitiesDiagnosticProvider = DiagnosticOptions(
@@ -222,9 +334,13 @@ class PullDiagnosticsPublisherTest {
         diagnosticProvider = provider,
         pull = { _, previousResultId ->
             rec.pullCalls.add(previousResultId)
+            rec.pullGate?.await()
             rec.reports()
         },
-        publish = { _, diagnostics -> rec.publishes.add(diagnostics) },
+        publish = { uri, diagnostics ->
+            rec.publishUris.add(uri)
+            rec.publishes.add(diagnostics)
+        },
         awaitReady = { },
         backoff = noBackoff
     )

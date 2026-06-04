@@ -91,6 +91,7 @@ import com.monkopedia.konstructor.frontend.viewmodel.UiState
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import konstructor.frontend.generated.resources.JetBrainsMono_Regular
 import konstructor.frontend.generated.resources.Res
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.Font
 import org.koin.compose.koinInject
 
@@ -217,6 +218,8 @@ private fun EditorContent(
         val service = konstructionVm.currentService ?: return@produceState
         // Stable per-konstruction document URI for the LSP session.
         val uri = "file:///${konstruction.workspaceId}/${konstruction.id}/content.csgs"
+        var lspClient: LSPClient? = null
+        var server: com.monkopedia.lsp.KsrpcLanguageServer? = null
         try {
             // The editor client receives server→client pushes (publishDiagnostics)
             // over the reverse channel multiplexed onto the same WebSocket. It is
@@ -226,16 +229,37 @@ private fun EditorContent(
             )
             // Open the nested ksrpc LSP sub-service; the returned stub IS-A
             // LanguageServer, so it drops straight into kodemirror's LSPClient.
-            val server = service.lsp(editorLspClient)
-            val lspClient = LSPClient(
+            server = service.lsp(editorLspClient)
+            val client = LSPClient(
                 server = server,
                 config = LSPClientConfig(rootUri = "file:///${konstruction.workspaceId}")
             )
-            editorLspClient.bind(lspClient.languageClient)
-            lspClient.initialize()
-            value = languageServerSupport(lspClient, uri, "kotlin")
+            lspClient = client
+            editorLspClient.bind(client.languageClient)
+            client.initialize()
+            value = languageServerSupport(client, uri, "kotlin")
         } catch (_: Exception) {
             value = null
+        }
+        // Teardown (epic #35 Phase 5 / #40): the WebSocket is long-lived + shared across
+        // konstructions, so the nested `lsp()` sub-service and the reverse client channel
+        // stay registered until explicitly closed. When this LSP wiring is disposed — the
+        // konstruction switches, the flag toggles off, or the editor leaves composition —
+        // do a real shutdown→exit handshake and close() the server stub. Closing the stub
+        // releases the `lsp()` sub-service AND triggers the backend BridgeLanguageServer's
+        // close(), which releases the reverse client channel; otherwise each open→close
+        // cycle would leak two sub-channels on the shared socket.
+        //
+        // The teardown runs on the LSPClient's own scope (a SupervisorJob deliberately
+        // outliving any single editor session — see LSPClient.scope) so it survives this
+        // produceState coroutine being cancelled at dispose.
+        val clientForDispose = lspClient
+        val serverForDispose = server
+        awaitDispose {
+            clientForDispose?.scope?.launch {
+                runCatching { clientForDispose.shutdown() }
+                runCatching { serverForDispose?.close() }
+            }
         }
     }.value
 

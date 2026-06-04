@@ -305,7 +305,12 @@ class BridgeLanguageServer(
 
     override suspend fun textDocumentDidClose(params: DidCloseTextDocumentParams) {
         val server = delegate ?: return
-        frontendUri?.let { diagnostics?.onClose(it) }
+        // Key the publisher's close by the SAME frontend csgs uri that onOpen/onChange used
+        // (`params.textDocument.uri`), not the stashed [frontendUri], so the doc is guaranteed
+        // to leave openDocs/resultIds (uri-space key consistency — a mismatched key would leak
+        // the doc and keep re-pulling it on every refresh after close). The publisher's own
+        // publish seam translates to the wrapped uri at the boundary.
+        diagnostics?.onClose(params.textDocument.uri)
         runCatching {
             server.textDocumentDidClose(
                 DidCloseTextDocumentParams(
@@ -381,22 +386,71 @@ class BridgeLanguageServer(
         )
     }
 
+    /**
+     * The editor's `shutdown` — END OF THIS KONSTRUCTION'S SESSION, NOT of the engine. The
+     * kotlin-lsp subprocess + its stdio connection are SHARED across konstructions and owned
+     * by [KotlinLspProcess] (keep-warm). Forwarding `shutdown`/`exit`/`close` to the shared
+     * subprocess stub would shut the engine down (or close the shared channel) for EVERY open
+     * konstruction and break the next reopen. So we do NOT forward it; we only advance our own
+     * [LifecycleState] and let [teardown] do per-konstruction cleanup. The engine forgets our
+     * document via the `didClose` we send (in [textDocumentDidClose] and, defensively, in
+     * [teardown]).
+     */
     override suspend fun shutdown(): Nothing? {
         lifecycle.advanceTo(LifecycleState.Phase.SHUTTING_DOWN)
-        return delegate?.let { runCatching { it.shutdown() }.getOrNull() }
+        return null
     }
 
     override suspend fun exit() {
         lifecycle.advanceTo(LifecycleState.Phase.EXITED)
+        teardown()
+    }
+
+    /**
+     * Teardown / reverse-channel release (Phase 5 / #40). ksrpc invokes this when the editor
+     * closes the returned `lsp()` server stub (the empty-endpoint close removes this
+     * sub-service from the host `serviceMap` and calls [SuspendCloseable.close]). Our
+     * WebSocket is long-lived + shared across konstructions, so without this BOTH the
+     * `lsp()` sub-service AND the reverse [frontendClient] channel would stay registered
+     * until the whole socket closes — leaking two sub-channels per open→close cycle.
+     *
+     * So on close we [teardown] (cancel the bridge scope, stop the publisher, exit+close the
+     * subprocess-facing stub) AND additionally [close][KsrpcLanguageClient.close] the
+     * stashed [frontendClient], which drops our reference to its reverse channel and lets
+     * ksrpc reclaim it. Idempotent and ordered after [teardown] so the publisher (which
+     * pushes to [frontendClient]) is already stopped before we release it.
+     *
+     * Note: the warm subprocess itself ([KotlinLspProcess]) intentionally stays alive across
+     * konstructions (keep-warm); we only release this konstruction's stub + reverse channel.
+     */
+    override suspend fun close() {
+        teardown()
+        runCatching { frontendClient.close() }
+            .onFailure { hauler.error("Failed releasing reverse LSP client channel", it) }
+    }
+
+    /**
+     * Per-konstruction cleanup. Drops the publisher, sends a best-effort `didClose` so the
+     * SHARED engine forgets this konstruction's document, then cancels the bridge scope.
+     * Deliberately does NOT `shutdown`/`exit`/`close` the subprocess-facing [delegate] stub,
+     * because that stub rides the shared keep-warm connection — closing it would kill the
+     * engine for other open konstructions and break the next reopen. Idempotent: a second
+     * pass is a no-op once [delegate] is nulled.
+     */
+    private suspend fun teardown() {
         diagnostics = null
-        scope.coroutineContext[Job]?.cancel()
         delegate?.let { server ->
-            runCatching { server.exit() }
-            // Close the subprocess-facing stub so its reverse channel is released (cheap
-            // leak guard; full teardown/leak test is Phase 5 / #40).
-            runCatching { server.close() }
+            // Tell the shared engine to forget our document (no-op if didClose already ran).
+            runCatching {
+                server.textDocumentDidClose(
+                    DidCloseTextDocumentParams(
+                        textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri)
+                    )
+                )
+            }
         }
         delegate = null
+        scope.coroutineContext[Job]?.cancel()
     }
 
     /**
