@@ -27,16 +27,22 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
 /**
- * Phase 1 LSP transport pipe (epic #35 / issue #36).
+ * LSP transport pipe + bridge graceful-off (epic #35, Phases 1–2 / issues #36, #37).
  *
- * Proves the flag-ON round-trip: with the `lspEnabled` flag on, opening a
- * konstruction in the editor opens the nested ksrpc LSP sub-service, the backend
- * stub server pushes one canned `publishDiagnostics` back over the reverse
- * channel, and the editor's client records it on the JS bridge
- * (`globalThis.__konstructor.lspDiagnostics`).
+ * Phase 1 proved the canned-diagnostic round-trip through a stub server. Phase 2
+ * replaces the stub with a REAL bridge to a JetBrains `kotlin-lsp` subprocess. CI
+ * has no 393MB binary, so [com.monkopedia.konstructor.Config.isKotlinLspAvailable]
+ * is false and the bridge degrades to an inert server: turning the flag ON still
+ * opens the nested ksrpc LSP sub-service and runs `initialize`/`initialized`/
+ * `didOpen` cleanly, but no engine diagnostics flow (and none should — there is no
+ * engine). The real kcsg-aware diagnostics path is verified LOCALLY against the
+ * binary (see the PR description); it is intentionally NOT CI-tested.
  *
- * The flag-OFF behavior (editor byte-for-byte unchanged) is covered by the rest
- * of the suite running with the default-off flag.
+ * This test therefore asserts the flag-ON path is wired and harmless WITHOUT a
+ * binary: the editor mounts, the session establishes, the app stays on the main
+ * screen, and no spurious diagnostics appear. The flag-OFF behavior (editor
+ * byte-for-byte unchanged) is covered by the rest of the suite running with the
+ * default-off flag.
  */
 class LspPipeTest : BaseE2eTest() {
 
@@ -50,11 +56,20 @@ class LspPipeTest : BaseE2eTest() {
     """.trimIndent()
 
     @Test
-    fun testCannedDiagnosticRoundTripsWhenFlagOn() {
+    fun testLspSessionEstablishesWhenFlagOnWithoutEngine() {
         loadApp()
         waitForBridge()
 
         bridgeAction("createWorkspace", "LspWs")
+        // The version bump can land a beat before the workspaceIds StateFlow propagates
+        // into bridge state; wait for the list to be non-empty before reading it.
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && " +
+                "globalThis.__konstructor.state.workspaceIds && " +
+                "globalThis.__konstructor.state.workspaceIds.length >= 1",
+            null,
+            Page.WaitForFunctionOptions().setTimeout(30000.0)
+        )
         val wsId = bridgeStateStringList("workspaceIds").first()
 
         // Create a konstruction with valid content via the API up-front, so the
@@ -81,24 +96,32 @@ class LspPipeTest : BaseE2eTest() {
         bridgeAction("setCodePaneMode", "EDITOR")
         bridgeActionNoWait("selectKonstruction", konId)
 
-        // Turn the LSP flag ON: the editor (re)builds the LSP session, which
-        // sends didOpen and triggers the backend stub's canned publishDiagnostics.
+        // Turn the LSP flag ON: the editor (re)builds the LSP session, which opens the
+        // nested ksrpc LSP sub-service and drives initialize/initialized/didOpen against
+        // the backend bridge. With no engine binary on CI the bridge is inert, so this
+        // must not crash the editor or surface any diagnostics.
         bridgeAction("setLspEnabled", "true")
 
-        // Wait for the canned diagnostic to round-trip back to the editor client.
-        page.waitForFunction(
-            "() => globalThis.__konstructor.lspDiagnostics && " +
-                "globalThis.__konstructor.lspDiagnostics.count >= 1",
-            null,
-            Page.WaitForFunctionOptions().setTimeout(60000.0)
-        )
+        // Give the session time to establish + didOpen to round-trip (no engine, so no
+        // diagnostics are expected — we assert the app stays healthy, not a count).
+        page.waitForTimeout(5000.0)
 
+        // The app must still be on the main screen (the inert bridge didn't break it).
+        waitForMainScreen()
+
+        // No engine ⇒ no diagnostics. `lspDiagnostics` is only set when the editor
+        // client actually receives a publishDiagnostics; it must remain unset/zero.
         val count = (
-            page.evaluate("() => globalThis.__konstructor.lspDiagnostics.count") as? Number
+            page.evaluate(
+                "() => (globalThis.__konstructor.lspDiagnostics && " +
+                    "globalThis.__konstructor.lspDiagnostics.count) || 0"
+            ) as? Number
             )?.toInt() ?: 0
-        val uri = page.evaluate("() => globalThis.__konstructor.lspDiagnostics.uri")?.toString()
-        System.err.println("LSP diagnostics received: count=$count uri=$uri")
-        assert(count >= 1) { "Expected the canned LSP diagnostic to round-trip, got count=$count" }
+        System.err.println("LSP (no-engine) diagnostics count=$count")
+        assert(count == 0) {
+            "With no kotlin-lsp binary on CI the bridge is inert; expected 0 " +
+                "diagnostics, got count=$count"
+        }
     }
 
     private fun waitForMainScreen() {
