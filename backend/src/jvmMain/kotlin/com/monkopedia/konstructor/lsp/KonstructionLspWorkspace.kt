@@ -66,28 +66,45 @@ class KonstructionLspWorkspace(
     val documentUri: String = fileUri(wrappedFile)
 
     /**
+     * The csgs content most recently wrapped into the `.kt`. Defaults to the stored
+     * snapshot on disk; [synthesize] with explicit text (the editor's live document)
+     * overwrites it so the engine analyzes what the user is currently editing, not a
+     * stale file. Drives [csgsLineCount], used by the Phase 3 footer-drop translation.
+     */
+    @Volatile
+    private var csgsContent: String = readStoredContent()
+
+    /**
      * (Re)write the wrapped `.kt` from the latest konstruction content and the
      * `workspace.json` pointing at this dir + the resolved `lib.jar`. Idempotent;
      * call before opening / on content change.
+     *
+     * @param content the live editor csgs text to wrap (full-document sync). When null,
+     *   the stored on-disk snapshot is used.
      */
-    fun synthesize() {
-        writeWrappedKt()
+    fun synthesize(content: String? = null) {
+        csgsContent = content ?: readStoredContent()
+        writeWrappedKt(csgsContent)
         writeWorkspaceJson()
     }
 
     /** The current wrapped-document text (post-wrapping). */
     fun wrappedText(): String = wrappedFile.readText()
 
-    private fun writeWrappedKt() {
-        val source =
-            if (paths.contentFile.exists()) {
-                paths.contentFile.inputStream()
-            } else {
-                "".byteInputStream()
-            }
+    /**
+     * Number of lines in the csgs content last [synthesize]d — the user-visible line
+     * count. Used by the Phase 3 translation to drop footer diagnostics (any wrapped
+     * line at/after `headerLines + csgsLineCount`).
+     */
+    fun csgsLineCount(): Int = csgsContent.split("\n").size
+
+    private fun readStoredContent(): String =
+        if (paths.contentFile.exists()) paths.contentFile.readText() else ""
+
+    private fun writeWrappedKt(content: String) {
         // Reuse konstructor's EXACT compiler wrapping (header swap + footer) so LSP
         // positions match the compiler's view of the script.
-        KonstructionControllerImpl.copyContentToScript(source, wrappedFile)
+        KonstructionControllerImpl.copyContentToScript(content.byteInputStream(), wrappedFile)
     }
 
     private fun writeWorkspaceJson() {
