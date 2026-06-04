@@ -51,6 +51,18 @@ import kotlinx.coroutines.sync.withLock
  * can later be lifted into `lsp-ksrpc` as a reusable `DiagnosticBridge`/
  * `PullDiagnosticsPublisher` (the lsp-kotlin maintainer offered to review it for that). It
  * is given only:
+ *
+ * **Module-extraction decision (epic #35 Phase 5 / #40): NOT YET.** Per the lsp-kotlin
+ * maintainer, the LSP proxy/translation layer + this `PullDiagnosticsPublisher` are
+ * extraction-ready (the seams below are transport- AND translation-agnostic; all csgs↔kt
+ * translation lives in the bridge seams) but should **bake in konstructor first**. So
+ * nothing is extracted here: the proxy/translation + publisher stay in the backend until the
+ * design is proven live. Extraction into a `csgs-lsp` module / an lsp-ksrpc `DiagnosticBridge`
+ * is deferred — the lsp-kotlin maintainer will lift `PullDiagnosticsPublisher` when ready
+ * (extraction-time affordances captured on #40: optional `identifier` keying resultId by
+ * (uri, identifier?); `version` through the publish seam; `awaitReady` as a generic
+ * `suspend () -> Unit`; the teardown contract — the publisher relies on its injected [scope]
+ * being cancelled, which `BridgeLanguageServer.close()` does).
  *  - [pull]: how to PULL a [DocumentDiagnosticReport] for a doc (the subprocess stub's
  *    `textDocumentDiagnostic`, with `previousResultId`),
  *  - [publish]: how to PUSH a doc's diagnostics up to the target client (the bridge wires
@@ -97,7 +109,13 @@ internal class PullDiagnosticsPublisher(
     /** Suspends until the target client has signalled it is ready (the `initialized` gate). */
     private val awaitReady: suspend () -> Unit,
     private val debounce: Duration = DEFAULT_DEBOUNCE,
-    private val backoff: ColdIndexBackoff = ColdIndexBackoff()
+    private val backoff: ColdIndexBackoff = ColdIndexBackoff(),
+    /**
+     * Whether [onClose] emits a clearing `publish(uri, emptyList())` so the editor drops the
+     * last squiggles when a doc closes (kodemirror does not always clear on its own didClose).
+     * Defaulted on; a knob for the eventual lsp-ksrpc extraction.
+     */
+    private val clearOnClose: Boolean = true
 ) {
     private val hauler = hauler("PullDiagnosticsPublisher")
 
@@ -160,11 +178,29 @@ internal class PullDiagnosticsPublisher(
         )?.cancel()
     }
 
-    /** A doc closed: forget its result id / open state / pending change pull. */
+    /**
+     * A doc closed: forget its result id / open state / pending change pull. The doc is
+     * removed from [openDocs] FIRST so any in-flight pull (from [onOpen]/[onChange]) that has
+     * not yet published sees `uri !in openDocs` in [pullOnce] and skips the publish — no stale
+     * diagnostics reappear after close (publish-after-close race). When [clearOnClose] we then
+     * emit a clearing `publish(uri, emptyList())` so the editor drops the last squiggles
+     * (kodemirror does not always clear on its own didClose).
+     *
+     * Keyed by the SAME uri space as [onOpen]/[onChange] (the frontend csgs uri): the seams
+     * translate at the boundary, the lifecycle callbacks all key consistently — otherwise a
+     * mismatched key would leave the doc in [openDocs]/[resultIds] forever (re-pulled on every
+     * refresh after close, a real leak).
+     */
     fun onClose(uri: String) {
         openDocs.remove(uri)
         resultIds.remove(uri)
         changeJobs.remove(uri)?.cancel()
+        if (clearOnClose) {
+            scope.launch {
+                runCatching { publish(uri, emptyList()) }
+                    .onFailure { hauler.error("clear-on-close publish failed for $uri", it) }
+            }
+        }
     }
 
     /**
@@ -196,6 +232,10 @@ internal class PullDiagnosticsPublisher(
         when (report) {
             is RelatedFullDocumentDiagnosticReport -> {
                 report.resultId?.let { resultIds[uri] = it }
+                // Publish-after-close race: this pull may have been launched by onOpen/onChange
+                // before the doc closed. If onClose has since removed it from openDocs, drop the
+                // publish so stale diagnostics never reappear for a now-closed doc.
+                if (uri !in openDocs) return@withLock PullOutcome.SKIPPED_CLOSED
                 runCatching { publish(uri, report.items) }
                     .onFailure { hauler.error("publish diagnostics failed for $uri", it) }
                 PullOutcome.PUBLISHED
@@ -225,7 +265,7 @@ internal class PullDiagnosticsPublisher(
         }
     }
 
-    private enum class PullOutcome { PUBLISHED, UNCHANGED, FAILED }
+    private enum class PullOutcome { PUBLISHED, UNCHANGED, FAILED, SKIPPED_CLOSED }
 
     /**
      * Bounded backoff for the FIRST pull only (before the index warms). Not a steady-state

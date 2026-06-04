@@ -62,6 +62,10 @@ kotlin {
         implementation(kotlin("test-junit"))
         implementation(libs.kotlinx.coroutines.test)
         implementation(libs.kotlinx.serialization.json)
+        // In-memory duplex ksrpc Connection for the LSP sub-service leak test
+        // (open+close the nested lsp() sub-service N× over a real bidi channel and
+        // assert the host channel's sub-service count returns to baseline — #40).
+        implementation(libs.ksrpc.sockets)
     }
 }
 
