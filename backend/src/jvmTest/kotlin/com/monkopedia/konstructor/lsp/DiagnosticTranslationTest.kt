@@ -198,7 +198,11 @@ class DiagnosticTranslationTest {
     fun `toWrappedPosition adds the header to the line and keeps the column`() {
         // Phase 4 (#39) request direction: csgs cursor -> wrapped-.kt cursor.
         val wrapped = DiagnosticTranslation.toWrappedPosition(pos(line = 0, character = 5))
-        assertEquals(headerLines.toUInt(), wrapped.line, "first csgs line maps to first user kt line")
+        assertEquals(
+            headerLines.toUInt(),
+            wrapped.line,
+            "first csgs line maps to first user kt line"
+        )
         assertEquals(5u, wrapped.character, "columns are unchanged across the wrap")
 
         val wrapped2 = DiagnosticTranslation.toWrappedPosition(pos(line = 4, character = 12))

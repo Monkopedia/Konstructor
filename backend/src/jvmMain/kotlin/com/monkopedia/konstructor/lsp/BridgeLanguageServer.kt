@@ -33,9 +33,9 @@ import com.monkopedia.lsp.DocumentDiagnosticReport
 import com.monkopedia.lsp.Hover
 import com.monkopedia.lsp.HoverParams
 import com.monkopedia.lsp.InitializeParams
-import com.monkopedia.lsp.InsertReplaceEdit
 import com.monkopedia.lsp.InitializeResult
 import com.monkopedia.lsp.InitializedParams
+import com.monkopedia.lsp.InsertReplaceEdit
 import com.monkopedia.lsp.KsrpcLanguageClient
 import com.monkopedia.lsp.KsrpcLanguageServer
 import com.monkopedia.lsp.LSPAny
@@ -394,6 +394,7 @@ class BridgeLanguageServer(
             TextDocumentCompletionResult.CompletionItemArray(
                 result.value.map { translateCompletionItem(it) }
             )
+
         is TextDocumentCompletionResult.CompletionListValue ->
             TextDocumentCompletionResult.CompletionListValue(
                 result.value.copy(items = result.value.items.map { translateCompletionItem(it) })
@@ -427,6 +428,7 @@ class BridgeLanguageServer(
         is TextEdit ->
             DiagnosticTranslation.translateRange(edit.range, csgsLineCount)
                 ?.let { edit.copy(range = it) }
+
         is InsertReplaceEdit -> {
             val insert = DiagnosticTranslation.translateRange(edit.insert, csgsLineCount)
             val replace = DiagnosticTranslation.translateRange(edit.replace, csgsLineCount)

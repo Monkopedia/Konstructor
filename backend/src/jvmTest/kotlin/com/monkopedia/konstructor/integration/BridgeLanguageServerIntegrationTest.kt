@@ -349,6 +349,7 @@ class BridgeLanguageServerIntegrationTest {
     private fun completionLabels(result: TextDocumentCompletionResult): List<String> =
         when (result) {
             is TextDocumentCompletionResult.CompletionItemArray -> result.value.map { it.label }
+
             is TextDocumentCompletionResult.CompletionListValue ->
                 result.value.items.map { it.label }
         }
