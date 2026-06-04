@@ -29,7 +29,6 @@ import com.monkopedia.lsp.DidChangeTextDocumentParams
 import com.monkopedia.lsp.DidCloseTextDocumentParams
 import com.monkopedia.lsp.DidOpenTextDocumentParams
 import com.monkopedia.lsp.DocumentDiagnosticParams
-import com.monkopedia.lsp.DocumentDiagnosticReport
 import com.monkopedia.lsp.Hover
 import com.monkopedia.lsp.HoverParams
 import com.monkopedia.lsp.InitializeParams
@@ -41,7 +40,7 @@ import com.monkopedia.lsp.KsrpcLanguageServer
 import com.monkopedia.lsp.LSPAny
 import com.monkopedia.lsp.PublishDiagnosticsParams
 import com.monkopedia.lsp.RegistrationParams
-import com.monkopedia.lsp.RelatedFullDocumentDiagnosticReport
+import com.monkopedia.lsp.ServerCapabilities
 import com.monkopedia.lsp.SignatureHelp
 import com.monkopedia.lsp.SignatureHelpParams
 import com.monkopedia.lsp.TextDocumentCompletionResult
@@ -52,13 +51,10 @@ import com.monkopedia.lsp.TextEdit
 import com.monkopedia.lsp.UnregistrationParams
 import com.monkopedia.lsp.VersionedTextDocumentIdentifier
 import com.monkopedia.lsp.ksrpc.LifecycleState
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
 
 /**
@@ -84,13 +80,24 @@ import kotlinx.serialization.json.JsonNull
  *   `range`) is translated back DOWN to csgs space on the way out — same
  *   [DiagnosticTranslation] header-line offset, so they cannot drift.
  *
- * **Pull→push diagnostics bridge.** kotlin-lsp does NOT proactively push
- * `publishDiagnostics`; it answers PULL `textDocument/diagnostic`. kodemirror's editor
- * client, however, listens for PUSHED diagnostics (the Phase 1 design). So on
- * didOpen/didChange the bridge polls the engine via pull and forwards the resulting
- * items up to the editor as `publishDiagnostics` (with retry, since the cold index can
- * take ~120s to settle). If kotlin-lsp ever also pushes, the [Forwarder] forwards those
- * too — they coexist.
+ * **Event-driven pull→push diagnostics bridge (#43).** kotlin-lsp does NOT proactively
+ * push `publishDiagnostics`; it is a LSP 3.17 PULL-mode server (answers
+ * `textDocument/diagnostic`, signals "re-pull" via `workspace/diagnostic/refresh`).
+ * kodemirror's editor client, however, listens for PUSHED diagnostics (the Phase 1
+ * design). The bridge therefore turns pulls into pushes — but EVENT-DRIVEN, not by blind
+ * polling. The machinery lives in [PullDiagnosticsPublisher]:
+ *  - Pull-mode is detected authoritatively from the subprocess
+ *    [InitializeResult]'s [ServerCapabilities.diagnosticProvider] (non-null ⇒ pull mode;
+ *    there is no push capability flag). The publisher is only created when pull-mode.
+ *  - Pulls are triggered on didOpen + debounced didChange, and on the engine's
+ *    `workspace/diagnostic/refresh` — overridden on the backend [Forwarder] (the
+ *    `DefaultLanguageClient` base THROWS for it; the frontend client's is a harmless
+ *    no-op, a different object) to re-pull every open doc. A bounded cold-index backoff
+ *    covers only the FIRST pull before the index warms.
+ *  - `previousResultId` is threaded per doc; an `unchanged` report does not republish
+ *    (only a `full` report emits `publishDiagnostics`).
+ *
+ * If kotlin-lsp ever also pushes, the [Forwarder] forwards those too — they coexist.
  *
  * Lifecycle gating (required, per the lsp-kotlin maintainer): we drive [LifecycleState]
  * by hand — [initialized]/[shutdown]/[exit] advance it, and the forwarder
@@ -118,8 +125,13 @@ class BridgeLanguageServer(
     /** The subprocess-facing stub; null when the engine is unavailable. */
     private var delegate: KsrpcLanguageServer? = null
 
-    /** The in-flight diagnostics poll, cancelled/replaced on each didOpen. */
-    private var diagnosticsPoll: Job? = null
+    /**
+     * The event-driven pull→push publisher (#43). Non-null ONLY when the subprocess
+     * advertised pull-mode ([ServerCapabilities.diagnosticProvider] != null); otherwise we
+     * run no pull machinery at all. Created in [initialize] once we have the engine's
+     * capabilities.
+     */
+    private var diagnostics: PullDiagnosticsPublisher? = null
 
     /**
      * The frontend's document URI (`...content.csgs`), captured on the editor's first
@@ -158,6 +170,19 @@ class BridgeLanguageServer(
 
         override suspend fun clientUnregisterCapability(params: UnregistrationParams): Nothing? =
             null
+
+        /**
+         * ⚠️ The engine's `workspace/diagnostic/refresh` ("results may have changed,
+         * re-pull"). The [DefaultLanguageClient] base THROWS `NotImplementedError` here
+         * (the lsp-kotlin maintainer's flagged trap — distinct from the frontend client's
+         * harmless no-op). Override it to re-pull every open doc via the publisher: this is
+         * the cold-index-warmed case and the steady-state event that makes diagnostics
+         * event-driven instead of a poll loop.
+         */
+        override suspend fun workspaceDiagnosticRefresh(): Nothing? {
+            diagnostics?.onRefresh()
+            return null
+        }
     }
 
     override suspend fun initialize(params: InitializeParams): InitializeResult {
@@ -172,13 +197,55 @@ class BridgeLanguageServer(
         }
         // Drive the subprocess through the same handshake, but rooted at the synthesized
         // workspace so it loads our workspace.json + classpath.
-        return server.initialize(
+        val result = server.initialize(
             params.copy(
                 rootUri = lspWorkspace.rootUri,
                 workspaceFolders = null
             )
         )
+        // Detect pull-mode authoritatively (#43): a non-null diagnosticProvider in the
+        // engine's capabilities is the only signal (there is no push capability flag). Only
+        // then do we stand up the event-driven pull→push publisher; otherwise no pull
+        // machinery runs at all.
+        diagnostics = PullDiagnosticsPublisher.pullProviderOf(result.capabilities)
+            ?.let { provider -> createPublisher(server, provider) }
+        return result
     }
+
+    /**
+     * Build the [PullDiagnosticsPublisher] wired to THIS bridge's subprocess [server] and
+     * frontend client. The publisher owns the pull/refresh/previousResultId/debounce/backoff
+     * logic; the bridge supplies only the three seams:
+     *  - the PULL (subprocess `textDocument/diagnostic`, threading `previousResultId`),
+     *  - the PUBLISH (translate ranges to csgs space + rewrite the URI, then push up), and
+     *  - the readiness gate (the editor's `initialized` handshake).
+     */
+    private fun createPublisher(
+        server: KsrpcLanguageServer,
+        provider: com.monkopedia.lsp.ServerCapabilitiesDiagnosticProvider
+    ): PullDiagnosticsPublisher = PullDiagnosticsPublisher(
+        scope = scope,
+        diagnosticProvider = provider,
+        pull = { _, previousResultId ->
+            server.textDocumentDiagnostic(
+                DocumentDiagnosticParams(
+                    textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
+                    previousResultId = previousResultId
+                )
+            )
+        },
+        publish = { _, items ->
+            // Translate wrapped-.kt ranges down to csgs space, rewrite to the editor's URI.
+            val uri = frontendUri ?: lspWorkspace.documentUri
+            frontendClient.textDocumentPublishDiagnostics(
+                PublishDiagnosticsParams(
+                    uri = uri,
+                    diagnostics = translateDiagnostics(items)
+                )
+            )
+        },
+        awaitReady = { lifecycle.awaitInitialized() }
+    )
 
     override suspend fun initialized(params: InitializedParams) {
         delegate?.let { runCatching { it.initialized(params) } }
@@ -204,50 +271,9 @@ class BridgeLanguageServer(
                 )
             )
         )
-        startDiagnosticsPoll(server)
-    }
-
-    /**
-     * Poll the engine via pull `textDocument/diagnostic` and push each result up to the
-     * editor as `publishDiagnostics`. Bridges kotlin-lsp's pull-only diagnostics to the
-     * editor client's push expectation. Retries (the cold index can take ~120s to
-     * settle), then keeps refreshing at a slower cadence so later edits/analysis updates
-     * still reach the editor. Gated on `initialized` before the first push.
-     */
-    private fun startDiagnosticsPoll(server: KsrpcLanguageServer) {
-        diagnosticsPoll?.cancel()
-        diagnosticsPoll = scope.launch {
-            lifecycle.awaitInitialized()
-            var attempt = 0
-            while (true) {
-                val items = runCatching { pullDiagnostics(server) }
-                    .onFailure { hauler.error("pull diagnostics failed", it) }
-                    .getOrNull()
-                if (items != null) {
-                    val uri = frontendUri ?: lspWorkspace.documentUri
-                    // Translate wrapped-.kt ranges down to csgs space before pushing up.
-                    val translated = translateDiagnostics(items)
-                    runCatching {
-                        frontendClient.textDocumentPublishDiagnostics(
-                            PublishDiagnosticsParams(uri = uri, diagnostics = translated)
-                        )
-                    }.onFailure { hauler.error("publish diagnostics to editor failed", it) }
-                }
-                // Faster while warming up, then a slow steady-state refresh.
-                attempt++
-                delay(if (attempt < WARMUP_ATTEMPTS) WARMUP_INTERVAL else STEADY_INTERVAL)
-            }
-        }
-    }
-
-    private suspend fun pullDiagnostics(server: KsrpcLanguageServer): List<Diagnostic> {
-        val report: DocumentDiagnosticReport = server.textDocumentDiagnostic(
-            DocumentDiagnosticParams(
-                textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri)
-            )
-        )
-        // Only a FULL report carries items; an UNCHANGED report means "no new items".
-        return (report as? RelatedFullDocumentDiagnosticReport)?.items ?: emptyList()
+        // Event-driven (#43): pull now (with cold-index backoff for this first pull only),
+        // then rely on didChange/refresh. Routes by the frontend's csgs URI.
+        diagnostics?.onOpen(params.textDocument.uri)
     }
 
     override suspend fun textDocumentDidChange(params: DidChangeTextDocumentParams) {
@@ -273,12 +299,13 @@ class BridgeLanguageServer(
                 )
             )
         }.onFailure { hauler.error("Failed forwarding didChange to engine", it) }
-        // Refresh diagnostics for the new content (re-poll; same path as didOpen).
-        startDiagnosticsPoll(server)
+        // Event-driven (#43): debounced re-pull for the new content (coalesces edit bursts).
+        diagnostics?.onChange(params.textDocument.uri)
     }
 
     override suspend fun textDocumentDidClose(params: DidCloseTextDocumentParams) {
         val server = delegate ?: return
+        frontendUri?.let { diagnostics?.onClose(it) }
         runCatching {
             server.textDocumentDidClose(
                 DidCloseTextDocumentParams(
@@ -361,7 +388,7 @@ class BridgeLanguageServer(
 
     override suspend fun exit() {
         lifecycle.advanceTo(LifecycleState.Phase.EXITED)
-        diagnosticsPoll?.cancel()
+        diagnostics = null
         scope.coroutineContext[Job]?.cancel()
         delegate?.let { server ->
             runCatching { server.exit() }
@@ -438,11 +465,5 @@ class BridgeLanguageServer(
                 null
             }
         }
-    }
-
-    private companion object {
-        private const val WARMUP_ATTEMPTS = 30
-        private val WARMUP_INTERVAL = 4.seconds
-        private val STEADY_INTERVAL = 15.seconds
     }
 }
