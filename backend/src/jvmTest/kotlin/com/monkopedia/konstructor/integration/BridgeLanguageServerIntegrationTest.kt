@@ -19,11 +19,16 @@ import com.monkopedia.konstructor.PathController
 import com.monkopedia.konstructor.lsp.BridgeLanguageServer
 import com.monkopedia.konstructor.testutil.TestEnvironment
 import com.monkopedia.lsp.ClientCapabilities
+import com.monkopedia.lsp.CompletionParams
 import com.monkopedia.lsp.DefaultLanguageClient
 import com.monkopedia.lsp.DidOpenTextDocumentParams
+import com.monkopedia.lsp.HoverParams
 import com.monkopedia.lsp.InitializeParams
 import com.monkopedia.lsp.InitializedParams
+import com.monkopedia.lsp.Position
 import com.monkopedia.lsp.PublishDiagnosticsParams
+import com.monkopedia.lsp.TextDocumentCompletionResult
+import com.monkopedia.lsp.TextDocumentIdentifier
 import com.monkopedia.lsp.TextDocumentItem
 import java.io.File
 import kotlin.test.assertTrue
@@ -178,6 +183,175 @@ class BridgeLanguageServerIntegrationTest {
                 "got line ${unresolved.range.start.line.toInt()}"
         )
     }
+
+    /**
+     * A valid csgs whose body sits in the `KcsgScript` receiver scope, so the engine offers
+     * the DSL members there (e.g. `cube`, `export`). csgs line index 1 is `val c = cu` — a
+     * partial reference we request completion on (the cursor sits right after `cu`).
+     */
+    private val completionScript = """
+        val ok by primitive { cube { dimensions = xyz(1.0, 1.0, 1.0) } }
+        export("ok")
+    """.trimIndent()
+
+    /**
+     * Phase 4 (#39) request-position translation, end-to-end against the real engine.
+     * Completion at a csgs cursor inside the receiver scope must offer kcsg DSL members
+     * (here `cube`). Proves the cursor Position is translated csgs → wrapped before the
+     * engine sees it (otherwise the engine would complete in the header/wrong scope).
+     */
+    @Test
+    fun realEngineOffersKcsgCompletion() = runBlocking {
+        val config = env!!.config
+        val workspaceId = "0"
+        val konstructionId = "0"
+        val paths: PathController.Paths = PathController(config)[workspaceId, konstructionId]
+        paths.contentFile.writeText(completionScript)
+        val frontendUri = "file:///$workspaceId/$konstructionId/content.csgs"
+
+        val bridge = BridgeLanguageServer(
+            config,
+            workspaceId,
+            konstructionId,
+            object : DefaultLanguageClient() {}
+        )
+        bridge.initialize(
+            InitializeParams(
+                capabilities = ClientCapabilities(),
+                processId = ProcessHandle.current().pid().toInt(),
+                rootUri = "file:///$workspaceId"
+            )
+        )
+        bridge.initialized(InitializedParams())
+        bridge.textDocumentDidOpen(
+            DidOpenTextDocumentParams(
+                textDocument = TextDocumentItem(
+                    uri = frontendUri,
+                    languageId = "kotlin",
+                    version = 1,
+                    text = completionScript
+                )
+            )
+        )
+
+        // Request completion at the END of csgs line 0 (after `... } }`), inside the
+        // KcsgScript receiver scope. The cursor is in CSGS space; the bridge must add the
+        // header to reach the right wrapped-.kt line. Poll while the index warms.
+        val cursor = Position(
+            line = 0u,
+            character = completionScript.lines().first().length.toUInt()
+        )
+        val labels = withTimeoutOrNull(180_000) {
+            while (true) {
+                val result = runCatching {
+                    bridge.textDocumentCompletion(
+                        CompletionParams(
+                            textDocument = TextDocumentIdentifier(uri = frontendUri),
+                            position = cursor
+                        )
+                    )
+                }.getOrNull()
+                val items = result?.let { completionLabels(it) } ?: emptyList()
+                if (items.any { it == "cube" }) return@withTimeoutOrNull items
+                delay(2000)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            emptyList<String>()
+        }
+
+        bridge.shutdown()
+        bridge.exit()
+
+        assertTrue(labels != null, "no completion ever returned `cube` within budget")
+        System.err.println("REAL-ENGINE completion offered ${labels.size} items")
+        assertTrue(
+            labels.contains("cube"),
+            "expected the kcsg DSL member `cube` in the receiver scope; got: " +
+                labels.take(40).joinToString(", ")
+        )
+    }
+
+    /**
+     * Phase 4 (#39) hover: hovering a kcsg symbol must resolve to non-empty content, and any
+     * returned range must already be in CSGS space (line < the header offset would mean the
+     * response range wasn't translated back down).
+     */
+    @Test
+    fun realEngineResolvesKcsgHover() = runBlocking {
+        val config = env!!.config
+        val workspaceId = "0"
+        val konstructionId = "0"
+        val paths: PathController.Paths = PathController(config)[workspaceId, konstructionId]
+        paths.contentFile.writeText(completionScript)
+        val frontendUri = "file:///$workspaceId/$konstructionId/content.csgs"
+
+        val bridge = BridgeLanguageServer(
+            config,
+            workspaceId,
+            konstructionId,
+            object : DefaultLanguageClient() {}
+        )
+        bridge.initialize(
+            InitializeParams(
+                capabilities = ClientCapabilities(),
+                processId = ProcessHandle.current().pid().toInt(),
+                rootUri = "file:///$workspaceId"
+            )
+        )
+        bridge.initialized(InitializedParams())
+        bridge.textDocumentDidOpen(
+            DidOpenTextDocumentParams(
+                textDocument = TextDocumentItem(
+                    uri = frontendUri,
+                    languageId = "kotlin",
+                    version = 1,
+                    text = completionScript
+                )
+            )
+        )
+
+        // Hover over the `cube` token on csgs line 0 (its index in the first line).
+        val cubeColumn = completionScript.lines().first().indexOf("cube") + 1
+        val cursor = Position(line = 0u, character = cubeColumn.toUInt())
+        val hover = withTimeoutOrNull(180_000) {
+            while (true) {
+                val h = runCatching {
+                    bridge.textDocumentHover(
+                        HoverParams(
+                            textDocument = TextDocumentIdentifier(uri = frontendUri),
+                            position = cursor
+                        )
+                    )
+                }.getOrNull()
+                if (h != null && h.contents.toString().length > 2) return@withTimeoutOrNull h
+                delay(2000)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            null
+        }
+
+        bridge.shutdown()
+        bridge.exit()
+
+        assertTrue(hover != null, "hover never resolved kcsg content within budget")
+        System.err.println("REAL-ENGINE hover range: ${hover.range}")
+        val range = hover.range
+        // If the engine returned a range it must be translated to csgs space: the `cube`
+        // token is on csgs line 0, so the range must NOT sit at header line N.
+        if (range != null) {
+            assertTrue(
+                range.start.line.toInt() == 0,
+                "hover range must be translated to csgs space (line 0), got ${range.start.line}"
+            )
+        }
+    }
+
+    private fun completionLabels(result: TextDocumentCompletionResult): List<String> =
+        when (result) {
+            is TextDocumentCompletionResult.CompletionItemArray -> result.value.map { it.label }
+            is TextDocumentCompletionResult.CompletionListValue ->
+                result.value.items.map { it.label }
+        }
 
     private companion object {
         /** The `val broken = thisSymbolDoesNotExist123` line in [deliberateErrorScript]. */
