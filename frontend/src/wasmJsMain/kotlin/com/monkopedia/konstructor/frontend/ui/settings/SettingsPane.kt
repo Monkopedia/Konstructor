@@ -51,6 +51,7 @@ fun SettingsPane(modifier: Modifier = Modifier) {
     val editorTheme by settingsVm.editorTheme.collectAsState()
     val keymap by settingsVm.keymap.collectAsState()
     val vimDisplayLineMotion by settingsVm.vimDisplayLineMotion.collectAsState()
+    val lspEnabled by settingsVm.lspEnabled.collectAsState()
 
     Column(
         modifier = modifier.padding(16.dp),
@@ -90,6 +91,15 @@ fun SettingsPane(modifier: Modifier = Modifier) {
                 onCheckedChange = { settingsVm.setVimDisplayLineMotion(it) }
             )
         }
+
+        // Code intelligence via the kotlin-lsp language server: completion,
+        // hover, signature help, and live error diagnostics in the editor.
+        // Opt-in; requires the server to have an LSP engine configured.
+        SettingSwitchRow(
+            label = "Code completion & errors (LSP)",
+            checked = lspEnabled,
+            onCheckedChange = { settingsVm.setLspEnabled(it) }
+        )
 
         SettingSwitchRow(
             label = "Show code on left",

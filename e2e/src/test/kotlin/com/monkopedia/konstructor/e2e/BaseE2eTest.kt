@@ -23,6 +23,7 @@ import java.io.File
 import java.nio.file.Paths
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -117,6 +118,12 @@ abstract class BaseE2eTest {
     protected fun bridgeStateInt(field: String): Int {
         val state = bridgeState()
         return state[field]?.jsonPrimitive?.int ?: -1
+    }
+
+    /** Return a single boolean field from bridge state. */
+    protected fun bridgeStateBoolean(field: String): Boolean {
+        val state = bridgeState()
+        return state[field]?.jsonPrimitive?.boolean ?: false
     }
 
     /** Return a list-of-string field from bridge state. */
