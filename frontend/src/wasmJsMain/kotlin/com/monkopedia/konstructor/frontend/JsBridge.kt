@@ -334,6 +334,9 @@ object JsBridge {
         scope.launch {
             settingsVm.keymap.collect { refreshTrigger.value++ }
         }
+        scope.launch {
+            settingsVm.lspEnabled.collect { refreshTrigger.value++ }
+        }
         if (konstructionVm != null) {
             scope.launch {
                 konstructionVm.targetDisplays.collect { refreshTrigger.value++ }
@@ -441,6 +444,7 @@ object JsBridge {
             codePaneMode = settingsVm.codePaneMode.value.name,
             editorTheme = settingsVm.editorTheme.value.name,
             keymap = settingsVm.keymap.value.name,
+            lspEnabled = settingsVm.lspEnabled.value,
             screen = when {
                 workspaces == null -> "loading"
                 workspaces.isEmpty() -> "empty"

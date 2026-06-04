@@ -133,6 +133,25 @@ class ThemeAndKeymapTest : BaseE2eTest() {
     }
 
     @Test
+    fun testLspEnabledToggle() {
+        setupWorkspaceWithCode()
+
+        // Default is opt-out: LSP off, so the editor is unchanged for users who
+        // never enable it.
+        assertEquals(false, bridgeStateBoolean("lspEnabled"))
+
+        // The Settings switch (and its bridge action) flips the persisted flag;
+        // the snapshot reflects it so the toggle shows the right state.
+        bridgeAction("setLspEnabled", "true")
+        page.waitForTimeout(3000.0)
+        assertEquals(true, bridgeStateBoolean("lspEnabled"))
+
+        bridgeAction("setLspEnabled", "false")
+        page.waitForTimeout(3000.0)
+        assertEquals(false, bridgeStateBoolean("lspEnabled"))
+    }
+
+    @Test
     fun testSettingsPaneShowsDropdowns() {
         setupWorkspaceWithCode()
 

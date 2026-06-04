@@ -47,6 +47,7 @@ data class AppStateSnapshot(
     val codePaneMode: String = "EDITOR",
     val editorTheme: String = "DRACULA",
     val keymap: String = "VIM",
+    val lspEnabled: Boolean = false,
     val screen: String = "loading",
     val konstructionCount: Int = 0,
     val konstructionNames: List<String> = emptyList(),
