@@ -63,6 +63,10 @@ internal class KcsgRemoteHostImpl(
         return Path(stlLocation.absolutePath)
     }
 
+    override fun stlVersion(stlName: String): String = dispatchThread.blockForSuspension {
+        hostService.stlVersion(stlName)
+    } ?: ""
+
     override fun storeCached(hash: String, csg: CSG) {
         val path = dispatchThread.blockForSuspension {
             hostService.storeCached(hash)

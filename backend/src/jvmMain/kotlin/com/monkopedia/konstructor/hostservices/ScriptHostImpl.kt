@@ -59,6 +59,25 @@ class ScriptHostImpl(
         return controller.paths.contentFile.absolutePath
     }
 
+    /**
+     * Version token for the SOURCE STL konstruction (issue #11): its content file's
+     * `lastModified:length`. This is the original STL content — the file [findStl] returns
+     * and that [KcsgRemoteHostImpl][com.monkopedia.konstructor.lib.KcsgRemoteHostImpl] then
+     * COPIES per resolve — so it changes only when the source konstruction is actually
+     * edited, not on every build (the copy's mtime would over-invalidate). Null when
+     * [stlName] doesn't resolve to an STL konstruction.
+     */
+    override suspend fun stlVersion(stlName: String): String? {
+        val target = findTarget(stlName)?.takeIf { it.type == STL } ?: return null
+        val controller = KonstructorManager(config).controllerFor(target)
+        val contentFile = controller.paths.contentFile
+        return if (contentFile.exists()) {
+            "${contentFile.lastModified()}:${contentFile.length()}"
+        } else {
+            null
+        }
+    }
+
     override suspend fun storeCached(hash: String): String {
         val target = File(cacheDir, "$hash.stl")
         return target.absolutePath
