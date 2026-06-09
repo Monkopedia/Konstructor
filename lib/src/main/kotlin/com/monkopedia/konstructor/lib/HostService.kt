@@ -30,6 +30,16 @@ interface HostService : RpcHostService {
     @KsMethod("/get_stl")
     suspend fun findStl(stlName: String): String?
 
+    /**
+     * An opaque token that changes whenever the **source** STL konstruction named
+     * [stlName] changes, folded into kcsg's `stl()` import cache key (issue #11). Null
+     * when [stlName] doesn't resolve to an STL konstruction. Must be derived from the
+     * SOURCE konstruction's content — NOT the path returned by [findStl], which the host
+     * copies on every resolve, so its mtime would change every build and over-invalidate.
+     */
+    @KsMethod("/stl_version")
+    suspend fun stlVersion(stlName: String): String?
+
     @KsMethod("/store_cached")
     suspend fun storeCached(hash: String): String
 
