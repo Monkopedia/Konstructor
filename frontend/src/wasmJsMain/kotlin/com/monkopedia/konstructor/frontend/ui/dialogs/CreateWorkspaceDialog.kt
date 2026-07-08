@@ -15,49 +15,17 @@
  */
 package com.monkopedia.konstructor.frontend.ui.dialogs
 
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
 import org.koin.compose.koinInject
 
 @Composable
 fun CreateWorkspaceDialog() {
     val dialogVm = koinInject<NavigationDialogViewModel>()
-    var name by remember { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = { dialogVm.hideCreateWorkspaceDialog() },
-        title = { Text("Enter new workspace name") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Name") },
-                singleLine = true
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        dialogVm.createWorkspace(name)
-                    }
-                }
-            ) {
-                Text("Set")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { dialogVm.hideCreateWorkspaceDialog() }) {
-                Text("Cancel")
-            }
-        }
+    NameEntryDialog(
+        title = "Enter new workspace name",
+        onConfirm = { name -> dialogVm.createWorkspace(name) },
+        onDismiss = { dialogVm.hideCreateWorkspaceDialog() }
     )
 }

@@ -15,18 +15,7 @@
  */
 package com.monkopedia.konstructor.frontend.ui.dialogs
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
 import org.koin.compose.koinInject
@@ -34,44 +23,13 @@ import org.koin.compose.koinInject
 @Composable
 fun EditWorkspaceDialog(space: Space) {
     val dialogVm = koinInject<NavigationDialogViewModel>()
-    var name by remember { mutableStateOf(space.name) }
 
-    AlertDialog(
-        onDismissRequest = { dialogVm.hideEditWorkspaceDialog() },
-        title = { Text("Change workspace name") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Name") },
-                singleLine = true
-            )
-        },
-        confirmButton = {
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = androidx.compose.ui.Modifier.fillMaxWidth()
-            ) {
-                TextButton(
-                    onClick = { dialogVm.deleteWorkspace(space) }
-                ) {
-                    Text("Delete")
-                }
-                Row {
-                    TextButton(onClick = { dialogVm.hideEditWorkspaceDialog() }) {
-                        Text("Cancel")
-                    }
-                    TextButton(
-                        onClick = {
-                            if (name.isNotBlank()) {
-                                dialogVm.renameWorkspace(space.id, name)
-                            }
-                        }
-                    ) {
-                        Text("Save")
-                    }
-                }
-            }
-        }
+    NameEntryDialog(
+        title = "Change workspace name",
+        onConfirm = { name -> dialogVm.renameWorkspace(space.id, name) },
+        onDismiss = { dialogVm.hideEditWorkspaceDialog() },
+        initialName = space.name,
+        confirmLabel = "Save",
+        onDelete = { dialogVm.deleteWorkspace(space) }
     )
 }
