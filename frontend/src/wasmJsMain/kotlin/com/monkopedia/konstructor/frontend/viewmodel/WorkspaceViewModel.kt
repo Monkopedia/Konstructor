@@ -66,32 +66,6 @@ class WorkspaceViewModel(private val serviceHolder: ServiceHolder) : ViewModel()
         }
     }
 
-    suspend fun createKonstruction(name: String, workspaceId: String): Konstruction? {
-        val ws = currentWorkspace ?: return null
-        return try {
-            val k = ws.create(
-                Konstruction(
-                    name = name,
-                    workspaceId = workspaceId,
-                    id = ""
-                )
-            )
-            refreshKonstructions()
-            k
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    suspend fun deleteKonstruction(konstruction: Konstruction) {
-        val ws = currentWorkspace ?: return
-        try {
-            ws.delete(konstruction)
-            refreshKonstructions()
-        } catch (_: Exception) {
-        }
-    }
-
     suspend fun renameWorkspace(name: String) {
         val ws = currentWorkspace ?: return
         try {
