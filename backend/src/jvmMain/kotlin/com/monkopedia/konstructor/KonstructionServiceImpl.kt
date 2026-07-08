@@ -59,6 +59,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
+/** Upper bound on a single compile/konstruct/listener-callback before it's cancelled. */
+private val callTimeout = 120.seconds
+
 class KonstructionServiceImpl(
     private val config: Config,
     private val workspaceId: String,
@@ -75,6 +78,31 @@ class KonstructionServiceImpl(
 
     override val serviceName: String
         get() = "KonstructionService"
+
+    /**
+     * Snapshots the current listeners under [listenerLock] and invokes [block] on each.
+     *
+     * The `.toList()` under the lock is load-bearing: it copies the handler set before
+     * iterating so the (suspending) callbacks never run while holding the lock and can't
+     * hit a concurrent modification of [listeners].
+     */
+    private suspend inline fun broadcast(block: ListenerHandler.() -> Unit) {
+        listenerLock.withLock { listeners.values.toList() }.forEach { it.block() }
+    }
+
+    /**
+     * Fire-and-forget shell shared by the `request*` methods: launches [block] on [scope]
+     * inside a named [callContext], bounded by [callTimeout].
+     */
+    private fun launchRequest(name: String, block: suspend () -> Unit) {
+        scope.launch {
+            callContext("$name.launch", baseCallSign = konstructionController.callSign) {
+                withTimeout(callTimeout) {
+                    block()
+                }
+            }
+        }
+    }
 
     override suspend fun getShipper(u: Unit): Shipper {
         val info = konstructionController.info.konstruction
@@ -116,8 +144,8 @@ class KonstructionServiceImpl(
                 konstruction = info.konstruction.copy(name = name)
             )
             konstructionController.info = newInfo
-            listenerLock.withLock { listeners.values.toList() }.forEach {
-                it.onInfoChanged(newInfo, emptyList())
+            broadcast {
+                onInfoChanged(newInfo, emptyList())
             }
         }
 
@@ -147,9 +175,9 @@ class KonstructionServiceImpl(
                 }
             )
             konstructionController.info = newInfo
-            listenerLock.withLock { listeners.values.toList() }.forEach {
-                it.onInfoChanged(newInfo, changedTargets, dirtyChanged = false)
-                it.onContentChange()
+            broadcast {
+                onInfoChanged(newInfo, changedTargets, dirtyChanged = false)
+                onContentChange()
             }
         }
 
@@ -182,13 +210,13 @@ class KonstructionServiceImpl(
                     }
                 )
                 konstructionController.info = newInfo
-                listenerLock.withLock { listeners.values.toList() }.forEach {
-                    it.onInfoChanged(newInfo, changedTargets)
+                broadcast {
+                    onInfoChanged(newInfo, changedTargets)
                 }
             }
             konstructionController.lastCompileResult().also { result ->
-                listenerLock.withLock { listeners.values.toList() }.forEach {
-                    it.onTaskComplete(result)
+                broadcast {
+                    onTaskComplete(result)
                 }
             }
         }
@@ -220,16 +248,7 @@ class KonstructionServiceImpl(
 
     override suspend fun requestCompile(u: Unit): Unit =
         callContext("requestCompile", baseCallSign = konstructionController.callSign) {
-            scope.launch {
-                callContext(
-                    "requestCompile.launch",
-                    baseCallSign = konstructionController.callSign
-                ) {
-                    withTimeout(120.seconds) {
-                        compile()
-                    }
-                }
-            }
+            launchRequest("requestCompile") { compile() }
         }
 
     override suspend fun konstruct(target: String): TaskResult =
@@ -267,10 +286,10 @@ class KonstructionServiceImpl(
                     targets = targets
                 )
                 konstructionController.info = newInfo
-                listenerLock.withLock { listeners.values.toList() }.forEach {
-                    it.onInfoChanged(newInfo, changedTargets)
+                broadcast {
+                    onInfoChanged(newInfo, changedTargets)
                     for (rendered in latestBuilt) {
-                        it.onRenderChanged(
+                        onRenderChanged(
                             KonstructionRender(
                                 info.konstruction,
                                 rendered,
@@ -281,38 +300,20 @@ class KonstructionServiceImpl(
                 }
             }
             konstructionController.lastRenderResult().also { result ->
-                listenerLock.withLock { listeners.values.toList() }.forEach {
-                    it.onTaskComplete(result)
+                broadcast {
+                    onTaskComplete(result)
                 }
             }
         }
 
     override suspend fun requestKonstruct(target: String): Unit =
         callContext("requestKonstruct", baseCallSign = konstructionController.callSign) {
-            scope.launch {
-                callContext(
-                    "requestKonstruct.launch",
-                    baseCallSign = konstructionController.callSign
-                ) {
-                    withTimeout(120.seconds) {
-                        konstruct(target)
-                    }
-                }
-            }
+            launchRequest("requestKonstruct") { konstruct(target) }
         }
 
     override suspend fun requestKonstructs(targets: List<String>): Unit =
         callContext("requestKonstructs", baseCallSign = konstructionController.callSign) {
-            scope.launch {
-                callContext(
-                    "requestKonstructs.launch",
-                    baseCallSign = konstructionController.callSign
-                ) {
-                    withTimeout(120.seconds) {
-                        konstruct(targets)
-                    }
-                }
-            }
+            launchRequest("requestKonstructs") { konstruct(targets) }
         }
 }
 
@@ -404,7 +405,7 @@ class ListenerHandler(
         val callSign = coroutineContext[CallSign.Key]
         scope.launch(callSign ?: EmptyCoroutineContext) {
             try {
-                withTimeout(120.seconds) {
+                withTimeout(callTimeout) {
                     listener.function()
                 }
             } catch (t: Throwable) {
