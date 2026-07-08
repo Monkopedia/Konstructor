@@ -51,12 +51,7 @@ class SaveFlowTest : BaseE2eTest() {
         page.reload()
         waitForBridge()
 
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen === 'main'",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
-        )
+        waitForMainScreen()
 
         // Get workspace ID
         val wsId = bridgeStateStringList("workspaceIds").first()
@@ -81,12 +76,7 @@ class SaveFlowTest : BaseE2eTest() {
         page.reload()
         waitForBridge()
 
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen === 'main'",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
-        )
+        waitForMainScreen()
 
         // Switch to editor
         bridgeAction("setCodePaneMode", "EDITOR")

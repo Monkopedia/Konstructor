@@ -70,20 +70,13 @@ class TargetControlTest : BaseE2eTest() {
         waitForBridge()
         page.reload()
         waitForBridge()
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen === 'main'",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
-        )
+        waitForMainScreen()
         bridgeAction("setCodePaneMode", "EDITOR")
         // Wait for compile + build to finish and target displays to populate
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.targets && " +
+        waitForState(
+            "globalThis.__konstructor.state.targets && " +
                 "globalThis.__konstructor.state.targets.length === 2",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(120000.0)
+            BUILD_TIMEOUT
         )
     }
 
@@ -166,12 +159,10 @@ class TargetControlTest : BaseE2eTest() {
         // Reload and verify settings survived
         page.reload()
         waitForBridge()
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.targets && " +
+        waitForState(
+            "globalThis.__konstructor.state.targets && " +
                 "globalThis.__konstructor.state.targets.length === 2",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(60000.0)
+            MAIN_SCREEN_TIMEOUT
         )
         val reloaded = targetSnapshot("cubeA")!!
         assertEquals(false, reloaded.getBool("isEnabled"))

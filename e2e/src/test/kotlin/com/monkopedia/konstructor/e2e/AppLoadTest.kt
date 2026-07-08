@@ -37,12 +37,7 @@ class AppLoadTest : BaseE2eTest() {
         loadApp()
         waitForBridge()
         // Wait a moment for the service to connect and load the workspace list
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen !== 'loading'",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(15000.0)
-        )
+        waitForNotLoading()
         val screen = bridgeStateString("screen")
         assertEquals("empty", screen, "Fresh server should show empty screen")
         val wsCount = bridgeStateInt("workspaceCount")

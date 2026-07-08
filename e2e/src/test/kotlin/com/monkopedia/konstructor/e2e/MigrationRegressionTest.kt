@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package com.monkopedia.konstructor.e2e
-
-import com.microsoft.playwright.Page
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.konstructor.common.Space
@@ -66,15 +64,6 @@ class MigrationRegressionTest : BaseE2eTest() {
         val client = HttpClient { install(WebSockets) }
         val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
         conn.defaultChannel().toStub<Konstructor, String>()
-    }
-
-    private fun waitForMainScreen(timeoutMs: Double = 60000.0) {
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen === 'main'",
-            null,
-            Page.WaitForFunctionOptions().setTimeout(timeoutMs)
-        )
     }
 
     private fun localStorageKeys(): List<String> {
