@@ -65,12 +65,6 @@ class TargetDisplayRepository(
         _displays.value = load(key)
     }
 
-    /** Clear state when no konstruction is active. */
-    fun clear() {
-        currentKey = null
-        _displays.value = emptyMap()
-    }
-
     /**
      * Reconcile the stored displays with the authoritative list of target
      * names. Adds entries for new targets (with defaults), removes entries
