@@ -15,19 +15,7 @@
  */
 package com.monkopedia.konstructor.frontend.ui.dialogs
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.frontend.viewmodel.NavigationDialogViewModel
 import org.koin.compose.koinInject
@@ -35,48 +23,19 @@ import org.koin.compose.koinInject
 @Composable
 fun EditKonstructionDialog(konstruction: Konstruction) {
     val dialogVm = koinInject<NavigationDialogViewModel>()
-    var name by remember { mutableStateOf(konstruction.name) }
 
-    AlertDialog(
-        onDismissRequest = { dialogVm.hideEditKonstructionDialog() },
-        title = { Text("Change konstruction name") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Name") },
-                singleLine = true
+    NameEntryDialog(
+        title = "Change konstruction name",
+        onConfirm = { name ->
+            dialogVm.renameKonstruction(
+                konstruction.workspaceId,
+                konstruction.id,
+                name
             )
         },
-        confirmButton = {
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                TextButton(
-                    onClick = { dialogVm.deleteKonstruction(konstruction) }
-                ) {
-                    Text("Delete")
-                }
-                Row {
-                    TextButton(onClick = { dialogVm.hideEditKonstructionDialog() }) {
-                        Text("Cancel")
-                    }
-                    TextButton(
-                        onClick = {
-                            if (name.isNotBlank()) {
-                                dialogVm.renameKonstruction(
-                                    konstruction.workspaceId,
-                                    konstruction.id,
-                                    name
-                                )
-                            }
-                        }
-                    ) {
-                        Text("Save")
-                    }
-                }
-            }
-        }
+        onDismiss = { dialogVm.hideEditKonstructionDialog() },
+        initialName = konstruction.name,
+        confirmLabel = "Save",
+        onDelete = { dialogVm.deleteKonstruction(konstruction) }
     )
 }
