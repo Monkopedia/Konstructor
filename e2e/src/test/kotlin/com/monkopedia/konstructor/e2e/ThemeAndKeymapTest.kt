@@ -63,12 +63,7 @@ class ThemeAndKeymapTest : BaseE2eTest() {
         waitForBridge()
         page.reload()
         waitForBridge()
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen === 'main'",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
+        waitForMainScreen(DEFAULT_STATE_TIMEOUT)
         // Switch to editor and wait for content to load
         bridgeAction("setCodePaneMode", "EDITOR")
         page.waitForTimeout(5000.0)

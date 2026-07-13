@@ -101,6 +101,34 @@ abstract class BaseE2eTest {
         )
     }
 
+    /**
+     * Wait until [jsCondition] holds against the bridge state. The condition is a
+     * JS expression evaluated with `globalThis.__konstructor.state` already known to
+     * be present (this helper prepends the `state &&` guard), e.g.
+     * `"globalThis.__konstructor.state.screen === 'main'"`.
+     *
+     * Consolidates the many inline `waitForFunction(... state && <cond> ...)` blocks
+     * that used to carry a fully-qualified `Page.WaitForFunctionOptions` and a
+     * per-copy magic timeout. Tune shared waits via the timeout constants below.
+     */
+    protected fun waitForState(jsCondition: String, timeoutMs: Double = DEFAULT_STATE_TIMEOUT) {
+        page.waitForFunction(
+            "() => globalThis.__konstructor.state && ($jsCondition)",
+            null,
+            Page.WaitForFunctionOptions().setTimeout(timeoutMs)
+        )
+    }
+
+    /** Wait until the app has reached the main screen. */
+    protected fun waitForMainScreen(timeoutMs: Double = MAIN_SCREEN_TIMEOUT) {
+        waitForState("globalThis.__konstructor.state.screen === 'main'", timeoutMs)
+    }
+
+    /** Wait until the app has left the initial loading screen. */
+    protected fun waitForNotLoading(timeoutMs: Double = NOT_LOADING_TIMEOUT) {
+        waitForState("globalThis.__konstructor.state.screen !== 'loading'", timeoutMs)
+    }
+
     /** Return the current bridge state as a parsed JsonObject. */
     protected fun bridgeState(): JsonObject {
         val raw = page.evaluate("() => JSON.stringify(globalThis.__konstructor.state)")
@@ -241,4 +269,18 @@ abstract class BaseE2eTest {
     }
 
     protected fun waitOpts(timeout: Double) = Page.WaitForSelectorOptions().setTimeout(timeout)
+
+    companion object {
+        /** Default timeout for a generic [waitForState] predicate. */
+        const val DEFAULT_STATE_TIMEOUT: Double = 30000.0
+
+        /** Timeout for waiting on the app to reach the main screen. */
+        const val MAIN_SCREEN_TIMEOUT: Double = 60000.0
+
+        /** Timeout for waiting on the app to leave the loading screen. */
+        const val NOT_LOADING_TIMEOUT: Double = 15000.0
+
+        /** Timeout for a compile+build round-trip to surface results in bridge state. */
+        const val BUILD_TIMEOUT: Double = 120000.0
+    }
 }

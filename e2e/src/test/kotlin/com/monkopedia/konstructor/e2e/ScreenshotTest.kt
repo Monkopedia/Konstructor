@@ -28,12 +28,7 @@ class ScreenshotTest : BaseE2eTest() {
         loadApp()
         waitForBridge()
         // Wait for the screen to settle
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen !== 'loading'",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(15000.0)
-        )
+        waitForNotLoading()
         screenshot("01-empty-state")
     }
 
@@ -47,12 +42,7 @@ class ScreenshotTest : BaseE2eTest() {
         // Reload so Compose starts fresh with the workspace already existing
         page.reload()
         waitForBridge()
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen === 'main'",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
+        waitForMainScreen(DEFAULT_STATE_TIMEOUT)
         page.waitForTimeout(3000.0)
         screenshot("02-main-screen-with-workspace")
 

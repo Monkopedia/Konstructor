@@ -104,12 +104,7 @@ class MigrationVisualRegressionTest : BaseE2eTest() {
     fun emptyStateMatchesBaselineShape() {
         loadApp()
         waitForBridge()
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen !== 'loading'",
-            null,
-            Page.WaitForFunctionOptions().setTimeout(20000.0)
-        )
+        waitForNotLoading(20000.0)
         page.waitForTimeout(1500.0)
         // Tolerance is loose: this guards orientation/layout, not exact pixels.
         assertBaseline("01-empty-state", maxDiffFraction = 0.60)

@@ -29,12 +29,7 @@ class WorkspaceCrudTest : BaseE2eTest() {
         bridgeAction("createWorkspace", "TestWs")
 
         // Wait for workspace list to show 1 workspace
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.workspaceCount === 1",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
+        waitForState("globalThis.__konstructor.state.workspaceCount === 1")
         val wsCount = bridgeStateInt("workspaceCount")
         assertEquals(1, wsCount, "Should have 1 workspace after creation")
         val names = bridgeStateStringList("workspaceNames")
@@ -49,12 +44,7 @@ class WorkspaceCrudTest : BaseE2eTest() {
         // Create a workspace first
         bridgeAction("createWorkspace", "ToDelete")
 
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.workspaceCount === 1",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
+        waitForState("globalThis.__konstructor.state.workspaceCount === 1")
 
         // Get the workspace id
         val ids = bridgeStateStringList("workspaceIds")
@@ -64,12 +54,7 @@ class WorkspaceCrudTest : BaseE2eTest() {
         // Delete it
         bridgeAction("deleteWorkspace", wsId)
 
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.workspaceCount === 0",
-            null,
-            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(30000.0)
-        )
+        waitForState("globalThis.__konstructor.state.workspaceCount === 0")
 
         val wsCount = bridgeStateInt("workspaceCount")
         assertEquals(0, wsCount, "Should have 0 workspaces after deletion")

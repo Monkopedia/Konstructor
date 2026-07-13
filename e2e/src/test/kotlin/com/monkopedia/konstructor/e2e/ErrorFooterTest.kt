@@ -101,20 +101,13 @@ class ErrorFooterTest : BaseE2eTest() {
         waitForBridge()
         page.reload()
         waitForBridge()
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen === 'main'",
-            null,
-            Page.WaitForFunctionOptions().setTimeout(60000.0)
-        )
+        waitForMainScreen()
         bridgeAction("setCodePaneMode", "EDITOR")
         // Wait for the auto compile to surface diagnostics in the bridge state.
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.diagnostics && " +
+        waitForState(
+            "globalThis.__konstructor.state.diagnostics && " +
                 "globalThis.__konstructor.state.diagnostics.length >= 2",
-            null,
-            Page.WaitForFunctionOptions().setTimeout(120000.0)
+            BUILD_TIMEOUT
         )
     }
 

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package com.monkopedia.konstructor.e2e
-
-import com.microsoft.playwright.Page
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.Konstructor
 import com.monkopedia.ksrpc.ksrpcEnvironment
@@ -63,12 +61,9 @@ class LspPipeTest : BaseE2eTest() {
         bridgeAction("createWorkspace", "LspWs")
         // The version bump can land a beat before the workspaceIds StateFlow propagates
         // into bridge state; wait for the list to be non-empty before reading it.
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.workspaceIds && " +
-                "globalThis.__konstructor.state.workspaceIds.length >= 1",
-            null,
-            Page.WaitForFunctionOptions().setTimeout(30000.0)
+        waitForState(
+            "globalThis.__konstructor.state.workspaceIds && " +
+                "globalThis.__konstructor.state.workspaceIds.length >= 1"
         )
         val wsId = bridgeStateStringList("workspaceIds").first()
 
@@ -122,14 +117,5 @@ class LspPipeTest : BaseE2eTest() {
             "With no kotlin-lsp binary on CI the bridge is inert; expected 0 " +
                 "diagnostics, got count=$count"
         }
-    }
-
-    private fun waitForMainScreen() {
-        page.waitForFunction(
-            "() => globalThis.__konstructor.state && " +
-                "globalThis.__konstructor.state.screen === 'main'",
-            null,
-            Page.WaitForFunctionOptions().setTimeout(60000.0)
-        )
     }
 }
