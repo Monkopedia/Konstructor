@@ -357,6 +357,13 @@ class KonstructionViewModel(
 
         override suspend fun onContentChange(u: Unit) {
             try {
+                // TODO(#3, migration regression #5): sync-conflict detection.
+                // This silently overwrites local edits when the server copy
+                // diverges. When dirty local content is present it should
+                // instead raise NavigationDialogViewModel.showSyncConflictDialog()
+                // (SyncConflictDialog / MainScreen are already wired for this;
+                // only the detection here is missing). See the @Ignore'd e2e test
+                // MigrationRegressionTest.syncConflictDialogFiresOnConcurrentEdit.
                 _content.value = ks.fetch()
             } catch (_: Exception) {
             }
