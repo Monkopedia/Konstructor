@@ -63,3 +63,13 @@ allprojects {
         mavenLocal()
     }
 }
+
+// Pin the Node.js version used by the Kotlin/JS + Wasm toolchains. Compose-wasm's
+// default Node download can 404/land on an incompatible build; the EnvSpec API is
+// used (not the deprecated NodeJsRootExtension.version =, which fails under -Werror).
+plugins.withType<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsPlugin> {
+    the<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsEnvSpec>().version.set("22.11.0")
+}
+plugins.withType<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugin> {
+    the<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec>().version.set("22.11.0")
+}
