@@ -48,7 +48,7 @@ jobs:
         run: ./gradlew shadowJar
 
       - name: Run backend + protocol unit tests
-        run: ./gradlew test
+        run: ./gradlew test :backend:jvmTest :protocol:jvmTest
 
       - name: Run e2e tests under Xvfb
         run: xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' ./gradlew :e2e:test -Pe2e

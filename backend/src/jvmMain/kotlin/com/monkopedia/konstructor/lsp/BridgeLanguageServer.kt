@@ -55,6 +55,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonNull
 
@@ -461,11 +462,11 @@ class BridgeLanguageServer(
 
     /**
      * Per-konstruction cleanup. Drops the publisher, sends a best-effort `didClose` so the
-     * SHARED engine forgets this konstruction's document, then cancels the bridge scope.
-     * Deliberately does NOT `shutdown`/`exit`/`close` the subprocess-facing [delegate] stub,
-     * because that stub rides the shared keep-warm connection — closing it would kill the
-     * engine for other open konstructions and break the next reopen. Idempotent: a second
-     * pass is a no-op once [delegate] is nulled.
+     * SHARED engine forgets this konstruction's document, then cancels the bridge scope and
+     * waits for it to fully stop. Deliberately does NOT `shutdown`/`exit`/`close` the
+     * subprocess-facing [delegate] stub, because that stub rides the shared keep-warm
+     * connection — closing it would kill the engine for other open konstructions and break
+     * the next reopen. Idempotent: a second pass is a no-op once [delegate] is nulled.
      */
     private suspend fun teardown() {
         diagnostics = null
@@ -480,7 +481,10 @@ class BridgeLanguageServer(
             }
         }
         delegate = null
-        scope.coroutineContext[Job]?.cancel()
+        // cancelAndJoin: wait for all scope children (hauler writers, etc.) to actually finish
+        // before returning, so callers that free resources (e.g. the temp dir in tests) do not
+        // race with in-flight IO coroutines.
+        scope.coroutineContext[Job]?.cancelAndJoin()
     }
 
     /**

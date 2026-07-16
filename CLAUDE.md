@@ -31,7 +31,9 @@ JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew shadowJar
 ./gradlew :lib:shadowJar
 
 # Run backend/protocol unit+integration tests
-./gradlew test
+# Note: the lifecycle `test` task does NOT wire :backend:jvmTest in KMP projects;
+# both targets must be named explicitly.
+./gradlew test :backend:jvmTest :protocol:jvmTest
 
 # Run e2e tests (requires full build)
 ./gradlew :e2e:test -Pe2e

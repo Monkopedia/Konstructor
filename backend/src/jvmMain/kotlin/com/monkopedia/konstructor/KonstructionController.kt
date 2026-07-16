@@ -19,6 +19,7 @@ package com.monkopedia.konstructor
 
 import com.monkopedia.hauler.CallSign
 import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.kcsg.KcsgScript
 import com.monkopedia.konstructor.common.KonstructionInfo
@@ -85,11 +86,13 @@ class KonstructionControllerImpl(
             // Optimistically set now, to have the info available immediately.
             infoImpl = value
             GlobalScope.launch(saveContext + callSign) {
-                contentFileLock.withLock {
-                    paths.infoFile.outputStream().use { output ->
-                        config.json.encodeToStream(value, output)
+                runCatching {
+                    contentFileLock.withLock {
+                        paths.infoFile.outputStream().use { output ->
+                            config.json.encodeToStream(value, output)
+                        }
                     }
-                }
+                }.onFailure { hauler.error("Failed to persist info for $workspaceId/$id", it) }
                 // Always set one more time after write to settle out any race conditions.
                 infoImpl = value
             }
