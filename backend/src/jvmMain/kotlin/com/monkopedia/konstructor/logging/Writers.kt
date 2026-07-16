@@ -42,7 +42,12 @@ suspend fun Shipper.writeText(
     formatter: suspend FlowCollector<String>.(Box) -> Unit = LogFormatter
 ) {
     deliveries().streamDeliveriesPacked()
-        .onEach { event -> appendText(file, event, maxSize, formatter) }
+        .onEach { event ->
+            // Wrap in runCatching so an IOException (e.g. during test-env teardown when the
+            // log dir is deleted) does not propagate to the scope's uncaught-exception handler
+            // and contaminate other tests via the global handler.
+            runCatching { appendText(file, event, maxSize, formatter) }
+        }
         .launchIn(scope)
 }
 
@@ -83,7 +88,11 @@ suspend fun Shipper.writeBinary(
     serializer: BinaryFormat = Cbor
 ) {
     deliveries().streamDeliveriesPacked()
-        .onEach { event -> appendBinary(file, event, maxCount, serializer) }
+        .onEach { event ->
+            // Wrap in runCatching so an IOException (e.g. during test-env teardown when the
+            // log dir is deleted) does not propagate to the scope's uncaught-exception handler.
+            runCatching { appendBinary(file, event, maxCount, serializer) }
+        }
         .launchIn(scope)
 }
 
