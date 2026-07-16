@@ -151,6 +151,12 @@ afterEvaluate {
         val cp = project.configurations.getByName("jvmRuntimeClasspath")
         configurations = listOf(cp)
         archiveClassifier.set("all")
+        // Keep the output name `backend-all.jar` stable regardless of the project
+        // version (set in gradle.properties). Downstream consumers reference a fixed
+        // name: e2e launches `libs/backend-all.jar` and the adolin deploy expects it.
+        // Without this, version=0.3.0 produces `backend-0.3.0-all.jar` and e2e's
+        // -Dkonstructor.jar path breaks (every e2e test times out at server startup).
+        archiveVersion.set("")
         manifest {
             attributes["Main-Class"] = "com.monkopedia.konstructor.AppKt"
         }
