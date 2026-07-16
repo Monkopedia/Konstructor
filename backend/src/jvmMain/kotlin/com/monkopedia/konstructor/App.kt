@@ -27,11 +27,14 @@ import com.monkopedia.ksrpc.channels.SerializedService
 import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.serialized
 import com.monkopedia.ksrpc.server.ServiceApp
+import io.ktor.http.CacheControl
+import io.ktor.http.content.CachingOptions
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.http.content.defaultResource
 import io.ktor.server.http.content.resources
 import io.ktor.server.http.content.static
+import io.ktor.server.plugins.cachingheaders.CachingHeaders
 import io.ktor.server.plugins.compression.Compression
 import io.ktor.server.plugins.compression.gzip
 import io.ktor.server.plugins.compression.matchContentType
@@ -97,6 +100,31 @@ class App : ServiceApp("konstructor") {
                 io.ktor.http.ContentType.Text.Any,
                 io.ktor.http.ContentType.Application.Json
             )
+        }
+        // Cache policy for the frontend bundle. index.html and frontend.js are NOT
+        // content-hashed, so they MUST revalidate — otherwise a browser can serve a
+        // stale frontend.js pointing at an old wasm hash after a redeploy (which
+        // manifests as bizarre input/coordinate bugs). The wasm IS content-hashed
+        // (immutable URL), so it can be cached long. Without this, Ktor sent no
+        // cache headers and Chrome heuristically cached the un-hashed frontend.js.
+        install(CachingHeaders) {
+            options { _, content ->
+                val ct = content.contentType?.withoutParameters()
+                when {
+                    ct == null -> null
+
+                    ct.match(io.ktor.http.ContentType.parse("application/wasm")) ->
+                        CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 31_536_000))
+
+                    ct.match(io.ktor.http.ContentType.Text.Html) ||
+                        ct.match(io.ktor.http.ContentType.Application.JavaScript) ||
+                        // Ktor serves .js as text/javascript, not application/javascript.
+                        ct.match(io.ktor.http.ContentType.parse("text/javascript")) ->
+                        CachingOptions(CacheControl.NoCache(null))
+
+                    else -> null
+                }
+            }
         }
     }
 
