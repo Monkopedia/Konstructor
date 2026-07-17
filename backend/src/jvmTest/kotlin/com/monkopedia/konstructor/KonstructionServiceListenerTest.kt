@@ -204,10 +204,14 @@ class KonstructionServiceListenerTest {
         awaitUntil(message = "fast listener blocked by slow listener") {
             fast.contentChanges.isNotEmpty()
         }
-        assertTrue(
-            slow.contentChanges.isNotEmpty(),
-            "slow listener should have started its callback"
-        )
+        // Poll rather than assert immediately: the slow listener records its
+        // content change before parking on the gate, but its coroutine may not
+        // have been scheduled yet when the fast listener finished (a timing race
+        // that flaked under CI load). awaitUntil still proves fan-out isn't
+        // serialized — a serialized impl would hang the fast awaitUntil above.
+        awaitUntil(message = "slow listener should have started its callback") {
+            slow.contentChanges.isNotEmpty()
+        }
 
         // Release the slow listener and clean up.
         gate.complete(Unit)
