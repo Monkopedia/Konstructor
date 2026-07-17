@@ -25,7 +25,13 @@ import org.slf4j.spi.SLF4JServiceProvider
 class HaulerServiceProvider : SLF4JServiceProvider {
     private lateinit var loggerFactory: ILoggerFactory
     private lateinit var markerFactory: IMarkerFactory
-    private lateinit var mdcAdapter: MDCAdapter
+
+    // SLF4J 2.0.x binds the MDC adapter eagerly: LoggerFactory.earlyBindMDCAdapter()
+    // calls getMDCAdapter() BEFORE initialize() runs. Initialize the adapter eagerly
+    // (not lateinit) so that early call always returns a valid adapter instead of
+    // throwing UninitializedPropertyAccessException. Behavior post-initialize is
+    // unchanged: the same NOPMDCAdapter instance is used throughout.
+    private val mdcAdapter: MDCAdapter = NOPMDCAdapter()
 
     override fun getLoggerFactory(): ILoggerFactory = loggerFactory
     override fun getMarkerFactory(): IMarkerFactory = markerFactory
@@ -35,6 +41,5 @@ class HaulerServiceProvider : SLF4JServiceProvider {
     override fun initialize() {
         loggerFactory = HaulerLoggerFactory()
         markerFactory = BasicMarkerFactory()
-        mdcAdapter = NOPMDCAdapter()
     }
 }

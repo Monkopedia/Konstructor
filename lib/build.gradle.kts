@@ -29,6 +29,14 @@ kotlin.compilerOptions {
     freeCompilerArgs.addAll("-Xskip-prerelease-check", "-Xno-param-assertions")
 }
 
+// The backend bundles this shadow JAR as the `lib-all.raj` resource and locates it
+// by the fixed name `lib-all.jar` (see backend copyLibToKtor). Keep the archive name
+// version-independent so the project `version` in gradle.properties doesn't rename it
+// to `lib-<version>-all.jar` and break the resource copy / runtime script compile.
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+    archiveVersion.set("")
+}
+
 dependencies {
     implementation(libs.ksrpc.core)
     implementation(libs.ksrpc.sockets)

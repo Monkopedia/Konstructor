@@ -63,3 +63,25 @@ allprojects {
         mavenLocal()
     }
 }
+
+// Pin the Node.js version used by the Kotlin/JS + Wasm toolchains. Compose-wasm's
+// default Node download otherwise resolves to the latest release (25.0.0), which
+// breaks wasmJsBrowserProductionWebpack on a fresh CI runner.
+//
+// The download version is driven per-compilation by each project's own node
+// EnvSpec (kotlinNodeJsSpec / kotlinWasmNodeJsSpec) — NOT by the root-project
+// spec or by the deprecated WasmNodeJsRootExtension.version. Setting it only on
+// the root project (as before) left :frontend's and :protocol's EnvSpecs at the
+// default 25.0.0, so the frontend webpack still downloaded 25.0.0. We therefore
+// apply the pin to every project's EnvSpec. Only the non-deprecated
+// EnvSpec.version Property API is used (the WasmNodeJsRootExtension.version =
+// setter fails under -Werror and is scheduled for removal in Kotlin 2.3).
+val pinnedNodeVersion = "22.11.0"
+allprojects {
+    plugins.withType<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsPlugin> {
+        the<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsEnvSpec>().version.set(pinnedNodeVersion)
+    }
+    plugins.withType<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugin> {
+        the<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec>().version.set(pinnedNodeVersion)
+    }
+}
