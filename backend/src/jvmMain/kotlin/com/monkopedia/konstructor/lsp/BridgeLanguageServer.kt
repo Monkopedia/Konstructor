@@ -18,6 +18,8 @@ package com.monkopedia.konstructor.lsp
 import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.konstructor.Config
+import com.monkopedia.lsp.ClientCapabilities
+import com.monkopedia.lsp.CompletionClientCapabilities
 import com.monkopedia.lsp.CompletionItem
 import com.monkopedia.lsp.CompletionItemTextEdit
 import com.monkopedia.lsp.CompletionParams
@@ -25,6 +27,7 @@ import com.monkopedia.lsp.ConfigurationParams
 import com.monkopedia.lsp.DefaultLanguageClient
 import com.monkopedia.lsp.DefaultLanguageServer
 import com.monkopedia.lsp.Diagnostic
+import com.monkopedia.lsp.DiagnosticClientCapabilities
 import com.monkopedia.lsp.DidChangeTextDocumentParams
 import com.monkopedia.lsp.DidCloseTextDocumentParams
 import com.monkopedia.lsp.DidOpenTextDocumentParams
@@ -43,6 +46,7 @@ import com.monkopedia.lsp.RegistrationParams
 import com.monkopedia.lsp.ServerCapabilities
 import com.monkopedia.lsp.SignatureHelp
 import com.monkopedia.lsp.SignatureHelpParams
+import com.monkopedia.lsp.TextDocumentClientCapabilities
 import com.monkopedia.lsp.TextDocumentCompletionResult
 import com.monkopedia.lsp.TextDocumentContentChangeEventVariant
 import com.monkopedia.lsp.TextDocumentIdentifier
@@ -51,12 +55,13 @@ import com.monkopedia.lsp.TextEdit
 import com.monkopedia.lsp.UnregistrationParams
 import com.monkopedia.lsp.VersionedTextDocumentIdentifier
 import com.monkopedia.lsp.ksrpc.LifecycleState
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.serialization.SerializationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.JsonNull
 
 /**
@@ -198,13 +203,25 @@ class BridgeLanguageServer(
             return InitializeResult(capabilities = com.monkopedia.lsp.ServerCapabilities())
         }
         // Drive the subprocess through the same handshake, but rooted at the synthesized
-        // workspace so it loads our workspace.json + classpath.
-        val result = server.initialize(
-            params.copy(
-                rootUri = lspWorkspace.rootUri,
-                workspaceFolders = null
+        // workspace so it loads our workspace.json + classpath. The editor's LSPClient
+        // advertises EMPTY client capabilities; newer kotlin-lsp builds (LS-262.6274.0+)
+        // gate features on the client declaring support — with no `textDocument.completion`
+        // the engine returns no completions, and with no `textDocument.diagnostic` it omits
+        // the pull `diagnosticProvider` entirely (so [PullDiagnosticsPublisher] never runs).
+        // The bridge DOES support both (it forwards completion and runs the pull→push loop),
+        // so we advertise them on the client's behalf before forwarding.
+        val result = guardEngine(
+            "initialize",
+            InitializeResult(capabilities = ServerCapabilities())
+        ) {
+            server.initialize(
+                params.copy(
+                    rootUri = lspWorkspace.rootUri,
+                    workspaceFolders = null,
+                    capabilities = params.capabilities.withBridgeFeatures()
+                )
             )
-        )
+        }
         // Detect pull-mode authoritatively (#43): a non-null diagnosticProvider in the
         // engine's capabilities is the only signal (there is no push capability flag). Only
         // then do we stand up the event-driven pull→push publisher; otherwise no pull
@@ -263,16 +280,18 @@ class BridgeLanguageServer(
         // form and open the WRAPPED file in the engine, so the engine analyzes what the
         // user actually has open.
         lspWorkspace.synthesize(content = params.textDocument.text)
-        server.textDocumentDidOpen(
-            DidOpenTextDocumentParams(
-                textDocument = TextDocumentItem(
-                    uri = lspWorkspace.documentUri,
-                    languageId = "kotlin",
-                    version = params.textDocument.version,
-                    text = lspWorkspace.wrappedText()
+        guardEngine("didOpen", Unit) {
+            server.textDocumentDidOpen(
+                DidOpenTextDocumentParams(
+                    textDocument = TextDocumentItem(
+                        uri = lspWorkspace.documentUri,
+                        languageId = "kotlin",
+                        version = params.textDocument.version,
+                        text = lspWorkspace.wrappedText()
+                    )
                 )
             )
-        )
+        }
         // Event-driven (#43): pull now (with cold-index backoff for this first pull only),
         // then rely on didChange/refresh. Routes by the frontend's csgs URI.
         diagnostics?.onOpen(params.textDocument.uri)
@@ -323,6 +342,35 @@ class BridgeLanguageServer(
     }
 
     /**
+     * Run a subprocess-facing ([delegate]) call, degrading to [fallback] if it fails.
+     *
+     * Failure isolation (observed live 2026-06-10): the kotlin-lsp subprocess can crash
+     * mid-session. A throwing delegate call must NOT propagate an exception out of an LSP
+     * method, because that exception rides up the **shared** frontend ksrpc connection and
+     * tears the whole connection down — after which unrelated [KonstructionService] calls
+     * (`getInfo`, `requestKonstructs`) all fail with "MultiChannel is closed" and the editor
+     * silently stops compiling/executing. So every forward call degrades to inert here: the
+     * worst a dead engine can do is "no completion / no hover", never kill the session.
+     * Cooperative cancellation is re-thrown; everything else returns [fallback].
+     */
+    private suspend fun <T> guardEngine(label: String, fallback: T, block: suspend () -> T): T =
+        try {
+            block()
+        } catch (t: Throwable) {
+            // Propagate ONLY a genuine cancellation of *this* coroutine (cooperative cancellation).
+            // A FOREIGN CancellationException — the dead kotlin-lsp subprocess leg's MultiChannel
+            // close surfacing through a delegate call — must NOT propagate: ksrpc converts thrown
+            // errors to error frames EXCEPT CancellationException, which it rethrows, so re-throwing
+            // it here escapes the call handler, cancels the frontend connection's serviceScope, and
+            // closes its MultiChannel — taking the whole editor session down (ksrpc#228, candidate B).
+            // ensureActive() rethrows only if WE are actually cancelled; otherwise the foreign
+            // cancellation is treated like any other engine failure and the bridge degrades to inert.
+            coroutineContext.ensureActive()
+            hauler.error("kotlin-lsp '$label' failed; bridge degraded to inert for this call", t)
+            fallback
+        }
+
+    /**
      * Completion (Phase 4 / #39). The editor sends a cursor [Position] in **csgs** space;
      * translate it UP to wrapped-`.kt` space (`ktLine = csgsLine + headerLines`) and
      * retarget the document at the wrapped file before delegating. Completion items can
@@ -332,25 +380,21 @@ class BridgeLanguageServer(
      */
     override suspend fun textDocumentCompletion(
         params: CompletionParams
-    ): TextDocumentCompletionResult {
-        val server = delegate ?: return super.textDocumentCompletion(params)
-        val result = try {
-            server.textDocumentCompletion(
+    ): TextDocumentCompletionResult? {
+        val server = delegate ?: return null
+        // lsp-types 1.2.0 types this spec-nullable result honestly: a server returning `null`
+        // (no completions / index not ready) decodes to `null`. A crashed engine, though, would
+        // THROW — and an exception escaping here rides up the shared frontend connection and
+        // closes it. Guard so a dead engine just yields "no popup" (see [guardEngine]).
+        return guardEngine("completion", null) {
+            val result = server.textDocumentCompletion(
                 params.copy(
                     textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
                     position = DiagnosticTranslation.toWrappedPosition(params.position)
                 )
-            )
-        } catch (e: SerializationException) {
-            // NULL-RESULT GUARD (lsp-types 1.1.0): ~45 spec-nullable LSP results (incl.
-            // completion: `CompletionList | CompletionItem[] | null`) are generated NON-nullable,
-            // so the engine returning `null` throws a decode exception in THIS calling coroutine.
-            // Catching it here is load-bearing: uncaught it cancels the scope shared with the
-            // diagnostics publisher, silently killing ALL updates (the lsp-kotlin maintainer
-            // traced this). Degrade to an empty result. Remove once we bump to fixed lsp-types.
-            return super.textDocumentCompletion(params)
+            ) ?: return@guardEngine null
+            translateCompletionResult(result)
         }
-        return translateCompletionResult(result)
     }
 
     /**
@@ -359,13 +403,9 @@ class BridgeLanguageServer(
      * back to csgs space too.
      */
     override suspend fun completionItemResolve(params: CompletionItem): CompletionItem {
-        val server = delegate ?: return super.completionItemResolve(params)
-        // Null-result guard (see textDocumentCompletion): on a decode failure, return the item
-        // unresolved (it just won't gain lazy detail) rather than cancel the shared scope.
-        return try {
+        val server = delegate ?: return params
+        return guardEngine("completionItemResolve", params) {
             translateCompletionItem(server.completionItemResolve(params))
-        } catch (e: SerializationException) {
-            params
         }
     }
 
@@ -375,26 +415,36 @@ class BridgeLanguageServer(
      * the user's line. [Hover.contents] is opaque markup with no positions, so it passes
      * through untouched.
      */
-    override suspend fun textDocumentHover(params: HoverParams): Hover {
-        val server = delegate ?: return super.textDocumentHover(params)
-        // Null-result guard (see textDocumentCompletion). Hover is the WORST offender: kotlin-lsp
-        // returns `null` for hover-over-nothing (spec-legal), and the editor fires hover on every
-        // cursor move — so without this catch the decode exception storms and cancels the shared
-        // scope, which is exactly what killed diagnostics + completion on first real use.
-        val hover = try {
-            server.textDocumentHover(
+    override suspend fun textDocumentHover(params: HoverParams): Hover? {
+        val server = delegate ?: return null
+        // Hover is `Hover | null` per spec: kotlin-lsp returns null for hover-over-nothing, which
+        // the editor fires on every cursor move. lsp-types 1.2.0 types it nullable, so null now
+        // decodes to null (no exception, no scope cancellation). Return null → editor shows no
+        // tooltip; only translate the range when there IS a hover.
+        return guardEngine("hover", null) {
+            val hover = server.textDocumentHover(
                 params.copy(
                     textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
                     position = DiagnosticTranslation.toWrappedPosition(params.position)
                 )
-            )
-        } catch (e: SerializationException) {
-            return super.textDocumentHover(params)
+            ) ?: return@guardEngine null
+            // When the cursor sits over whitespace inside the user's content, the engine resolves
+            // the hover to the ENCLOSING wrapper construct — the `KcsgScript().apply { ... }` call
+            // whose lambda body holds the csgs. Its range lands on a header line, so translateRange
+            // drops to null. A hover that carries a range we can't map into csgs space is a wrapping
+            // artifact the user can neither see nor target, so SUPPRESS the whole hover (return null)
+            // rather than show the wrapper's tooltip with no highlight — the same header/footer drop
+            // the diagnostics do.
+            val engineRange = hover.range
+            if (engineRange != null) {
+                val csgsRange =
+                    DiagnosticTranslation.translateRange(engineRange, lspWorkspace.csgsLineCount())
+                        ?: return@guardEngine null
+                return@guardEngine hover.copy(range = csgsRange)
+            }
+            // No range at all: a positionless hover (rare) — pass it through unchanged.
+            hover
         }
-        val range = hover.range?.let {
-            DiagnosticTranslation.translateRange(it, lspWorkspace.csgsLineCount())
-        }
-        return hover.copy(range = range)
     }
 
     /**
@@ -402,18 +452,18 @@ class BridgeLanguageServer(
      * response ([SignatureHelp]: signatures, parameter offsets, active indices) carries no
      * document positions, so it passes through unchanged.
      */
-    override suspend fun textDocumentSignatureHelp(params: SignatureHelpParams): SignatureHelp {
-        val server = delegate ?: return super.textDocumentSignatureHelp(params)
-        // Null-result guard (see textDocumentCompletion): signatureHelp is `SignatureHelp | null`.
-        return try {
+    override suspend fun textDocumentSignatureHelp(params: SignatureHelpParams): SignatureHelp? {
+        val server = delegate ?: return null
+        // `SignatureHelp | null` per spec (null when the cursor isn't in a call). lsp-types 1.2.0
+        // types it nullable, so null propagates cleanly instead of throwing; a crashed engine is
+        // guarded to inert so it can't take the shared connection down.
+        return guardEngine("signatureHelp", null) {
             server.textDocumentSignatureHelp(
                 params.copy(
                     textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
                     position = DiagnosticTranslation.toWrappedPosition(params.position)
                 )
             )
-        } catch (e: SerializationException) {
-            super.textDocumentSignatureHelp(params)
         }
     }
 
@@ -493,7 +543,25 @@ class BridgeLanguageServer(
      * [DiagnosticTranslation]; the csgs line count is the live document last synthesized.
      */
     private fun translateDiagnostics(diagnostics: List<Diagnostic>): List<Diagnostic> =
-        DiagnosticTranslation.translateDiagnostics(diagnostics, lspWorkspace.csgsLineCount())
+        DiagnosticTranslation.translateDiagnostics(
+            diagnostics.filterNot(::isMissingJdkFalsePositive),
+            lspWorkspace.csgsLineCount()
+        )
+
+    /**
+     * STOPGAP (tracked): the synthesized workspace.json has no working JDK on the LSP classpath
+     * (the `jrt://` SDK roots aren't resolving against this engine's JSON-import path yet — a
+     * golden-file format issue under investigation with the lsp-kotlin maintainer). Without a JDK
+     * the engine flags every reference to a `java.*` supertype — e.g. `java.io.Serializable`, a
+     * supertype of `kotlin.Double` — so EVERY numeric literal/coordinate in a kcsg script becomes
+     * a false "Cannot access 'java.…' … Check your module classpath" error (100+ on a real model).
+     * That flood both renders as noise AND lags the editor. Until the JDK SDK roots land, suppress
+     * exactly this missing-classpath cascade. It is narrow: real user errors (unresolved kcsg refs,
+     * type mismatches) carry different messages and still surface.
+     */
+    private fun isMissingJdkFalsePositive(d: Diagnostic): Boolean =
+        d.message.contains("Cannot access 'java.") &&
+            d.message.contains("Check your module classpath")
 
     /**
      * Translate every wrapped-`.kt` range carried by a completion result DOWN to csgs
@@ -554,4 +622,21 @@ class BridgeLanguageServer(
             }
         }
     }
+}
+
+/**
+ * Advertise the `textDocument` features the bridge actually services — `completion` and
+ * pull `diagnostic` — so spec-strict engine builds (LS-262.6274.0+) offer them even though
+ * the editor's `LSPClient` initializes with empty [ClientCapabilities]. Any sub-capabilities
+ * the editor DID send are preserved; we only fill the gaps. Hover/signature-help are left
+ * untouched (they are plain request/response and already resolve without being advertised).
+ */
+private fun ClientCapabilities.withBridgeFeatures(): ClientCapabilities {
+    val td = textDocument ?: TextDocumentClientCapabilities()
+    return copy(
+        textDocument = td.copy(
+            completion = td.completion ?: CompletionClientCapabilities(),
+            diagnostic = td.diagnostic ?: DiagnosticClientCapabilities()
+        )
+    )
 }

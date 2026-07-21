@@ -554,6 +554,23 @@ class BridgeLanguageServerIntegrationTest {
             null
         }
 
+        // Whitespace-hover suppression: hovering empty space inside the user's content makes the
+        // engine resolve the hover to the ENCLOSING wrapper construct (the `KcsgScript().apply { }`
+        // lambda the csgs is spliced into), whose range lands on a header line. That used to leak
+        // through as a contentful tooltip with a null (untranslatable) range — the spurious
+        // "wrapper" hover the user reported. The bridge must now SUPPRESS it (return null). Probe a
+        // column well past the end of csgs line 1 (`export("ok")`), which is pure whitespace.
+        val pastEol = completionScript.lines()[1].length + 8
+        val whitespaceHover = runCatching {
+            bridge.textDocumentHover(
+                HoverParams(
+                    textDocument = TextDocumentIdentifier(uri = frontendUri),
+                    position = Position(line = 1u, character = pastEol.toUInt())
+                )
+            )
+        }.getOrNull()
+        System.err.println("REAL-ENGINE whitespace hover: $whitespaceHover")
+
         bridge.shutdown()
         bridge.exit()
 
@@ -566,6 +583,15 @@ class BridgeLanguageServerIntegrationTest {
             assertTrue(
                 range.start.line.toInt() == 0,
                 "hover range must be translated to csgs space (line 0), got ${range.start.line}"
+            )
+        }
+        // The whitespace hover must never surface a wrapper tooltip: either no hover at all, or a
+        // hover whose range is genuinely in csgs space. A contentful hover with a null range is the
+        // exact leak we fixed.
+        if (whitespaceHover != null) {
+            assertTrue(
+                whitespaceHover.range != null,
+                "whitespace hover returned content with no csgs range — the wrapper tooltip leaked"
             )
         }
     }
