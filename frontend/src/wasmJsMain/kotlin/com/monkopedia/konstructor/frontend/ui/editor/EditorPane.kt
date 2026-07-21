@@ -393,9 +393,13 @@ private fun EditorContent(
 
     // When content changes externally (server load, not user save), update
     // the editor document without recreating the session — preserves undo history.
+    // Must sync EMPTY content too: switching to a new/empty konstruction sets the
+    // loaded content to "", and without applying it the editor would keep showing
+    // the previously-open konstruction's text until a page refresh. The
+    // `currentDoc != content` guard already skips redundant no-op updates.
     LaunchedEffect(content) {
         val currentDoc = session.state.doc.toString()
-        if (currentDoc != content && content.isNotEmpty()) {
+        if (currentDoc != content) {
             session.dispatch(
                 com.monkopedia.kodemirror.state.TransactionSpec(
                     changes = com.monkopedia.kodemirror.state.ChangeSpec.Single(
