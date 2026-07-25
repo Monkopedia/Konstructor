@@ -56,7 +56,7 @@ class ScopedShipper(private val tagPrefix: String, name: String, private val shi
     }
 
     override suspend fun requestPickup(u: Unit): DropBox {
-        val pickup = requestPickup()
+        val pickup = shipper.requestPickup()
         return object : DropBox {
             override suspend fun log(logEvent: Box) {
                 pickup.log(
