@@ -18,9 +18,7 @@ package com.monkopedia.konstructor.frontend.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.monkopedia.konstructor.common.Konstruction
-import com.monkopedia.konstructor.common.KonstructionType
 import com.monkopedia.konstructor.common.Space
-import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,7 +33,10 @@ data class DialogState(
     val showSyncConflict: Boolean = false
 )
 
-class NavigationDialogViewModel(private val serviceHolder: ServiceHolder) : ViewModel() {
+class NavigationDialogViewModel(
+    private val serviceHolder: ServiceHolder,
+    private val mutations: WorkspaceMutations
+) : ViewModel() {
 
     private val _dialogState = MutableStateFlow(DialogState())
     val dialogState: StateFlow<DialogState> = _dialogState.asStateFlow()
@@ -95,102 +96,49 @@ class NavigationDialogViewModel(private val serviceHolder: ServiceHolder) : View
         _dialogState.value = _dialogState.value.copy(showSyncConflict = false)
     }
 
-    fun createWorkspace(name: String) {
-        viewModelScope.launch {
-            val service = serviceHolder.service.value ?: return@launch
-            try {
-                service.create(Space(id = "", name = name))
-                onMutation?.invoke()
-            } catch (_: Exception) {
-            }
-            hideCreateWorkspaceDialog()
-        }
+    fun createWorkspace(name: String) = mutate(::hideCreateWorkspaceDialog) {
+        mutations.createWorkspace(name)
     }
 
-    fun deleteWorkspace(space: Space) {
-        viewModelScope.launch {
-            val service = serviceHolder.service.value ?: return@launch
-            try {
-                service.delete(space)
-                onMutation?.invoke()
-            } catch (_: Exception) {
-            }
-            hideEditWorkspaceDialog()
-        }
+    fun deleteWorkspace(space: Space) = mutate(::hideEditWorkspaceDialog) {
+        mutations.deleteWorkspace(space)
     }
 
-    fun renameWorkspace(id: String, name: String) {
-        viewModelScope.launch {
-            val service = serviceHolder.service.value ?: return@launch
-            try {
-                val ws = service.get(id)
-                ws.setName(name)
-                onMutation?.invoke()
-            } catch (_: Exception) {
-            }
-            hideEditWorkspaceDialog()
-        }
+    fun renameWorkspace(id: String, name: String) = mutate(::hideEditWorkspaceDialog) {
+        mutations.renameWorkspace(id, name)
     }
 
-    fun createKonstruction(name: String, workspaceId: String) {
-        viewModelScope.launch {
-            val service = serviceHolder.service.value ?: return@launch
-            try {
-                val ws = service.get(workspaceId)
-                ws.create(Konstruction(name = name, workspaceId = workspaceId, id = ""))
-                onMutation?.invoke()
-            } catch (_: Exception) {
-            }
-            hideCreateKonstructionDialog()
+    fun createKonstruction(name: String, workspaceId: String) =
+        mutate(::hideCreateKonstructionDialog) {
+            mutations.createKonstruction(workspaceId, name)
         }
+
+    fun deleteKonstruction(konstruction: Konstruction) = mutate(::hideEditKonstructionDialog) {
+        mutations.deleteKonstruction(konstruction)
     }
 
-    fun deleteKonstruction(konstruction: Konstruction) {
-        viewModelScope.launch {
-            val service = serviceHolder.service.value ?: return@launch
-            try {
-                val ws = service.get(konstruction.workspaceId)
-                ws.delete(konstruction)
-                onMutation?.invoke()
-            } catch (_: Exception) {
-            }
-            hideEditKonstructionDialog()
+    fun renameKonstruction(workspaceId: String, id: String, name: String) =
+        mutate(::hideEditKonstructionDialog) {
+            mutations.renameKonstruction(workspaceId, id, name)
         }
+
+    fun uploadStl(name: String, workspaceId: String, data: ByteArray) = mutate {
+        mutations.uploadStl(workspaceId, name, data)
     }
 
-    fun renameKonstruction(workspaceId: String, id: String, name: String) {
+    /**
+     * Runs a mutation, notifies [onMutation] on success, and finally hides the
+     * originating dialog. Failures are swallowed (matching the dialog UX) so a
+     * transient RPC error can't leave the dialog stuck open.
+     */
+    private fun mutate(hideDialog: () -> Unit = {}, block: suspend () -> Unit) {
         viewModelScope.launch {
-            val service = serviceHolder.service.value ?: return@launch
             try {
-                val ks = service.konstruction(
-                    Konstruction(name = "", workspaceId = workspaceId, id = id)
-                )
-                ks.setName(name)
+                block()
                 onMutation?.invoke()
             } catch (_: Exception) {
             }
-            hideEditKonstructionDialog()
-        }
-    }
-
-    fun uploadStl(name: String, workspaceId: String, data: ByteArray) {
-        viewModelScope.launch {
-            val service = serviceHolder.service.value ?: return@launch
-            try {
-                val ws = service.get(workspaceId)
-                val k = ws.create(
-                    Konstruction(
-                        name = name,
-                        workspaceId = workspaceId,
-                        id = "",
-                        type = KonstructionType.STL
-                    )
-                )
-                val ks = service.konstruction(k)
-                ks.setBinary(ByteReadChannel(data))
-                onMutation?.invoke()
-            } catch (_: Exception) {
-            }
+            hideDialog()
         }
     }
 }

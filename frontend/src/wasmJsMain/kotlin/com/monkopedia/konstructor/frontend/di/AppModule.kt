@@ -21,6 +21,7 @@ import com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.TargetDisplayRepository
+import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceMutations
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import org.koin.dsl.module
 
@@ -28,9 +29,10 @@ val appModule = module {
     single { ServiceHolder() }
     single { SettingsViewModel() }
     single { TargetDisplayRepository() }
+    single { WorkspaceMutations(get()) }
 
-    single { SpaceListViewModel(get()) }
+    single { SpaceListViewModel(get(), get()) }
     single { WorkspaceViewModel(get()) }
     single { KonstructionViewModel(get(), get()) }
-    single { NavigationDialogViewModel(get()) }
+    single { NavigationDialogViewModel(get(), get()) }
 }
