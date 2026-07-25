@@ -16,8 +16,8 @@
 package com.monkopedia.konstructor.common
 
 import com.monkopedia.hauler.Box
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
