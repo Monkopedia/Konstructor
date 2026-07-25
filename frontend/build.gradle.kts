@@ -114,4 +114,9 @@ kotlin {
 
 kotlin.compilerOptions {
     freeCompilerArgs.addAll("-Xskip-prerelease-check")
+    // The entire wasmJs source set is built on JS interop (@JsFun / external
+    // declarations across threejs bindings, JsBridge, FilePicker, etc). Kotlin
+    // 2.4.0 gates that interop behind @kotlin.js.ExperimentalWasmJsInterop, so
+    // opt in module-wide rather than annotating every external declaration.
+    optIn.add("kotlin.js.ExperimentalWasmJsInterop")
 }
