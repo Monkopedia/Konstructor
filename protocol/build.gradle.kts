@@ -46,22 +46,10 @@ kotlin {
         implementation(libs.kotlinx.serialization.json)
         implementation(libs.kotlinx.coroutines.core)
     }
-    sourceSets["jvmMain"].dependencies {
-        implementation(kotlin("stdlib"))
-        implementation(kotlin("reflect"))
-        implementation(libs.slf4j.api)
-
-        implementation(libs.kotlinx.serialization.core)
-        implementation(libs.kotlinx.serialization.json)
-        implementation(libs.logback.classic)
-    }
     sourceSets["commonTest"].dependencies {
         implementation(kotlin("test"))
         implementation(libs.kotlinx.coroutines.test)
         implementation(libs.kotlinx.serialization.json)
-    }
-    sourceSets["jvmTest"].dependencies {
-        implementation(kotlin("test-junit"))
     }
 }
 
