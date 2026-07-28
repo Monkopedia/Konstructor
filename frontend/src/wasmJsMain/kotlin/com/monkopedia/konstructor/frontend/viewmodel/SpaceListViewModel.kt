@@ -24,7 +24,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class SpaceListViewModel(private val serviceHolder: ServiceHolder) : ViewModel() {
+class SpaceListViewModel(
+    private val serviceHolder: ServiceHolder,
+    private val mutations: WorkspaceMutations
+) : ViewModel() {
 
     private val _workspaces = MutableStateFlow<List<Space>?>(null)
     val workspaces: StateFlow<List<Space>?> = _workspaces.asStateFlow()
@@ -62,21 +65,15 @@ class SpaceListViewModel(private val serviceHolder: ServiceHolder) : ViewModel()
         }
     }
 
-    suspend fun createWorkspace(name: String): Space? {
-        val service = serviceHolder.service.value ?: return null
-        return try {
-            val space = service.create(Space(id = "", name = name))
-            refreshWorkspaces()
-            space
-        } catch (_: Exception) {
-            null
-        }
+    suspend fun createWorkspace(name: String): Space? = try {
+        mutations.createWorkspace(name)?.also { refreshWorkspaces() }
+    } catch (_: Exception) {
+        null
     }
 
     suspend fun deleteWorkspace(space: Space) {
-        val service = serviceHolder.service.value ?: return
         try {
-            service.delete(space)
+            mutations.deleteWorkspace(space)
             refreshWorkspaces()
         } catch (_: Exception) {
         }

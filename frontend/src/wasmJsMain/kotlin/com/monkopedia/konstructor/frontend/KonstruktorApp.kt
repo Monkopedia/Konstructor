@@ -31,6 +31,7 @@ import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
+import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceMutations
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
@@ -69,12 +70,21 @@ fun KonstruktorApp() {
 private fun InstallJsBridge() {
     val scope = rememberCoroutineScope()
     val serviceHolder = koinInject<ServiceHolder>()
+    val mutations = koinInject<WorkspaceMutations>()
     val spaceListVm = koinInject<SpaceListViewModel>()
     val settingsVm = koinInject<SettingsViewModel>()
     val konstructionVm = koinInject<KonstructionViewModel>()
     val workspaceVm = koinInject<WorkspaceViewModel>()
 
     LaunchedEffect(Unit) {
-        JsBridge.install(scope, serviceHolder, spaceListVm, settingsVm, konstructionVm, workspaceVm)
+        JsBridge.install(
+            scope,
+            serviceHolder,
+            mutations,
+            spaceListVm,
+            settingsVm,
+            konstructionVm,
+            workspaceVm
+        )
     }
 }

@@ -65,13 +65,4 @@ class WorkspaceViewModel(private val serviceHolder: ServiceHolder) : ViewModel()
             }
         }
     }
-
-    suspend fun renameWorkspace(name: String) {
-        val ws = currentWorkspace ?: return
-        try {
-            ws.setName(name)
-            _workspaceName.value = name
-        } catch (_: Exception) {
-        }
-    }
 }

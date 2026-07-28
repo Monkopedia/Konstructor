@@ -15,7 +15,6 @@
  */
 package com.monkopedia.konstructor.frontend
 
-import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.Space
 import com.monkopedia.konstructor.frontend.viewmodel.CodePaneMode
 import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
@@ -24,6 +23,7 @@ import com.monkopedia.konstructor.frontend.viewmodel.KonstructionViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.ServiceHolder
 import com.monkopedia.konstructor.frontend.viewmodel.SettingsViewModel
 import com.monkopedia.konstructor.frontend.viewmodel.SpaceListViewModel
+import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceMutations
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collectLatest
@@ -59,6 +59,7 @@ object JsBridge {
     fun install(
         scope: CoroutineScope,
         serviceHolder: ServiceHolder,
+        mutations: WorkspaceMutations,
         spaceListVm: SpaceListViewModel,
         settingsVm: SettingsViewModel,
         konstructionVm: KonstructionViewModel? = null,
@@ -132,9 +133,7 @@ object JsBridge {
                     val args = json.decodeFromString<JsonObject>(argJson)
                     val id = args["id"]!!.jsonPrimitive.content
                     val name = args["name"]!!.jsonPrimitive.content
-                    val service = serviceHolder.service.value ?: return@launch
-                    val ws = service.get(id)
-                    ws.setName(name)
+                    mutations.renameWorkspace(id, name)
                     spaceListVm.refreshWorkspaces()
                 } catch (e: Exception) {
                     setError("renameWorkspace failed: ${e.message}")
@@ -147,9 +146,7 @@ object JsBridge {
                     val args = json.decodeFromString<JsonObject>(argJson)
                     val name = args["name"]!!.jsonPrimitive.content
                     val workspaceId = args["workspaceId"]!!.jsonPrimitive.content
-                    val service = serviceHolder.service.value ?: return@launch
-                    val ws = service.get(workspaceId)
-                    ws.create(Konstruction(name = name, workspaceId = workspaceId, id = ""))
+                    mutations.createKonstruction(workspaceId, name)
                     // Refresh state so konstructions list updates
                     refreshKonstructions(serviceHolder, spaceListVm)
                 } catch (e: Exception) {
@@ -163,13 +160,9 @@ object JsBridge {
                     val args = json.decodeFromString<JsonObject>(argJson)
                     val wsId = args["wsId"]!!.jsonPrimitive.content
                     val konId = args["konId"]!!.jsonPrimitive.content
-                    val service = serviceHolder.service.value ?: return@launch
-                    val ws = service.get(wsId)
-                    // Find the konstruction by id
-                    val kons = ws.list()
-                    val kon = kons.firstOrNull { it.id == konId }
+                    val kon = mutations.findKonstruction(wsId, konId)
                     if (kon != null) {
-                        ws.delete(kon)
+                        mutations.deleteKonstruction(kon)
                         refreshKonstructions(serviceHolder, spaceListVm)
                     }
                 } catch (e: Exception) {
@@ -184,12 +177,7 @@ object JsBridge {
                     val wsId = args["wsId"]!!.jsonPrimitive.content
                     val konId = args["konId"]!!.jsonPrimitive.content
                     val name = args["name"]!!.jsonPrimitive.content
-                    val service = serviceHolder.service.value ?: return@launch
-                    val ws = service.get(wsId)
-                    val kons = ws.list()
-                    val kon = kons.firstOrNull { it.id == konId } ?: return@launch
-                    val ks = service.konstruction(kon)
-                    ks.setName(name)
+                    mutations.renameKonstruction(wsId, konId, name)
                     refreshKonstructions(serviceHolder, spaceListVm)
                 } catch (e: Exception) {
                     setError("renameKonstruction failed: ${e.message}")
@@ -204,9 +192,7 @@ object JsBridge {
                     val konId = args["konId"]!!.jsonPrimitive.content
                     val content = args["content"]!!.jsonPrimitive.content
                     val service = serviceHolder.service.value ?: return@launch
-                    val ws = service.get(wsId)
-                    val kons = ws.list()
-                    val kon = kons.firstOrNull { it.id == konId } ?: return@launch
+                    val kon = mutations.findKonstruction(wsId, konId) ?: return@launch
                     val ks = service.konstruction(kon)
                     ks.set(content)
                     incrementVersion()
@@ -222,9 +208,7 @@ object JsBridge {
                     val wsId = args["wsId"]!!.jsonPrimitive.content
                     val konId = args["konId"]!!.jsonPrimitive.content
                     val service = serviceHolder.service.value ?: return@launch
-                    val ws = service.get(wsId)
-                    val kons = ws.list()
-                    val kon = kons.firstOrNull { it.id == konId } ?: return@launch
+                    val kon = mutations.findKonstruction(wsId, konId) ?: return@launch
                     val ks = service.konstruction(kon)
                     val content = ks.fetch()
                     // Wrap content as a JSON string for lastResult
@@ -246,9 +230,7 @@ object JsBridge {
                     val wsId = args["wsId"]!!.jsonPrimitive.content
                     val konId = args["konId"]!!.jsonPrimitive.content
                     val service = serviceHolder.service.value ?: return@launch
-                    val ws = service.get(wsId)
-                    val kons = ws.list()
-                    val kon = kons.firstOrNull { it.id == konId } ?: return@launch
+                    val kon = mutations.findKonstruction(wsId, konId) ?: return@launch
                     val ks = service.konstruction(kon)
                     val result = ks.compile()
                     setLastResult(
@@ -271,9 +253,7 @@ object JsBridge {
                     val konId = args["konId"]!!.jsonPrimitive.content
                     val target = args["target"]!!.jsonPrimitive.content
                     val service = serviceHolder.service.value ?: return@launch
-                    val ws = service.get(wsId)
-                    val kons = ws.list()
-                    val kon = kons.firstOrNull { it.id == konId } ?: return@launch
+                    val kon = mutations.findKonstruction(wsId, konId) ?: return@launch
                     val ks = service.konstruction(kon)
                     val result = ks.konstruct(target)
                     setLastResult(
