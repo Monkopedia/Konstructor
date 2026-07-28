@@ -17,6 +17,7 @@ package com.monkopedia.konstructor.lsp
 
 import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
+import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.Config
 import com.monkopedia.lsp.ClientCapabilities
 import com.monkopedia.lsp.CompletionClientCapabilities
@@ -62,6 +63,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonNull
 
 /**
@@ -116,8 +119,22 @@ import kotlinx.serialization.json.JsonNull
  * [delegate] is null and the bridge degrades to an inert server: [initialize] returns
  * empty capabilities, notifications are dropped. The frontend is flag-gated anyway, so
  * with the flag off this class is never constructed.
+ *
+ * **Self-heal after an engine crash (#54).** The kotlin-lsp subprocess can crash
+ * mid-session; [KotlinLspProcess] then respawns it on the next [connect][KotlinLspProcess.connect].
+ * The bridge's [delegate], however, is set once in [initialize] and would keep pointing at the
+ * dead stub — so every forward call fails, [guardEngine] degrades it to inert, and LSP stays
+ * dark for that document until it is closed+reopened. To self-heal, a forward call that fails
+ * ([guardEngine]) triggers a single-flight [reconnect]: it re-[connect][KotlinLspProcess.connect]s
+ * a fresh delegate against the (respawned) subprocess, re-runs the engine handshake, and
+ * re-`didOpen`s the current document, then the failed call is retried once against the fresh
+ * delegate. The reconnect is guarded by [reconnectLock] (single-flight — concurrent failing
+ * requests don't spawn N handshakes) and is itself failure-isolated (a still-dead engine just
+ * leaves the bridge inert, exactly as before — it never throws out to kill the shared frontend
+ * connection). Deliberately minimal: no backoff/retry-limit machinery — each failing request
+ * makes at most one reconnect+retry attempt, so recovery is naturally paced by request traffic.
  */
-class BridgeLanguageServer(
+open class BridgeLanguageServer(
     private val config: Config,
     private val workspaceId: String,
     private val konstructionId: String,
@@ -148,6 +165,49 @@ class BridgeLanguageServer(
      */
     @Volatile
     private var frontendUri: String? = null
+
+    /**
+     * The editor's [InitializeParams], captured on [initialize]. Replayed verbatim (with the
+     * same rootUri/capabilities overrides) when [reconnect] re-runs the engine handshake after a
+     * crash, so the respawned subprocess is driven through the identical init the first one saw.
+     */
+    @Volatile
+    private var initializeParams: InitializeParams? = null
+
+    /**
+     * The editor's [InitializedParams] once it has sent `initialized`. Replayed to the fresh
+     * engine after a [reconnect] so the respawned subprocess completes the LSP handshake (the
+     * server needs its own `initialized`, distinct from the editor↔bridge lifecycle gate). Null
+     * before the editor initializes (nothing to replay).
+     */
+    @Volatile
+    private var initializedParams: InitializedParams? = null
+
+    /**
+     * The current open document (uri + version + wrapped text), captured on the editor's
+     * didOpen/didChange. Replayed as a `didOpen` when [reconnect] re-establishes the delegate, so
+     * the respawned engine re-analyzes what the user has open instead of an empty session. Null
+     * before the first didOpen (nothing to replay).
+     */
+    @Volatile
+    private var openDocument: OpenDocument? = null
+
+    /**
+     * Single-flight guard for [reconnect]: when the engine crashes, N concurrent forward calls all
+     * fail at once; without this each would spawn its own handshake. The first to acquire performs
+     * the reconnect; the rest observe [delegate] already swapped to the fresh stub and skip.
+     */
+    private val reconnectLock = Mutex()
+
+    /**
+     * Set once [teardown] runs, under [reconnectLock], so a concurrent [reconnect] that was queued
+     * behind teardown observes it and bails instead of resurrecting the delegate after the scope
+     * was cancelled (which would leak the fresh subprocess connection).
+     */
+    private var torndown = false
+
+    /** The current open document, retained so [reconnect] can replay the `didOpen`. */
+    private data class OpenDocument(val uri: String, val version: Int, val csgsText: String)
 
     /**
      * Backend→subprocess client. Forwards diagnostics up to the frontend (gated on
@@ -192,16 +252,42 @@ class BridgeLanguageServer(
         }
     }
 
+    /**
+     * Obtain a fresh subprocess-facing stub wired to a new [Forwarder] for this session — the sole
+     * seam through which the bridge acquires an engine delegate, used by both the first
+     * [initialize] and the post-crash [reconnect] (#54). [KotlinLspProcess.connect] respawns a dead
+     * subprocess before handing back a stub, which is what makes reconnect self-healing. Returns
+     * `null` when the engine is unavailable. `open` so tests can substitute a fake engine (no real
+     * subprocess) to exercise the crash→respawn transition.
+     */
+    protected open suspend fun connectEngine(): KsrpcLanguageServer? =
+        KotlinLspProcess.forConfig(config).connect(Forwarder())
+
     override suspend fun initialize(params: InitializeParams): InitializeResult {
+        // Stash the editor's params so a post-crash [reconnect] can replay the identical
+        // handshake against the respawned subprocess (#54).
+        initializeParams = params
         // Synthesize the per-konstruction workspace (wrapped .kt + workspace.json) and
         // spawn/connect the warm subprocess. NO blocking client-bound request here.
         lspWorkspace.synthesize()
-        val server = KotlinLspProcess.forConfig(config).connect(Forwarder())
+        val server = connectEngine()
         delegate = server
         if (server == null) {
             hauler.error("kotlin-lsp engine unavailable; bridge is inert")
             return InitializeResult(capabilities = com.monkopedia.lsp.ServerCapabilities())
         }
+        return handshakeEngine(server, params)
+    }
+
+    /**
+     * Drive a freshly-[connect][KotlinLspProcess.connect]ed [server] through the engine
+     * handshake and (re)build the pull publisher, returning its [InitializeResult]. Shared by
+     * the first [initialize] and by [reconnect] after a crash, so both replay the IDENTICAL init.
+     */
+    private suspend fun handshakeEngine(
+        server: KsrpcLanguageServer,
+        params: InitializeParams
+    ): InitializeResult {
         // Drive the subprocess through the same handshake, but rooted at the synthesized
         // workspace so it loads our workspace.json + classpath. The editor's LSPClient
         // advertises EMPTY client capabilities; newer kotlin-lsp builds (LS-262.6274.0+)
@@ -267,20 +353,28 @@ class BridgeLanguageServer(
     )
 
     override suspend fun initialized(params: InitializedParams) {
+        // Remember the editor sent `initialized` so [reconnect] replays it to the fresh engine.
+        initializedParams = params
         delegate?.let { runCatching { it.initialized(params) } }
         // Now the editor has initialized; release the forwarder so it can push.
         lifecycle.advanceTo(LifecycleState.Phase.INITIALIZED)
     }
 
     override suspend fun textDocumentDidOpen(params: DidOpenTextDocumentParams) {
-        val server = delegate ?: return
+        if (delegate == null) return
         // Remember the editor's URI so subprocess diagnostics get routed back to it.
         frontendUri = params.textDocument.uri
+        // Retain the live open doc so a post-crash [reconnect] can replay this didOpen (#54).
+        openDocument = OpenDocument(
+            uri = params.textDocument.uri,
+            version = params.textDocument.version,
+            csgsText = params.textDocument.text
+        )
         // Wrap the editor's LIVE csgs content (not just the stored snapshot) into the .kt
         // form and open the WRAPPED file in the engine, so the engine analyzes what the
         // user actually has open.
         lspWorkspace.synthesize(content = params.textDocument.text)
-        guardEngine("didOpen", Unit) {
+        withLiveDelegate("didOpen", Unit) { server ->
             server.textDocumentDidOpen(
                 DidOpenTextDocumentParams(
                     textDocument = TextDocumentItem(
@@ -298,7 +392,7 @@ class BridgeLanguageServer(
     }
 
     override suspend fun textDocumentDidChange(params: DidChangeTextDocumentParams) {
-        val server = delegate ?: return
+        if (delegate == null) return
         // Full-document sync (v1): the editor sends the whole edited csgs as the change
         // text (kodemirror full-sync; these files are tiny). Take the last change's text
         // as the live document, re-wrap it into the .kt form so the engine analyzes the
@@ -306,8 +400,14 @@ class BridgeLanguageServer(
         val csgsText = params.contentChanges
             .filterIsInstance<TextDocumentContentChangeEventVariant>()
             .lastOrNull()?.text ?: return
+        // Update the retained open doc so a post-crash [reconnect] replays the CURRENT content
+        // as its didOpen (#54), not the stale text the doc was first opened with.
+        openDocument = openDocument?.copy(
+            version = params.textDocument.version,
+            csgsText = csgsText
+        )
         lspWorkspace.synthesize(content = csgsText)
-        runCatching {
+        withLiveDelegate("didChange", Unit) { server ->
             server.textDocumentDidChange(
                 DidChangeTextDocumentParams(
                     textDocument = VersionedTextDocumentIdentifier(
@@ -319,13 +419,16 @@ class BridgeLanguageServer(
                     )
                 )
             )
-        }.onFailure { hauler.error("Failed forwarding didChange to engine", it) }
+        }
         // Event-driven (#43): debounced re-pull for the new content (coalesces edit bursts).
         diagnostics?.onChange(params.textDocument.uri)
     }
 
     override suspend fun textDocumentDidClose(params: DidCloseTextDocumentParams) {
         val server = delegate ?: return
+        // The doc is closing: nothing to replay on a future reconnect. (A dead engine on close
+        // needs no self-heal — the session is ending — so this path stays a plain guarded call.)
+        openDocument = null
         // Key the publisher's close by the SAME frontend csgs uri that onOpen/onChange used
         // (`params.textDocument.uri`), not the stashed [frontendUri], so the doc is guaranteed
         // to leave openDocs/resultIds (uri-space key consistency — a mismatched key would leak
@@ -371,6 +474,115 @@ class BridgeLanguageServer(
         }
 
     /**
+     * Run a subprocess-facing call against the CURRENT [delegate], and — if the engine has
+     * crashed — transparently self-heal (#54): on failure, attempt a single-flight [reconnect]
+     * against the respawned subprocess, then retry [block] ONCE against the fresh delegate. If the
+     * engine is still dead after the reconnect attempt, degrade to [fallback] (never throwing —
+     * same isolation contract as [guardEngine]).
+     *
+     * [block] is passed the delegate to use so the retry runs against the FRESH stub, not the dead
+     * one a captured reference would hold. At most one reconnect + one retry per failing call: no
+     * backoff/retry-limit machinery — recovery is paced by request traffic (a subsequent request
+     * that still fails simply tries again).
+     */
+    private suspend fun <T> withLiveDelegate(
+        label: String,
+        fallback: T,
+        block: suspend (KsrpcLanguageServer) -> T
+    ): T {
+        val server = delegate ?: return fallback
+        return try {
+            block(server)
+        } catch (t: Throwable) {
+            // Cooperative cancellation of THIS coroutine must propagate; a foreign cancellation
+            // (the dead engine leg) must not — see [guardEngine] for the full rationale.
+            coroutineContext.ensureActive()
+            hauler.error("kotlin-lsp '$label' failed; attempting reconnect", t)
+            // Single-flight re-establish against the (respawned) subprocess. If it yields a fresh,
+            // live delegate, retry the call once against it; otherwise stay inert for this call.
+            val fresh = reconnect(deadServer = server)
+            if (fresh == null || fresh === server) {
+                fallback
+            } else {
+                guardEngine("$label (post-reconnect retry)", fallback) { block(fresh) }
+            }
+        }
+    }
+
+    /**
+     * Self-heal the delegate after an engine crash (#54): re-[connect][KotlinLspProcess.connect] a
+     * fresh subprocess-facing stub (the process manager respawns a dead subprocess on connect),
+     * replay the [initialize]/`initialized` handshake, and re-`didOpen` the current document so the
+     * respawned engine resumes analyzing what the user has open. Returns the fresh [delegate], or
+     * the current one unchanged if another concurrent call already reconnected, or `null` if the
+     * engine is still unavailable.
+     *
+     * Single-flight: guarded by [reconnectLock] and keyed on [deadServer] — the caller that
+     * observed a failure passes the delegate it was using; if [delegate] no longer === that stub,
+     * another coroutine already reconnected (or [teardown] nulled it) so we do NOT reconnect again.
+     * This both dedupes the N-concurrent-failures storm and prevents resurrecting the delegate
+     * after teardown (post-teardown [delegate] is null, so it can never === a non-null deadServer).
+     *
+     * Failure-isolated: any error here is swallowed to `null` (bridge stays inert), never thrown —
+     * preserving the [guardEngine] no-cascade contract.
+     */
+    private suspend fun reconnect(deadServer: KsrpcLanguageServer): KsrpcLanguageServer? =
+        reconnectLock.withLock {
+            // Torn down (scope cancelled): never resurrect the delegate.
+            if (torndown) return@withLock null
+            // Another concurrent failure already reconnected, or teardown ran: nothing to do.
+            if (delegate !== deadServer) return@withLock delegate
+            val params = initializeParams ?: return@withLock null
+            try {
+                // connectEngine respawns the subprocess if it died, and returns a fresh stub wired
+                // to a new Forwarder for THIS bridge's session.
+                val fresh = connectEngine()
+                    ?: return@withLock null.also {
+                        hauler.error("kotlin-lsp reconnect failed to respawn; bridge stays inert")
+                    }
+                delegate = fresh
+                hauler.info("kotlin-lsp reconnected; replaying handshake + didOpen")
+                // Replay the engine handshake (this also rebuilds the pull publisher against the
+                // fresh stub) and, if the editor had already initialized, its `initialized`.
+                handshakeEngine(fresh, params)
+                if (initializedParams != null) {
+                    runCatching { fresh.initialized(initializedParams!!) }
+                }
+                // Re-open the current document so the engine re-analyzes what the user has open.
+                replayDidOpen(fresh)
+                fresh
+            } catch (t: Throwable) {
+                // Never let a reconnect failure escape and cascade the shared connection.
+                coroutineContext.ensureActive()
+                hauler.error("kotlin-lsp reconnect failed; bridge stays inert", t)
+                null
+            }
+        }
+
+    /**
+     * Replay a `didOpen` for the current [openDocument] against a freshly-reconnected [server], and
+     * re-trigger the diagnostics pull. No-op if no document is open. Mirrors [textDocumentDidOpen]'s
+     * wrap-then-open, using the retained live content (kept current by didOpen/didChange).
+     */
+    private suspend fun replayDidOpen(server: KsrpcLanguageServer) {
+        val doc = openDocument ?: return
+        lspWorkspace.synthesize(content = doc.csgsText)
+        guardEngine("reconnect didOpen", Unit) {
+            server.textDocumentDidOpen(
+                DidOpenTextDocumentParams(
+                    textDocument = TextDocumentItem(
+                        uri = lspWorkspace.documentUri,
+                        languageId = "kotlin",
+                        version = doc.version,
+                        text = lspWorkspace.wrappedText()
+                    )
+                )
+            )
+        }
+        diagnostics?.onOpen(doc.uri)
+    }
+
+    /**
      * Completion (Phase 4 / #39). The editor sends a cursor [Position] in **csgs** space;
      * translate it UP to wrapped-`.kt` space (`ktLine = csgsLine + headerLines`) and
      * retarget the document at the wrapped file before delegating. Completion items can
@@ -381,18 +593,19 @@ class BridgeLanguageServer(
     override suspend fun textDocumentCompletion(
         params: CompletionParams
     ): TextDocumentCompletionResult? {
-        val server = delegate ?: return null
+        if (delegate == null) return null
         // lsp-types 1.2.0 types this spec-nullable result honestly: a server returning `null`
         // (no completions / index not ready) decodes to `null`. A crashed engine, though, would
         // THROW — and an exception escaping here rides up the shared frontend connection and
-        // closes it. Guard so a dead engine just yields "no popup" (see [guardEngine]).
-        return guardEngine("completion", null) {
+        // closes it. Guard so a dead engine just yields "no popup" (see [guardEngine]); a crash
+        // also triggers a single-flight reconnect + one retry (see [withLiveDelegate], #54).
+        return withLiveDelegate("completion", null) { server ->
             val result = server.textDocumentCompletion(
                 params.copy(
                     textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
                     position = DiagnosticTranslation.toWrappedPosition(params.position)
                 )
-            ) ?: return@guardEngine null
+            ) ?: return@withLiveDelegate null
             translateCompletionResult(result)
         }
     }
@@ -403,8 +616,8 @@ class BridgeLanguageServer(
      * back to csgs space too.
      */
     override suspend fun completionItemResolve(params: CompletionItem): CompletionItem {
-        val server = delegate ?: return params
-        return guardEngine("completionItemResolve", params) {
+        if (delegate == null) return params
+        return withLiveDelegate("completionItemResolve", params) { server ->
             translateCompletionItem(server.completionItemResolve(params))
         }
     }
@@ -416,18 +629,18 @@ class BridgeLanguageServer(
      * through untouched.
      */
     override suspend fun textDocumentHover(params: HoverParams): Hover? {
-        val server = delegate ?: return null
+        if (delegate == null) return null
         // Hover is `Hover | null` per spec: kotlin-lsp returns null for hover-over-nothing, which
         // the editor fires on every cursor move. lsp-types 1.2.0 types it nullable, so null now
         // decodes to null (no exception, no scope cancellation). Return null → editor shows no
         // tooltip; only translate the range when there IS a hover.
-        return guardEngine("hover", null) {
+        return withLiveDelegate("hover", null) { server ->
             val hover = server.textDocumentHover(
                 params.copy(
                     textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
                     position = DiagnosticTranslation.toWrappedPosition(params.position)
                 )
-            ) ?: return@guardEngine null
+            ) ?: return@withLiveDelegate null
             // When the cursor sits over whitespace inside the user's content, the engine resolves
             // the hover to the ENCLOSING wrapper construct — the `KcsgScript().apply { ... }` call
             // whose lambda body holds the csgs. Its range lands on a header line, so translateRange
@@ -439,8 +652,8 @@ class BridgeLanguageServer(
             if (engineRange != null) {
                 val csgsRange =
                     DiagnosticTranslation.translateRange(engineRange, lspWorkspace.csgsLineCount())
-                        ?: return@guardEngine null
-                return@guardEngine hover.copy(range = csgsRange)
+                        ?: return@withLiveDelegate null
+                return@withLiveDelegate hover.copy(range = csgsRange)
             }
             // No range at all: a positionless hover (rare) — pass it through unchanged.
             hover
@@ -453,11 +666,11 @@ class BridgeLanguageServer(
      * document positions, so it passes through unchanged.
      */
     override suspend fun textDocumentSignatureHelp(params: SignatureHelpParams): SignatureHelp? {
-        val server = delegate ?: return null
+        if (delegate == null) return null
         // `SignatureHelp | null` per spec (null when the cursor isn't in a call). lsp-types 1.2.0
         // types it nullable, so null propagates cleanly instead of throwing; a crashed engine is
         // guarded to inert so it can't take the shared connection down.
-        return guardEngine("signatureHelp", null) {
+        return withLiveDelegate("signatureHelp", null) { server ->
             server.textDocumentSignatureHelp(
                 params.copy(
                     textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
@@ -519,18 +732,25 @@ class BridgeLanguageServer(
      * the next reopen. Idempotent: a second pass is a no-op once [delegate] is nulled.
      */
     private suspend fun teardown() {
-        diagnostics = null
-        delegate?.let { server ->
-            // Tell the shared engine to forget our document (no-op if didClose already ran).
-            runCatching {
-                server.textDocumentDidClose(
-                    DidCloseTextDocumentParams(
-                        textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri)
+        // Take [reconnectLock] and set [torndown] so an in-flight self-heal (#54) can't resurrect
+        // the delegate after we null it; then release the delegate under the lock. A reconnect
+        // queued behind us will see [torndown] and bail.
+        reconnectLock.withLock {
+            torndown = true
+            diagnostics = null
+            openDocument = null
+            delegate?.let { server ->
+                // Tell the shared engine to forget our document (no-op if didClose already ran).
+                runCatching {
+                    server.textDocumentDidClose(
+                        DidCloseTextDocumentParams(
+                            textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri)
+                        )
                     )
-                )
+                }
             }
+            delegate = null
         }
-        delegate = null
         // cancelAndJoin: wait for all scope children (hauler writers, etc.) to actually finish
         // before returning, so callers that free resources (e.g. the temp dir in tests) do not
         // race with in-flight IO coroutines.
