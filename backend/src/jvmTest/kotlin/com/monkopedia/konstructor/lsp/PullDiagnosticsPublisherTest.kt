@@ -24,12 +24,18 @@ import com.monkopedia.lsp.RelatedFullDocumentDiagnosticReport
 import com.monkopedia.lsp.RelatedUnchangedDocumentDiagnosticReport
 import com.monkopedia.lsp.ServerCapabilities
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.coroutines.coroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.runTest
 
 /**
@@ -42,6 +48,9 @@ import kotlinx.coroutines.test.runTest
  *  - **`unchanged`-report skip** — an unchanged report must NOT republish.
  *  - **`previousResultId` threading** — the last `resultId` is fed to the next pull.
  *  - **refresh → re-pull** — `onRefresh` re-pulls every open doc.
+ *
+ * Plus the teardown contract the publisher now relies on (#80): the cold-index retry has no
+ * attempt countdown of its own, so cancelling the injected scope must stop it.
  */
 class PullDiagnosticsPublisherTest {
 
@@ -61,8 +70,6 @@ class PullDiagnosticsPublisherTest {
         range = Range(start = Position(0u, 0u), end = Position(0u, 0u)),
         message = message
     )
-
-    private val noBackoff = PullDiagnosticsPublisher.ColdIndexBackoff(maxAttempts = 1)
 
     /** A pull/publish recorder driving the publisher with scripted reports. */
     private class Recorder {
@@ -323,7 +330,37 @@ class PullDiagnosticsPublisherTest {
         )
     }
 
-    private fun kotlinx.coroutines.CoroutineScope.newPublisher(
+    // --- cancellation is what bounds the cold-index retry (#80) -----------------------
+
+    @Test
+    fun `the cold-index retry runs until its scope is cancelled`() = runTest {
+        val rec = Recorder()
+        rec.reports = { error("engine is down") }
+        // The publisher is launched in the ENGINE CONNECTION's scope (#80), which the bridge
+        // cancels when that connection dies or is replaced.
+        val connectionScope = CoroutineScope(coroutineContext + Job())
+        val publisher = connectionScope.newPublisher(rec)
+
+        publisher.onOpen(uri)
+        testScheduler.advanceTimeBy(30.seconds)
+        val whileConnected = rec.pullCalls.size
+        assertTrue(
+            whileConnected > 1,
+            "a failing first pull must keep retrying while the connection lives; got $whileConnected"
+        )
+
+        // Cancelling the connection's scope is the ONLY thing that bounds the retry — there is no
+        // attempt countdown any more.
+        connectionScope.cancel()
+        testScheduler.advanceTimeBy(5.minutes)
+        assertEquals(
+            whileConnected,
+            rec.pullCalls.size,
+            "a cancelled scope must stop the retry dead, not keep polling a dead engine"
+        )
+    }
+
+    private fun CoroutineScope.newPublisher(
         rec: Recorder,
         provider: com.monkopedia.lsp.ServerCapabilitiesDiagnosticProvider = DiagnosticOptions(
             interFileDependencies = false,
@@ -341,7 +378,6 @@ class PullDiagnosticsPublisherTest {
             rec.publishUris.add(uri)
             rec.publishes.add(diagnostics)
         },
-        awaitReady = { },
-        backoff = noBackoff
+        awaitReady = { }
     )
 }
