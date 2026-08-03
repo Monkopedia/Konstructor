@@ -27,12 +27,14 @@ import com.monkopedia.lsp.RelatedUnchangedDocumentDiagnosticReport
 import com.monkopedia.lsp.ServerCapabilities
 import com.monkopedia.lsp.ServerCapabilitiesDiagnosticProvider
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.coroutineContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -62,7 +64,8 @@ import kotlinx.coroutines.sync.withLock
  * (extraction-time affordances captured on #40: optional `identifier` keying resultId by
  * (uri, identifier?); `version` through the publish seam; `awaitReady` as a generic
  * `suspend () -> Unit`; the teardown contract — the publisher relies on its injected [scope]
- * being cancelled, which `BridgeLanguageServer.close()` does).
+ * being cancelled, which the bridge does whenever the engine connection it belongs to dies, is
+ * replaced or is torn down (#80), and which is the ONLY thing that bounds its pulls).
  *  - [pull]: how to PULL a [DocumentDiagnosticReport] for a doc (the subprocess stub's
  *    `textDocumentDiagnostic`, with `previousResultId`),
  *  - [publish]: how to PUSH a doc's diagnostics up to the target client (the bridge wires
@@ -70,7 +73,7 @@ import kotlinx.coroutines.sync.withLock
  *    `textDocumentPublishDiagnostics`),
  *  - [awaitReady]: a gate suspended on until the target client is ready to receive (the
  *    `initialized` handshake), and
- *  - timing knobs ([debounce], cold-index [backoff]).
+ *  - timing knobs ([debounce], [coldIndexRetry]).
  *
  * It tracks per-doc [previousResultId][DocumentDiagnosticParams.previousResultId] (see
  * [resultIds]); on each pull it threads the last id, and when the server answers an
@@ -79,9 +82,9 @@ import kotlinx.coroutines.sync.withLock
  * `kind == "full"`) emits a `publishDiagnostics`. This kills redundant upward pushes.
  *
  * Triggers:
- *  - [onOpen] — pull immediately (the doc just opened); bounded cold-index backoff applies
- *    to this FIRST pull only, since the index may not be warm yet (a pull can transiently
- *    fail or come back empty before analysis settles).
+ *  - [onOpen] — pull immediately (the doc just opened); the [coldIndexRetry] applies to this
+ *    FIRST pull only, since the index may not be warm yet (a pull can transiently fail or
+ *    come back empty before analysis settles).
  *  - [onChange] — debounced pull for that doc (coalesces a burst of edits/saves).
  *  - [onRefresh] — re-pull **all** open docs; this is the engine's
  *    `workspace/diagnostic/refresh` (the cold-index-warmed case), and is the steady-state
@@ -109,7 +112,8 @@ internal class PullDiagnosticsPublisher(
     /** Suspends until the target client has signalled it is ready (the `initialized` gate). */
     private val awaitReady: suspend () -> Unit,
     private val debounce: Duration = DEFAULT_DEBOUNCE,
-    private val backoff: ColdIndexBackoff = ColdIndexBackoff(),
+    /** How long to wait between re-tries of the FIRST pull, while the index is still cold. */
+    private val coldIndexRetry: Duration = DEFAULT_COLD_INDEX_RETRY,
     /**
      * Whether [onClose] emits a clearing `publish(uri, emptyList())` so the editor drops the
      * last squiggles when a doc closes (kodemirror does not always clear on its own didClose).
@@ -149,16 +153,16 @@ internal class PullDiagnosticsPublisher(
     private fun lockFor(uri: String): Mutex = pullLocks.getOrPut(uri) { Mutex() }
 
     /**
-     * Register `uri` as open and pull its diagnostics now, with bounded cold-index backoff
-     * (this first pull may race the index warming). Replaces the Phase 2 unconditional
-     * retry loop: once the engine sends a refresh we're event-driven, so backoff applies
+     * Register `uri` as open and pull its diagnostics now, retrying while the index is still
+     * cold (this first pull may race the index warming). Replaces the Phase 2 unconditional
+     * retry loop: once the engine sends a refresh we're event-driven, so the retry applies
      * ONLY to this initial pull.
      */
     fun onOpen(uri: String) {
         openDocs.add(uri)
         scope.launch {
             awaitReady()
-            pullWithColdIndexBackoff(uri)
+            pullUntilPublished(uri)
         }
     }
 
@@ -226,9 +230,17 @@ internal class PullDiagnosticsPublisher(
      */
     private suspend fun pullOnce(uri: String): PullOutcome = lockFor(uri).withLock {
         val previousResultId = resultIds[uri]
-        val report = runCatching { pull(uri, previousResultId) }
-            .onFailure { hauler.error("pull diagnostics failed for $uri", it) }
-            .getOrElse { return@withLock PullOutcome.FAILED }
+        val report = try {
+            pull(uri, previousResultId)
+        } catch (t: Throwable) {
+            // Our own cancellation must propagate, not be logged as an engine error and retried:
+            // it is how [pullUntilPublished] stops when the engine connection is cancelled (#80).
+            // A FOREIGN CancellationException (the dead engine leg) is an engine failure like any
+            // other, which is why this is ensureActive() and not `catch (e: CancellationException)`.
+            coroutineContext.ensureActive()
+            hauler.error("pull diagnostics failed for $uri", t)
+            return@withLock PullOutcome.FAILED
+        }
         when (report) {
             is RelatedFullDocumentDiagnosticReport -> {
                 report.resultId?.let { resultIds[uri] = it }
@@ -250,40 +262,25 @@ internal class PullDiagnosticsPublisher(
     }
 
     /**
-     * The first pull after [onOpen]: retry with bounded backoff until we either publish or
-     * exhaust attempts. The cold index can take ~120s to settle, so a pull may transiently
-     * fail or come back empty before analysis lands; once it publishes (or the doc closes)
-     * we stop and rely on event-driven [onRefresh]/[onChange].
+     * The first pull after [onOpen]: retry every [coldIndexRetry] until it publishes. The cold
+     * index can take ~120s to settle, so a pull may transiently fail or come back empty before
+     * analysis lands; once it publishes (or the doc closes) we stop and rely on event-driven
+     * [onRefresh]/[onChange]. It needs no attempt limit of its own: the loop is bounded by the
+     * [scope] it runs in, which the caller cancels when the engine connection dies or is replaced
+     * (#80) — so it can never outlive the engine it is polling.
      */
-    private suspend fun pullWithColdIndexBackoff(uri: String) {
-        var attempt = 0
-        while (attempt < backoff.maxAttempts && uri in openDocs) {
-            val outcome = pullOnce(uri)
-            if (outcome == PullOutcome.PUBLISHED) return
-            attempt++
-            delay(backoff.interval)
+    private suspend fun pullUntilPublished(uri: String) {
+        while (uri in openDocs) {
+            if (pullOnce(uri) == PullOutcome.PUBLISHED) return
+            delay(coldIndexRetry)
         }
     }
 
     private enum class PullOutcome { PUBLISHED, UNCHANGED, FAILED, SKIPPED_CLOSED }
 
-    /**
-     * Bounded backoff for the FIRST pull only (before the index warms). Not a steady-state
-     * poll: after the first publish we go event-driven (refresh/change). Defaults are
-     * generous enough to cover a cold index (~120s) without an unbounded loop.
-     */
-    data class ColdIndexBackoff(
-        val maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
-        val interval: Duration = DEFAULT_INTERVAL
-    ) {
-        private companion object {
-            private const val DEFAULT_MAX_ATTEMPTS = 40
-            private val DEFAULT_INTERVAL = 4.seconds
-        }
-    }
-
     companion object {
         private val DEFAULT_DEBOUNCE = 300.milliseconds
+        private val DEFAULT_COLD_INDEX_RETRY = 4.seconds
 
         /**
          * The authoritative pull-mode signal: the initialize result's

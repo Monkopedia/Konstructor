@@ -59,10 +59,11 @@ import com.monkopedia.lsp.ksrpc.LifecycleState
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonNull
@@ -102,8 +103,8 @@ import kotlinx.serialization.json.JsonNull
  *  - Pulls are triggered on didOpen + debounced didChange, and on the engine's
  *    `workspace/diagnostic/refresh` — overridden on the backend [Forwarder] (the
  *    `DefaultLanguageClient` base THROWS for it; the frontend client's is a harmless
- *    no-op, a different object) to re-pull every open doc. A bounded cold-index backoff
- *    covers only the FIRST pull before the index warms.
+ *    no-op, a different object) to re-pull every open doc. A cold-index retry covers only
+ *    the FIRST pull before the index warms.
  *  - `previousResultId` is threaded per doc; an `unchanged` report does not republish
  *    (only a `full` report emits `publishDiagnostics`).
  *
@@ -116,14 +117,14 @@ import kotlinx.serialization.json.JsonNull
  * client-bound request from inside [initialize] (deadlock risk).
  *
  * If the subprocess is unavailable (binary unset/missing or spawn failure),
- * [delegate] is null and the bridge degrades to an inert server: [initialize] returns
+ * [connection] is null and the bridge degrades to an inert server: [initialize] returns
  * empty capabilities, notifications are dropped. The frontend is flag-gated anyway, so
  * with the flag off this class is never constructed.
  *
  * **Self-heal after an engine crash (#54).** The kotlin-lsp subprocess can crash
  * mid-session; [KotlinLspProcess] then respawns it on the next [connect][KotlinLspProcess.connect].
- * The bridge's [delegate], however, is set once in [initialize] and would keep pointing at the
- * dead stub — so every forward call fails, [guardEngine] degrades it to inert, and LSP stays
+ * The bridge's engine [connection], however, is set once in [initialize] and would keep pointing
+ * at the dead stub — so every forward call fails, [guardEngine] degrades it to inert, LSP stays
  * dark for that document until it is closed+reopened. To self-heal, a forward call that fails
  * ([guardEngine]) triggers a single-flight [reconnect]: it re-[connect][KotlinLspProcess.connect]s
  * a fresh delegate against the (respawned) subprocess, re-runs the engine handshake, and
@@ -133,6 +134,12 @@ import kotlinx.serialization.json.JsonNull
  * leaves the bridge inert, exactly as before — it never throws out to kill the shared frontend
  * connection). Deliberately minimal: no backoff/retry-limit machinery — each failing request
  * makes at most one reconnect+retry attempt, so recovery is naturally paced by request traffic.
+ *
+ * **Engine-scoped work is tied to the connection (#80).** Everything the bridge runs on behalf of
+ * one engine connection — today the [PullDiagnosticsPublisher]'s pulls — is launched in that
+ * [EngineConnection.scope]. Cancelling the scope is the single teardown for all of it, so a
+ * connection that fails or is replaced by [reconnect] stops working immediately instead of each
+ * consumer having to notice the corpse and count itself out.
  */
 open class BridgeLanguageServer(
     private val config: Config,
@@ -144,18 +151,26 @@ open class BridgeLanguageServer(
     private val hauler = hauler("BridgeLanguageServer")
     private val lifecycle = LifecycleState()
     private val lspWorkspace = KonstructionLspWorkspace(config, workspaceId, konstructionId)
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    /** The subprocess-facing stub; null when the engine is unavailable. */
-    private var delegate: KsrpcLanguageServer? = null
+    /** The live engine connection; null when the engine is unavailable. */
+    private var connection: EngineConnection? = null
 
     /**
-     * The event-driven pull→push publisher (#43). Non-null ONLY when the subprocess
-     * advertised pull-mode ([ServerCapabilities.diagnosticProvider] != null); otherwise we
-     * run no pull machinery at all. Created in [initialize] once we have the engine's
-     * capabilities.
+     * One engine connection: the subprocess-facing [server] stub, the [scope] every piece of work
+     * launched on that engine's behalf runs in, and the pull publisher fed by it. They live and die
+     * together — [reconnect] and [teardown] cancel the [scope], which stops everything the
+     * connection had in flight (#80).
      */
-    private var diagnostics: PullDiagnosticsPublisher? = null
+    private class EngineConnection(val server: KsrpcLanguageServer) {
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+        /**
+         * The event-driven pull→push publisher (#43). Non-null ONLY when the engine advertised
+         * pull-mode ([ServerCapabilities.diagnosticProvider] != null); otherwise we run no pull
+         * machinery at all. Set by [handshakeEngine], which is where the capabilities land.
+         */
+        var diagnostics: PullDiagnosticsPublisher? = null
+    }
 
     /**
      * The frontend's document URI (`...content.csgs`), captured on the editor's first
@@ -195,14 +210,14 @@ open class BridgeLanguageServer(
     /**
      * Single-flight guard for [reconnect]: when the engine crashes, N concurrent forward calls all
      * fail at once; without this each would spawn its own handshake. The first to acquire performs
-     * the reconnect; the rest observe [delegate] already swapped to the fresh stub and skip.
+     * the reconnect; the rest observe [connection] already swapped to the fresh one and skip.
      */
     private val reconnectLock = Mutex()
 
     /**
      * Set once [teardown] runs, under [reconnectLock], so a concurrent [reconnect] that was queued
-     * behind teardown observes it and bails instead of resurrecting the delegate after the scope
-     * was cancelled (which would leak the fresh subprocess connection).
+     * behind teardown observes it and bails instead of resurrecting the connection after it was
+     * cancelled (which would leak the fresh subprocess connection).
      */
     private var torndown = false
 
@@ -247,7 +262,7 @@ open class BridgeLanguageServer(
          * event-driven instead of a poll loop.
          */
         override suspend fun workspaceDiagnosticRefresh(): Nothing? {
-            diagnostics?.onRefresh()
+            connection?.diagnostics?.onRefresh()
             return null
         }
     }
@@ -271,21 +286,22 @@ open class BridgeLanguageServer(
         // spawn/connect the warm subprocess. NO blocking client-bound request here.
         lspWorkspace.synthesize()
         val server = connectEngine()
-        delegate = server
         if (server == null) {
             hauler.error("kotlin-lsp engine unavailable; bridge is inert")
-            return InitializeResult(capabilities = com.monkopedia.lsp.ServerCapabilities())
+            return InitializeResult(capabilities = ServerCapabilities())
         }
-        return handshakeEngine(server, params)
+        val fresh = EngineConnection(server)
+        connection = fresh
+        return handshakeEngine(fresh, params)
     }
 
     /**
-     * Drive a freshly-[connect][KotlinLspProcess.connect]ed [server] through the engine
-     * handshake and (re)build the pull publisher, returning its [InitializeResult]. Shared by
+     * Drive a freshly-[connect][KotlinLspProcess.connect]ed [connection] through the engine
+     * handshake and build its pull publisher, returning the engine's [InitializeResult]. Shared by
      * the first [initialize] and by [reconnect] after a crash, so both replay the IDENTICAL init.
      */
     private suspend fun handshakeEngine(
-        server: KsrpcLanguageServer,
+        connection: EngineConnection,
         params: InitializeParams
     ): InitializeResult {
         // Drive the subprocess through the same handshake, but rooted at the synthesized
@@ -300,7 +316,7 @@ open class BridgeLanguageServer(
             "initialize",
             InitializeResult(capabilities = ServerCapabilities())
         ) {
-            server.initialize(
+            connection.server.initialize(
                 params.copy(
                     rootUri = lspWorkspace.rootUri,
                     workspaceFolders = null,
@@ -312,27 +328,28 @@ open class BridgeLanguageServer(
         // engine's capabilities is the only signal (there is no push capability flag). Only
         // then do we stand up the event-driven pull→push publisher; otherwise no pull
         // machinery runs at all.
-        diagnostics = PullDiagnosticsPublisher.pullProviderOf(result.capabilities)
-            ?.let { provider -> createPublisher(server, provider) }
+        connection.diagnostics = PullDiagnosticsPublisher.pullProviderOf(result.capabilities)
+            ?.let { provider -> createPublisher(connection, provider) }
         return result
     }
 
     /**
-     * Build the [PullDiagnosticsPublisher] wired to THIS bridge's subprocess [server] and
-     * frontend client. The publisher owns the pull/refresh/previousResultId/debounce/backoff
-     * logic; the bridge supplies only the three seams:
+     * Build the [PullDiagnosticsPublisher] wired to THIS [connection]'s engine stub and the
+     * frontend client. The publisher owns the pull/refresh/previousResultId/debounce/retry logic
+     * and runs it all in [EngineConnection.scope], so it stops the moment that connection is
+     * replaced or torn down (#80). The bridge supplies only the three seams:
      *  - the PULL (subprocess `textDocument/diagnostic`, threading `previousResultId`),
      *  - the PUBLISH (translate ranges to csgs space + rewrite the URI, then push up), and
      *  - the readiness gate (the editor's `initialized` handshake).
      */
     private fun createPublisher(
-        server: KsrpcLanguageServer,
+        connection: EngineConnection,
         provider: com.monkopedia.lsp.ServerCapabilitiesDiagnosticProvider
     ): PullDiagnosticsPublisher = PullDiagnosticsPublisher(
-        scope = scope,
+        scope = connection.scope,
         diagnosticProvider = provider,
         pull = { _, previousResultId ->
-            server.textDocumentDiagnostic(
+            connection.server.textDocumentDiagnostic(
                 DocumentDiagnosticParams(
                     textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri),
                     previousResultId = previousResultId
@@ -355,13 +372,13 @@ open class BridgeLanguageServer(
     override suspend fun initialized(params: InitializedParams) {
         // Remember the editor sent `initialized` so [reconnect] replays it to the fresh engine.
         initializedParams = params
-        delegate?.let { runCatching { it.initialized(params) } }
+        connection?.let { runCatching { it.server.initialized(params) } }
         // Now the editor has initialized; release the forwarder so it can push.
         lifecycle.advanceTo(LifecycleState.Phase.INITIALIZED)
     }
 
     override suspend fun textDocumentDidOpen(params: DidOpenTextDocumentParams) {
-        if (delegate == null) return
+        if (connection == null) return
         // Remember the editor's URI so subprocess diagnostics get routed back to it.
         frontendUri = params.textDocument.uri
         // Retain the live open doc so a post-crash [reconnect] can replay this didOpen (#54).
@@ -386,13 +403,13 @@ open class BridgeLanguageServer(
                 )
             )
         }
-        // Event-driven (#43): pull now (with cold-index backoff for this first pull only),
+        // Event-driven (#43): pull now (with the cold-index retry for this first pull only),
         // then rely on didChange/refresh. Routes by the frontend's csgs URI.
-        diagnostics?.onOpen(params.textDocument.uri)
+        connection?.diagnostics?.onOpen(params.textDocument.uri)
     }
 
     override suspend fun textDocumentDidChange(params: DidChangeTextDocumentParams) {
-        if (delegate == null) return
+        if (connection == null) return
         // Full-document sync (v1): the editor sends the whole edited csgs as the change
         // text (kodemirror full-sync; these files are tiny). Take the last change's text
         // as the live document, re-wrap it into the .kt form so the engine analyzes the
@@ -421,11 +438,11 @@ open class BridgeLanguageServer(
             )
         }
         // Event-driven (#43): debounced re-pull for the new content (coalesces edit bursts).
-        diagnostics?.onChange(params.textDocument.uri)
+        connection?.diagnostics?.onChange(params.textDocument.uri)
     }
 
     override suspend fun textDocumentDidClose(params: DidCloseTextDocumentParams) {
-        val server = delegate ?: return
+        val current = connection ?: return
         // The doc is closing: nothing to replay on a future reconnect. (A dead engine on close
         // needs no self-heal — the session is ending — so this path stays a plain guarded call.)
         openDocument = null
@@ -434,9 +451,9 @@ open class BridgeLanguageServer(
         // to leave openDocs/resultIds (uri-space key consistency — a mismatched key would leak
         // the doc and keep re-pulling it on every refresh after close). The publisher's own
         // publish seam translates to the wrapped uri at the boundary.
-        diagnostics?.onClose(params.textDocument.uri)
+        current.diagnostics?.onClose(params.textDocument.uri)
         runCatching {
-            server.textDocumentDidClose(
+            current.server.textDocumentDidClose(
                 DidCloseTextDocumentParams(
                     textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri)
                 )
@@ -445,7 +462,7 @@ open class BridgeLanguageServer(
     }
 
     /**
-     * Run a subprocess-facing ([delegate]) call, degrading to [fallback] if it fails.
+     * Run a subprocess-facing ([connection]) call, degrading to [fallback] if it fails.
      *
      * Failure isolation (observed live 2026-06-10): the kotlin-lsp subprocess can crash
      * mid-session. A throwing delegate call must NOT propagate an exception out of an LSP
@@ -474,7 +491,7 @@ open class BridgeLanguageServer(
         }
 
     /**
-     * Run a subprocess-facing call against the CURRENT [delegate], and — if the engine has
+     * Run a subprocess-facing call against the CURRENT [connection], and — if the engine has
      * crashed — transparently self-heal (#54): on failure, attempt a single-flight [reconnect]
      * against the respawned subprocess, then retry [block] ONCE against the fresh delegate. If the
      * engine is still dead after the reconnect attempt, degrade to [fallback] (never throwing —
@@ -484,70 +501,78 @@ open class BridgeLanguageServer(
      * one a captured reference would hold. At most one reconnect + one retry per failing call: no
      * backoff/retry-limit machinery — recovery is paced by request traffic (a subsequent request
      * that still fails simply tries again).
+     *
+     * Only ever called from an editor-facing method, i.e. NEVER from inside an
+     * [EngineConnection.scope] — [reconnect] cancels that scope, and a caller running in it would
+     * be cancelling itself mid-reconnect.
      */
     private suspend fun <T> withLiveDelegate(
         label: String,
         fallback: T,
         block: suspend (KsrpcLanguageServer) -> T
     ): T {
-        val server = delegate ?: return fallback
+        val dead = connection ?: return fallback
         return try {
-            block(server)
+            block(dead.server)
         } catch (t: Throwable) {
             // Cooperative cancellation of THIS coroutine must propagate; a foreign cancellation
             // (the dead engine leg) must not — see [guardEngine] for the full rationale.
             coroutineContext.ensureActive()
             hauler.error("kotlin-lsp '$label' failed; attempting reconnect", t)
             // Single-flight re-establish against the (respawned) subprocess. If it yields a fresh,
-            // live delegate, retry the call once against it; otherwise stay inert for this call.
-            val fresh = reconnect(deadServer = server)
-            if (fresh == null || fresh === server) {
+            // live connection, retry the call once against it; otherwise stay inert for this call.
+            val fresh = reconnect(dead)
+            if (fresh == null || fresh === dead) {
                 fallback
             } else {
-                guardEngine("$label (post-reconnect retry)", fallback) { block(fresh) }
+                guardEngine("$label (post-reconnect retry)", fallback) { block(fresh.server) }
             }
         }
     }
 
     /**
-     * Self-heal the delegate after an engine crash (#54): re-[connect][KotlinLspProcess.connect] a
-     * fresh subprocess-facing stub (the process manager respawns a dead subprocess on connect),
-     * replay the [initialize]/`initialized` handshake, and re-`didOpen` the current document so the
-     * respawned engine resumes analyzing what the user has open. Returns the fresh [delegate], or
-     * the current one unchanged if another concurrent call already reconnected, or `null` if the
-     * engine is still unavailable.
+     * Self-heal after an engine crash (#54): cancel the [dead] connection's scope,
+     * re-[connect][KotlinLspProcess.connect] a fresh subprocess-facing stub (the process manager
+     * respawns a dead subprocess on connect), replay the [initialize]/`initialized` handshake, and
+     * re-`didOpen` the current document so the respawned engine resumes analyzing what the user has
+     * open. Returns the fresh [connection], or the current one unchanged if another concurrent call
+     * already reconnected, or `null` if the engine is still unavailable.
      *
-     * Single-flight: guarded by [reconnectLock] and keyed on [deadServer] — the caller that
-     * observed a failure passes the delegate it was using; if [delegate] no longer === that stub,
-     * another coroutine already reconnected (or [teardown] nulled it) so we do NOT reconnect again.
-     * This both dedupes the N-concurrent-failures storm and prevents resurrecting the delegate
-     * after teardown (post-teardown [delegate] is null, so it can never === a non-null deadServer).
+     * Single-flight: guarded by [reconnectLock] and keyed on [dead] — the caller that observed a
+     * failure passes the connection it was using; if [connection] is no longer that one, another
+     * coroutine already reconnected (or [teardown] nulled it) so we do NOT reconnect again. This
+     * both dedupes the N-concurrent-failures storm and prevents resurrecting the connection after
+     * teardown (post-teardown [connection] is null, so it can never === a non-null [dead]).
      *
      * Failure-isolated: any error here is swallowed to `null` (bridge stays inert), never thrown —
      * preserving the [guardEngine] no-cascade contract.
      */
-    private suspend fun reconnect(deadServer: KsrpcLanguageServer): KsrpcLanguageServer? =
+    private suspend fun reconnect(dead: EngineConnection): EngineConnection? =
         reconnectLock.withLock {
-            // Torn down (scope cancelled): never resurrect the delegate.
+            // Torn down (connection cancelled): never resurrect it.
             if (torndown) return@withLock null
             // Another concurrent failure already reconnected, or teardown ran: nothing to do.
-            if (delegate !== deadServer) return@withLock delegate
+            if (connection !== dead) return@withLock connection
             val params = initializeParams ?: return@withLock null
+            // The engine behind this connection is gone, so everything scoped to it is pointless
+            // (#80): cancel it here — before the respawn — so a publisher mid-pull cannot keep
+            // polling the corpse alongside the fresh connection's own. Not joined: we must not
+            // block the reconnect (holding [reconnectLock]) on work stuck against a dead engine.
+            dead.scope.cancel()
             try {
                 // connectEngine respawns the subprocess if it died, and returns a fresh stub wired
                 // to a new Forwarder for THIS bridge's session.
-                val fresh = connectEngine()
+                val server = connectEngine()
                     ?: return@withLock null.also {
                         hauler.error("kotlin-lsp reconnect failed to respawn; bridge stays inert")
                     }
-                delegate = fresh
+                val fresh = EngineConnection(server)
+                connection = fresh
                 hauler.info("kotlin-lsp reconnected; replaying handshake + didOpen")
-                // Replay the engine handshake (this also rebuilds the pull publisher against the
-                // fresh stub) and, if the editor had already initialized, its `initialized`.
+                // Replay the engine handshake (this also builds the pull publisher against the
+                // fresh connection) and, if the editor had already initialized, its `initialized`.
                 handshakeEngine(fresh, params)
-                if (initializedParams != null) {
-                    runCatching { fresh.initialized(initializedParams!!) }
-                }
+                initializedParams?.let { runCatching { server.initialized(it) } }
                 // Re-open the current document so the engine re-analyzes what the user has open.
                 replayDidOpen(fresh)
                 fresh
@@ -560,15 +585,16 @@ open class BridgeLanguageServer(
         }
 
     /**
-     * Replay a `didOpen` for the current [openDocument] against a freshly-reconnected [server], and
-     * re-trigger the diagnostics pull. No-op if no document is open. Mirrors [textDocumentDidOpen]'s
-     * wrap-then-open, using the retained live content (kept current by didOpen/didChange).
+     * Replay a `didOpen` for the current [openDocument] against a freshly-reconnected [connection],
+     * and re-trigger the diagnostics pull. No-op if no document is open. Mirrors
+     * [textDocumentDidOpen]'s wrap-then-open, using the retained live content (kept current by
+     * didOpen/didChange).
      */
-    private suspend fun replayDidOpen(server: KsrpcLanguageServer) {
+    private suspend fun replayDidOpen(connection: EngineConnection) {
         val doc = openDocument ?: return
         lspWorkspace.synthesize(content = doc.csgsText)
         guardEngine("reconnect didOpen", Unit) {
-            server.textDocumentDidOpen(
+            connection.server.textDocumentDidOpen(
                 DidOpenTextDocumentParams(
                     textDocument = TextDocumentItem(
                         uri = lspWorkspace.documentUri,
@@ -579,7 +605,7 @@ open class BridgeLanguageServer(
                 )
             )
         }
-        diagnostics?.onOpen(doc.uri)
+        connection.diagnostics?.onOpen(doc.uri)
     }
 
     /**
@@ -593,7 +619,7 @@ open class BridgeLanguageServer(
     override suspend fun textDocumentCompletion(
         params: CompletionParams
     ): TextDocumentCompletionResult? {
-        if (delegate == null) return null
+        if (connection == null) return null
         // lsp-types 1.2.0 types this spec-nullable result honestly: a server returning `null`
         // (no completions / index not ready) decodes to `null`. A crashed engine, though, would
         // THROW — and an exception escaping here rides up the shared frontend connection and
@@ -616,7 +642,7 @@ open class BridgeLanguageServer(
      * back to csgs space too.
      */
     override suspend fun completionItemResolve(params: CompletionItem): CompletionItem {
-        if (delegate == null) return params
+        if (connection == null) return params
         return withLiveDelegate("completionItemResolve", params) { server ->
             translateCompletionItem(server.completionItemResolve(params))
         }
@@ -629,7 +655,7 @@ open class BridgeLanguageServer(
      * through untouched.
      */
     override suspend fun textDocumentHover(params: HoverParams): Hover? {
-        if (delegate == null) return null
+        if (connection == null) return null
         // Hover is `Hover | null` per spec: kotlin-lsp returns null for hover-over-nothing, which
         // the editor fires on every cursor move. lsp-types 1.2.0 types it nullable, so null now
         // decodes to null (no exception, no scope cancellation). Return null → editor shows no
@@ -666,7 +692,7 @@ open class BridgeLanguageServer(
      * document positions, so it passes through unchanged.
      */
     override suspend fun textDocumentSignatureHelp(params: SignatureHelpParams): SignatureHelp? {
-        if (delegate == null) return null
+        if (connection == null) return null
         // `SignatureHelp | null` per spec (null when the cursor isn't in a call). lsp-types 1.2.0
         // types it nullable, so null propagates cleanly instead of throwing; a crashed engine is
         // guarded to inert so it can't take the shared connection down.
@@ -708,8 +734,8 @@ open class BridgeLanguageServer(
      * `lsp()` sub-service AND the reverse [frontendClient] channel would stay registered
      * until the whole socket closes — leaking two sub-channels per open→close cycle.
      *
-     * So on close we [teardown] (cancel the bridge scope, stop the publisher, exit+close the
-     * subprocess-facing stub) AND additionally [close][KsrpcLanguageClient.close] the
+     * So on close we [teardown] (didClose the document, cancel the engine connection's scope and
+     * with it the publisher) AND additionally [close][KsrpcLanguageClient.close] the
      * stashed [frontendClient], which drops our reference to its reverse channel and lets
      * ksrpc reclaim it. Idempotent and ordered after [teardown] so the publisher (which
      * pushes to [frontendClient]) is already stopped before we release it.
@@ -724,37 +750,38 @@ open class BridgeLanguageServer(
     }
 
     /**
-     * Per-konstruction cleanup. Drops the publisher, sends a best-effort `didClose` so the
-     * SHARED engine forgets this konstruction's document, then cancels the bridge scope and
-     * waits for it to fully stop. Deliberately does NOT `shutdown`/`exit`/`close` the
-     * subprocess-facing [delegate] stub, because that stub rides the shared keep-warm
-     * connection — closing it would kill the engine for other open konstructions and break
-     * the next reopen. Idempotent: a second pass is a no-op once [delegate] is nulled.
+     * Per-konstruction cleanup. Sends a best-effort `didClose` so the SHARED engine forgets this
+     * konstruction's document, then cancels the connection's scope (stopping the publisher and
+     * anything else scoped to it) and waits for it to fully stop. Deliberately does NOT
+     * `shutdown`/`exit`/`close` the subprocess-facing stub, because it rides the shared keep-warm
+     * connection — closing it would kill the engine for other open konstructions and break the next
+     * reopen. Idempotent: a second pass is a no-op once [connection] is nulled.
      */
     private suspend fun teardown() {
         // Take [reconnectLock] and set [torndown] so an in-flight self-heal (#54) can't resurrect
-        // the delegate after we null it; then release the delegate under the lock. A reconnect
-        // queued behind us will see [torndown] and bail.
-        reconnectLock.withLock {
+        // the connection after we null it; then release it under the lock. A reconnect queued
+        // behind us will see [torndown] and bail.
+        val dead = reconnectLock.withLock {
             torndown = true
-            diagnostics = null
             openDocument = null
-            delegate?.let { server ->
+            val current = connection
+            connection = null
+            current?.let {
                 // Tell the shared engine to forget our document (no-op if didClose already ran).
                 runCatching {
-                    server.textDocumentDidClose(
+                    it.server.textDocumentDidClose(
                         DidCloseTextDocumentParams(
                             textDocument = TextDocumentIdentifier(uri = lspWorkspace.documentUri)
                         )
                     )
                 }
             }
-            delegate = null
+            current
         }
-        // cancelAndJoin: wait for all scope children (hauler writers, etc.) to actually finish
-        // before returning, so callers that free resources (e.g. the temp dir in tests) do not
-        // race with in-flight IO coroutines.
-        scope.coroutineContext[Job]?.cancelAndJoin()
+        // cancelAndJoin: unlike [reconnect]'s fire-and-forget cancel, teardown waits for the
+        // connection's children to actually finish, so callers that free resources (e.g. the temp
+        // dir in tests) do not race with in-flight IO coroutines.
+        dead?.scope?.coroutineContext?.job?.cancelAndJoin()
     }
 
     /**

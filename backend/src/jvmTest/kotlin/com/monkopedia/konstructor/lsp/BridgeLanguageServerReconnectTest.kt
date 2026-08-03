@@ -24,13 +24,18 @@ import com.monkopedia.lsp.CompletionItem
 import com.monkopedia.lsp.CompletionParams
 import com.monkopedia.lsp.DefaultLanguageClient
 import com.monkopedia.lsp.DefaultLanguageServer
+import com.monkopedia.lsp.DiagnosticOptions
 import com.monkopedia.lsp.DidOpenTextDocumentParams
+import com.monkopedia.lsp.DocumentDiagnosticParams
+import com.monkopedia.lsp.DocumentDiagnosticReport
 import com.monkopedia.lsp.InitializeParams
 import com.monkopedia.lsp.InitializeResult
 import com.monkopedia.lsp.InitializedParams
 import com.monkopedia.lsp.KsrpcLanguageServer
 import com.monkopedia.lsp.Position
+import com.monkopedia.lsp.RelatedFullDocumentDiagnosticReport
 import com.monkopedia.lsp.ServerCapabilities
+import com.monkopedia.lsp.ServerCapabilitiesDiagnosticProvider
 import com.monkopedia.lsp.TextDocumentCompletionResult
 import com.monkopedia.lsp.TextDocumentIdentifier
 import com.monkopedia.lsp.TextDocumentItem
@@ -42,7 +47,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 /**
  * Self-heal-after-crash guard for [BridgeLanguageServer] (#54), exercised WITHOUT a real
@@ -56,8 +65,10 @@ import kotlinx.coroutines.runBlocking
  *    retries once (LSP resumes without a file reopen),
  *  - the reconnect replays the engine handshake (`initialize` + `initialized`) and re-`didOpen`s the
  *    CURRENT document,
- *  - concurrent failing calls single-flight the reconnect (one respawn, not N), and
- *  - after teardown the bridge never resurrects the delegate.
+ *  - concurrent failing calls single-flight the reconnect (one respawn, not N),
+ *  - after teardown the bridge never resurrects the delegate, and
+ *  - the replaced connection's scope is cancelled, so work launched against the dead engine (the
+ *    diagnostics pull) stops there and then rather than running on (#80).
  */
 class BridgeLanguageServerReconnectTest {
 
@@ -83,12 +94,25 @@ class BridgeLanguageServerReconnectTest {
     }
 
     /** A fake engine stub. Forward calls throw while [crashed]; otherwise they record + respond. */
-    private class FakeEngine(val id: Int, val crashed: AtomicBoolean = AtomicBoolean(false)) :
-        DefaultLanguageServer() {
+    private class FakeEngine(
+        val id: Int,
+        val crashed: AtomicBoolean = AtomicBoolean(false),
+        /** Non-null ⇒ the fake advertises pull mode, so the bridge stands up a publisher. */
+        private val diagnosticProvider: ServerCapabilitiesDiagnosticProvider? = null
+    ) : DefaultLanguageServer() {
         val initializes = CopyOnWriteArrayList<InitializeParams>()
         val initializedCalls = CopyOnWriteArrayList<InitializedParams>()
         val didOpens = CopyOnWriteArrayList<DidOpenTextDocumentParams>()
         val completions = CopyOnWriteArrayList<CompletionParams>()
+
+        /** Completes once a diagnostics pull has reached this engine and parked on the gate. */
+        val pullStarted = CompletableDeferred<Unit>()
+
+        /** Completes if a parked pull is CANCELLED — i.e. the work scoped to it was stopped. */
+        val pullCancelled = CompletableDeferred<Unit>()
+
+        /** Never completed: a pull parks here so the test can observe what happens to it. */
+        private val pullGate = CompletableDeferred<Unit>()
 
         private fun crashIfDead() {
             if (crashed.get()) error("fake kotlin-lsp #$id crashed")
@@ -97,8 +121,27 @@ class BridgeLanguageServerReconnectTest {
         override suspend fun initialize(params: InitializeParams): InitializeResult {
             crashIfDead()
             initializes.add(params)
-            // No diagnosticProvider ⇒ no pull publisher; the test focuses on delegate self-heal.
-            return InitializeResult(capabilities = ServerCapabilities())
+            return InitializeResult(
+                capabilities = ServerCapabilities(diagnosticProvider = diagnosticProvider)
+            )
+        }
+
+        /**
+         * A pull that never answers: it records that it started and then parks, so the test can
+         * assert whether the coroutine driving it is still alive after a reconnect.
+         */
+        override suspend fun textDocumentDiagnostic(
+            params: DocumentDiagnosticParams
+        ): DocumentDiagnosticReport {
+            crashIfDead()
+            pullStarted.complete(Unit)
+            try {
+                pullGate.await()
+            } catch (e: CancellationException) {
+                pullCancelled.complete(Unit)
+                throw e
+            }
+            return RelatedFullDocumentDiagnosticReport(kind = "full", items = emptyList())
         }
 
         override suspend fun initialized(params: InitializedParams) {
@@ -267,6 +310,38 @@ class BridgeLanguageServerReconnectTest {
             bridge.handedOut.size,
             "teardown must prevent any reconnect (no second engine handed out)"
         )
+    }
+
+    @Test
+    fun `reconnect cancels the work scoped to the dead connection`() = runBlocking {
+        seedContent("val a = 1\n")
+        val pullMode =
+            DiagnosticOptions(interFileDependencies = false, workspaceDiagnostics = false)
+        val first = FakeEngine(id = 1, diagnosticProvider = pullMode)
+        val second = FakeEngine(id = 2, diagnosticProvider = pullMode)
+        val queue = ArrayDeque(listOf(first, second))
+        val bridge = FakeEngineBridge(env.config, workspaceId, konstructionId) {
+            queue.removeFirstOrNull()
+        }
+        bridge.initialize(
+            InitializeParams(capabilities = ClientCapabilities(), rootUri = "file:///$workspaceId")
+        )
+        bridge.initialized(InitializedParams())
+        bridge.textDocumentDidOpen(openParams("val a = 1\n"))
+        // The first connection's publisher is now mid-pull against the first engine.
+        withTimeout(10.seconds) { first.pullStarted.await() }
+
+        // The engine crashes and the next request self-heals onto the second engine.
+        first.crashed.set(true)
+        bridge.textDocumentCompletion(completionAt())
+
+        // The dead connection's scope goes with it, so its in-flight pull is cancelled instead of
+        // polling on against the corpse until some private countdown expires (#80)...
+        withTimeout(10.seconds) { first.pullCancelled.await() }
+        // ...and the pulling has moved to the fresh connection.
+        withTimeout(10.seconds) { second.pullStarted.await() }
+
+        bridge.close()
     }
 
     @Test
