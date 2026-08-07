@@ -12,7 +12,7 @@ Gradle 9.4.1 multi-module project using a version catalog (`gradle/libs.versions
 
 ### Modules
 
-- **protocol** — Kotlin Multiplatform (JVM + JS + WasmJS). Shared RPC service interfaces using ksrpc. Defines the API contract between backend and frontend.
+- **protocol** — Kotlin Multiplatform (JVM + WasmJS). Shared RPC service interfaces using ksrpc. Defines the API contract between backend and frontend.
 - **lib** — JVM only. CSG geometry library integration (kcsg). Built as a shadow JAR that gets bundled into the backend as a resource (`lib-all.raj`).
 - **frontend** — Kotlin/WasmJS + Compose Multiplatform. Material3 UI with kodemirror code editor. Compiled to WebAssembly and bundled into backend resources.
 - **backend** — Kotlin Multiplatform (JVM target). Ktor server that serves the frontend, manages workspaces/konstructions, compiles user scripts via lib, and communicates with frontend over WebSockets (ksrpc).
@@ -42,7 +42,7 @@ JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew shadowJar
 ./gradlew :backend:jvmTest --tests "*.KonstructorImplTest"
 
 # Lint/format check
-./gradlew autostyleCheck
+./gradlew spotlessCheck
 
 # Clean build (sometimes needed for Wasm compiler cache issues)
 ./gradlew clean shadowJar
@@ -65,7 +65,8 @@ The backend's `shadowJar` task orchestrates the full build:
 - The frontend uses Compose Multiplatform for UI rendering (Material3, wasmJs target).
 - Koin for dependency injection with ViewModels (`koin-compose-viewmodel`).
 - State management via Kotlin StateFlows, collected in Composables via `collectAsState()`.
-- TestBridge pattern for Playwright e2e testing: exposes app state to `globalThis.__konstructor` since Compose renders to a WebGL canvas (no DOM elements for Playwright selectors).
+- JsBridge (formerly TestBridge) pattern for Playwright e2e testing: exposes app state to `globalThis.__konstructor` since Compose renders to a WebGL canvas (no DOM elements for Playwright selectors).
+- **LSP**: a kcsg-aware language server (completion/hover/pull-diagnostics) is wired through `backend/src/jvmMain/.../lsp/` (a `BridgeLanguageServer` fronting a standalone kotlin-lsp/intellij-server engine spawned via `KONSTRUCTOR_KOTLIN_LSP`) and the frontend editor's LSP client. Opt-in via a Settings toggle.
 
 ## Frontend Structure (src/wasmJsMain/)
 
@@ -74,25 +75,27 @@ frontend/src/wasmJsMain/kotlin/com/monkopedia/konstructor/frontend/
 ├── Main.kt              — ComposeViewport entry point
 ├── KonstruktorApp.kt    — Root composable (Koin + MaterialTheme)
 ├── Theme.kt             — Material3 dark color scheme
-├── TestBridge.kt        — Playwright e2e testing bridge
+├── JsBridge.kt          — Playwright e2e testing bridge (was TestBridge.kt)
 ├── di/AppModule.kt      — Koin module definitions
 ├── viewmodel/           — ViewModels (ServiceHolder, SpaceList, Workspace, Konstruction, Settings, NavigationDialog)
 ├── ui/                  — Composable screens
 │   ├── Initializer.kt   — Routes to Loading/Empty/Main based on state
 │   ├── MainScreen.kt    — 50/50 split layout
 │   ├── TopBar.kt        — Material3 TopAppBar
-│   ├── editor/          — kodemirror editor integration
+│   ├── editor/          — kodemirror editor integration + LSP client (EditorLspClient, EditorDiagnostics)
 │   ├── navigation/      — Workspace/Konstruction list
 │   ├── settings/        — Settings, GL settings, Selection panes
 │   └── dialogs/         — Create/Edit workspace/konstruction dialogs
 └── threejs/             — Three.js Wasm interop bindings (Phase 2)
 ```
 
+_Overview, not exhaustive — newer files (e.g. `JsBridge.kt`, `BridgeStateSnapshot.kt`, `ui/GlRenderer.kt`, `ui/ContentPane.kt`) are omitted for brevity._
+
 ## Code Style
 
-- Apache 2.0 license headers on all Kotlin files (enforced by autostyle)
-- ktlint formatting (version 0.42.1, android profile)
-- JVM target: Java 17
+- Apache 2.0 license headers on all Kotlin files (enforced by spotless)
+- ktlint formatting (version 1.8.0, `android_studio` code style via `.editorconfig`)
+- JVM bytecode target: Java 17 for `:backend`; the other modules compile against the JDK 21 toolchain, so the assembled fat JAR requires **Java 21 at runtime** (it will not boot on 17)
 - Requires JDK 21 to build (`JAVA_HOME=/usr/lib/jvm/java-21-openjdk`)
 - Compiler flags: `-Xskip-prerelease-check` on most modules
 
@@ -100,5 +103,5 @@ frontend/src/wasmJsMain/kotlin/com/monkopedia/konstructor/frontend/
 
 - **Backend unit tests**: protocol types serialization, Config, PathController, workspace/konstruction CRUD
 - **Backend integration tests**: full lifecycle tests, compile+execute (requires `-Dintegration=true`)
-- **E2e tests**: Playwright-based, uses TestBridge for Compose canvas interaction and ksrpc API for server operations
+- **E2e tests**: Playwright-based, uses JsBridge for Compose canvas interaction and ksrpc API for server operations
 - **Screenshot baselines**: pre-migration screenshots in `e2e/baselines/` for visual regression comparison
