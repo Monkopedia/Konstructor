@@ -144,7 +144,10 @@ afterEvaluate {
     }
 
     val jvmJar = tasks.named<Jar>("jvmJar")
-    tasks.register<
+    // Shadow 9.x auto-registers a `shadowJar` task (8.x did not for this KMP-jvm
+    // setup), so `register` collides ("task already exists"). Configure the
+    // plugin-created task instead. (#64 spike)
+    tasks.named<
         com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
         >("shadowJar") {
         from(jvmJar.map { it.outputs })
