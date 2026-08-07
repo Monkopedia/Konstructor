@@ -143,11 +143,17 @@ afterEvaluate {
         mustRunAfter(lib.tasks["shadowJar"])
     }
 
-    val jvmJar = tasks.named<Jar>("jvmJar")
-    tasks.register<
+    // Shadow 9.x auto-registers a `shadowJar` task for this KMP-jvm module (8.x did
+    // not), so `tasks.register("shadowJar")` collides with "task already exists".
+    // Configure the plugin-created task instead. That task already pulls in the jvm
+    // main output, so the old explicit `from(jvmJar.map { it.outputs })` is not only
+    // redundant, it is harmful under 9.x: `ShadowJar.from` was aligned with Gradle's
+    // `AbstractCopyTask.from`, which copies a jar as an OPAQUE FILE rather than
+    // unzipping it — that added an 18.8 MB `backend-jvm-0.3.0.jar` entry inside
+    // `backend-all.jar` (44.9 MB -> 63.9 MB) that nothing on the classpath can read.
+    tasks.named<
         com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
         >("shadowJar") {
-        from(jvmJar.map { it.outputs })
         val cp = project.configurations.getByName("jvmRuntimeClasspath")
         configurations = listOf(cp)
         archiveClassifier.set("all")
@@ -159,6 +165,16 @@ afterEvaluate {
         archiveVersion.set("")
         manifest {
             attributes["Main-Class"] = "com.monkopedia.konstructor.AppKt"
+        }
+        // Shadow 9.x actually honours `duplicatesStrategy`, and its default is
+        // EXCLUDE — which drops a duplicate entry BEFORE any transformer sees it, so
+        // `mergeServiceFiles()` silently degrades to "keep the first jar's file".
+        // Measured on this project: `META-INF/services/...TerminalInterfaceProvider`
+        // collapsed from 3 providers to 1. Let service files through as duplicates so
+        // the ServiceFileTransformer can actually merge them; everything else keeps
+        // the EXCLUDE default. (#64)
+        filesMatching("META-INF/services/**") {
+            duplicatesStrategy = DuplicatesStrategy.INCLUDE
         }
         mergeServiceFiles()
         mustRunAfter("copyJsBundleToKtor")
