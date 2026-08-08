@@ -48,7 +48,13 @@ jobs:
         run: ./gradlew shadowJar
 
       - name: Run backend + protocol unit tests
-        run: ./gradlew test :backend:jvmTest :protocol:jvmTest
+        # SPIKE (#82): add -Dintegration=true to turn ON the integration gate that
+        # CI never passes today, to measure how many of the assumeTrue-gated
+        # integration methods actually execute + pass on a runner. The LSP
+        # integration tests additionally require KONSTRUCTOR_KOTLIN_LSP (a real
+        # engine), so those will still skip here — that asymmetry is part of the
+        # answer. DO NOT MERGE.
+        run: ./gradlew test :backend:jvmTest :protocol:jvmTest -Dintegration=true
 
       - name: Run e2e tests under Xvfb
         run: xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' ./gradlew :e2e:test -Pe2e
