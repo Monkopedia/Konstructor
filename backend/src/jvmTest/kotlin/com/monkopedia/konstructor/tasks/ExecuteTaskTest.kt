@@ -19,11 +19,13 @@ import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.KonstructionControllerImpl.Companion.copyContentToScript
 import com.monkopedia.konstructor.PathController
 import com.monkopedia.konstructor.common.TaskResult
+import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.hostservices.InvalidScriptException
 import com.monkopedia.konstructor.hostservices.ScriptManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 class ExecuteTaskTest {
@@ -50,6 +52,46 @@ class ExecuteTaskTest {
             """.trimIndent()
         )
         assertEquals(SUCCESS, result.status, "Result: $result")
+    }
+
+    /**
+     * Regression test for #81.
+     *
+     * A multi-target render where one export fails at EXECUTE time (compiles fine, throws while
+     * building/rendering) while the subprocess stays alive and another export succeeds. The
+     * failing target is declared FIRST and the succeeding target LAST, which is exactly the
+     * last-target-wins scenario that used to mask the failure:
+     *   (a) `isSuccessful` was ASSIGNED per target, so `good` building after `bad` overwrote the
+     *       failure and the whole render reported SUCCESS (the failed target got marked CLEAN and
+     *       never retried).
+     *   (b) the fetched error trace was discarded, so `messages` was always empty.
+     *
+     * With the fix the render must report FAILURE and surface the error trace.
+     */
+    @Test
+    fun `multi-target render fails when one target fails at execute time`() {
+        val result = execCode(
+            """
+            val bad by primitive {
+               throw RuntimeException("boom-81")
+            }
+            val good by primitive {
+               roundedCube {
+                   dimensions = xyz(1.0, 1.0, 1.0)
+               }
+            }
+            """.trimIndent()
+        )
+        assertEquals(
+            FAILURE,
+            result.status,
+            "A failed target must fail the whole render, even if a later target succeeds. " +
+                "Result: $result"
+        )
+        assertTrue(
+            result.messages.isNotEmpty(),
+            "The execute-phase error trace must be surfaced in messages. Result: $result"
+        )
     }
 
     fun execCode(code: String): TaskResult {
