@@ -22,6 +22,7 @@ import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
 import com.monkopedia.ksrpc.toStub
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
+import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
@@ -58,7 +59,7 @@ class SaveFlowTest : BaseE2eTest() {
         System.err.println("Workspace ID: $wsId")
 
         // Create konstruction and set content via API
-        runBlocking {
+        val konstruction = runBlocking {
             val env = ksrpcEnvironment { }
             val client = HttpClient { install(WebSockets) }
             val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
@@ -70,6 +71,7 @@ class SaveFlowTest : BaseE2eTest() {
             val ks = service.konstruction(kon)
             ks.set(validScript)
             System.err.println("Created konstruction ${kon.id} and set content")
+            kon
         }
 
         // Reload again so Initializer picks up the konstruction
@@ -89,18 +91,30 @@ class SaveFlowTest : BaseE2eTest() {
         val vBefore = getVersion()
         page.evaluate("() => globalThis.__konstructor.actions.triggerSave('')")
 
-        try {
-            page.waitForFunction(
-                "(v) => globalThis.__konstructor.version > v",
-                vBefore,
-                com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(120000.0)
-            )
-            System.err.println("Save completed!")
-        } catch (e: Exception) {
-            System.err.println("Save timeout: ${e.message}")
-        }
+        // The version increment IS the "save happened" signal. If it never
+        // arrives, this throws and the test FAILS — a broken save must not pass.
+        page.waitForFunction(
+            "(v) => globalThis.__konstructor.version > v",
+            vBefore,
+            com.microsoft.playwright.Page.WaitForFunctionOptions().setTimeout(120000.0)
+        )
+        System.err.println("Save completed!")
 
         page.waitForTimeout(3000.0)
         screenshot("save-flow-after")
+
+        // Round-trip assertion: the saved content must be readable back via the
+        // API and match what we saved. Without this the save could "complete"
+        // (version bump) while persisting the wrong content and still pass.
+        runBlocking {
+            val env = ksrpcEnvironment { }
+            val client = HttpClient { install(WebSockets) }
+            val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
+            val service = conn.defaultChannel().toStub<Konstructor, String>()
+            val ks = service.konstruction(konstruction)
+            val fetched = ks.fetch()
+            System.err.println("Fetched back ${fetched.length} chars after save")
+            assertEquals(validScript, fetched)
+        }
     }
 }

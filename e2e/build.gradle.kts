@@ -41,5 +41,18 @@ tasks.test {
     val jarFile = project(":backend")
         .layout.buildDirectory.file("libs/backend-all.jar")
     systemProperty("konstructor.jar", jarFile.get().asFile.absolutePath)
+    // Forward opt-in flags to the forked test JVM. Gradle does not propagate -D
+    // system properties or -P project properties to test workers automatically,
+    // so without this the `capture`/`updateBaselines` gates always read null.
+    //  - `capture`: run the assertion-free screenshot/manual capture tools.
+    //  - `updateBaselines`: on a missing baseline, write the captured actual as
+    //    the new baseline and skip (instead of failing).
+    // A bare `-Pcapture` / `-PupdateBaselines` (no value) is treated as opt-in.
+    listOf("capture", "updateBaselines").forEach { key ->
+        if (project.hasProperty(key) || System.getProperty(key) != null) {
+            val raw = (project.findProperty(key) as? String) ?: System.getProperty(key)
+            systemProperty(key, if (raw.isNullOrEmpty()) "true" else raw)
+        }
+    }
     useJUnit()
 }

@@ -26,7 +26,9 @@ import com.monkopedia.ksrpc.toStub
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
 import kotlin.test.assertTrue
+import kotlin.test.fail
 import kotlinx.coroutines.runBlocking
+import org.junit.Assume.assumeTrue
 import org.junit.Ignore
 import org.junit.Test
 
@@ -67,20 +69,34 @@ class MigrationVisualRegressionTest : BaseE2eTest() {
     }
 
     /**
-     * Capture the current full page and diff it against a named baseline. When
-     * no baseline exists yet, the actual is written to build/screenshots/ and
-     * the test asserts that fact (so a new baseline is a deliberate one-line add
-     * by copying the captured image into e2e/baselines/).
+     * Capture the current full page and diff it against a named baseline.
+     *
+     * A MISSING baseline is a FAILURE, not a silent pass — otherwise this gate
+     * measures nothing (issue #82c). The sanctioned way to establish a baseline
+     * is to run with `-PupdateBaselines` (or `-DupdateBaselines=true`): in that
+     * mode a missing baseline is written from the captured actual and the test
+     * SKIPs (so the next ordinary run compares against it). A plain run with a
+     * missing baseline FAILS.
      */
     private fun assertBaseline(name: String, maxDiffFraction: Double) {
         val png = page.screenshot(Page.ScreenshotOptions().setFullPage(true))
         val result = BaselineComparison.compare(png, name)
         if (!result.baselineExists) {
-            System.err.println(
-                "No baseline '$name' yet; captured actual at ${result.diffImagePath}. " +
-                    "Copy it into e2e/baselines/$name.png to establish it."
+            if (System.getProperty("updateBaselines") == "true") {
+                val target = BaselineComparison.baselineFor(name)
+                target.parentFile?.mkdirs()
+                target.writeBytes(png)
+                assumeTrue(
+                    "Established new baseline '$name' at ${target.absolutePath}; " +
+                        "re-run without -PupdateBaselines to compare against it.",
+                    false
+                )
+                return
+            }
+            fail(
+                "No baseline '$name' — run with -PupdateBaselines to establish it. " +
+                    "Captured actual is under build/screenshots/$name-actual.png."
             )
-            return
         }
         assertTrue(
             result.sameSize,

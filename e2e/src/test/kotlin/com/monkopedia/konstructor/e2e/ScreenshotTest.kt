@@ -15,13 +15,27 @@
  */
 package com.monkopedia.konstructor.e2e
 
+import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
  * Captures screenshots of all major UI states for visual inspection.
  * Screenshots are saved to e2e/build/screenshots/.
+ *
+ * These are capture TOOLS, not assertions — they make no claim about behaviour,
+ * so on an ordinary run they must not masquerade as passing tests. They are
+ * gated behind `-Dcapture=true` (or `-Pcapture`) and SKIP otherwise.
  */
 class ScreenshotTest : BaseE2eTest() {
+
+    @Before
+    fun requireCaptureOptIn() {
+        assumeTrue(
+            "Set -Dcapture=true (or -Pcapture) to run screenshot capture tools",
+            System.getProperty("capture") == "true"
+        )
+    }
 
     @Test
     fun captureEmptyState() {
