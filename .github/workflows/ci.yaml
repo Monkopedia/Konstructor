@@ -47,8 +47,12 @@ jobs:
       - name: Build shadowJar (produces the backend fat jar e2e tests run against)
         run: ./gradlew shadowJar
 
-      - name: Run backend + protocol unit tests
-        run: ./gradlew test :backend:jvmTest :protocol:jvmTest
+      - name: Run backend + protocol unit + integration tests
+        # -Dintegration=true runs the compile+execute and subprocess-failure
+        # integration tests (9 methods) that otherwise self-skip via assumeTrue.
+        # BridgeLanguageServerIntegrationTest stays skipped (its second gate needs
+        # a real kotlin-lsp engine, absent on the runner); soak stays off.
+        run: ./gradlew test :backend:jvmTest :protocol:jvmTest -Dintegration=true
 
       - name: Run e2e tests under Xvfb
         run: xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' ./gradlew :e2e:test -Pe2e
