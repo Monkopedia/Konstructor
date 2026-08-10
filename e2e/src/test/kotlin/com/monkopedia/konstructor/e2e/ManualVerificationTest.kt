@@ -24,13 +24,27 @@ import com.monkopedia.ksrpc.toStub
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
 import kotlinx.coroutines.runBlocking
+import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
  * Takes screenshots at every step to verify the full UI works.
- * Run with: DISPLAY=:99 ./gradlew :e2e:test -Pe2e --tests "*.ManualVerificationTest" --no-daemon
+ * Run with: DISPLAY=:99 ./gradlew :e2e:test -Pe2e -Pcapture --tests "*.ManualVerificationTest" --no-daemon
+ *
+ * This is a manual capture TOOL with no assertions, so on an ordinary run it
+ * must not masquerade as a passing test. It is gated behind `-Dcapture=true`
+ * (or `-Pcapture`) and SKIPs otherwise.
  */
 class ManualVerificationTest : BaseE2eTest() {
+
+    @Before
+    fun requireCaptureOptIn() {
+        assumeTrue(
+            "Set -Dcapture=true (or -Pcapture) to run the manual verification capture tool",
+            System.getProperty("capture") == "true"
+        )
+    }
 
     private val cubeScript = """
 val simpleCube by primitive {
