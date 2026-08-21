@@ -20,6 +20,8 @@ import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.Config
+import com.monkopedia.konstructor.common.MessageImportance
+import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
@@ -57,7 +59,7 @@ class ExecuteTask(
 ) {
     private val hauler by lazy { hauler() }
     suspend fun execute(): Pair<TaskResult, List<String>> {
-        val errors = StringBuilder()
+        val messages = mutableListOf<TaskMessage>()
         var isSuccessful = true
         val exports = script.listTargets(onlyExports = true)
         val allTargets = script.listTargets(onlyExports = false).map { it.name }
@@ -68,13 +70,29 @@ class ExecuteTask(
             val exportService = script.buildTarget(export)
             val status = awaitTerminalStatus(export, exportService)
 
-            isSuccessful = status == BUILT
-            if (!isSuccessful) {
-                hauler.error("Error: ${runCatching { exportService.getErrorTrace() }.getOrNull()}")
+            val targetBuilt = status == BUILT
+            // Accumulate — one failed target must fail the whole render. This previously
+            // ASSIGNED (`isSuccessful = status == BUILT`), i.e. last-target-wins: with a live
+            // subprocess, target A failing then target B succeeding reported SUCCESS and the
+            // caller marked the failed target CLEAN, so it never retried (#81).
+            isSuccessful = isSuccessful && targetBuilt
+            if (!targetBuilt) {
+                val trace = runCatching { exportService.getErrorTrace() }.getOrNull()
+                hauler.error("Error: $trace")
+                // Surface the execute-phase error to the UI. The trace is a runtime error,
+                // not kotlinc output, and CompileTask.parseErrors() keeps only kotlinc-format
+                // lines — routing the trace through it would filter it to nothing, which is
+                // why the old write-never `errors` StringBuilder always yielded empty
+                // messages (#81). Build the TaskMessage directly instead.
+                messages += TaskMessage(
+                    message = trace?.takeIf { it.isNotBlank() }
+                        ?: "Target '$export' failed to build (no error trace available).",
+                    importance = MessageImportance.ERROR
+                )
             }
             runCatching { exportService.close() }
             hauler.debug("Done with $export")
-            if (!isSuccessful && subprocessExit?.isCompleted == true) {
+            if (!targetBuilt && subprocessExit?.isCompleted == true) {
                 // The subprocess is gone; remaining targets can't build. Stop here.
                 break
             }
@@ -89,19 +107,11 @@ class ExecuteTask(
         } catch (t: Throwable) {
             // Closing up, thats fin.
         }
-        return if (isSuccessful) {
-            TaskResult(
-                builtTargets,
-                SUCCESS,
-                CompileTask.parseErrors(errors.toString().byteInputStream().bufferedReader())
-            ) to allTargets
-        } else {
-            TaskResult(
-                builtTargets,
-                FAILURE,
-                CompileTask.parseErrors(errors.toString().byteInputStream().bufferedReader())
-            ) to allTargets
-        }
+        return TaskResult(
+            builtTargets,
+            if (isSuccessful) SUCCESS else FAILURE,
+            messages
+        ) to allTargets
     }
 
     /**
