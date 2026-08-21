@@ -94,7 +94,8 @@ fun SettingsPane(modifier: Modifier = Modifier) {
 
         // Code intelligence via the kotlin-lsp language server: completion,
         // hover, signature help, and live error diagnostics in the editor.
-        // Opt-in; requires the server to have an LSP engine configured.
+        // On by default since 2026-08-21 (opt-OUT); still requires the server to have
+        // an LSP engine configured, so with no engine this switch changes nothing.
         SettingSwitchRow(
             label = "Code completion & errors (LSP)",
             checked = lspEnabled,

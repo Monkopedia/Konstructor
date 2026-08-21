@@ -119,7 +119,8 @@ class KonstructionServiceImpl(
             // param, so its publishDiagnostics channel rides the same WebSocket) is
             // stashed and the bridge forwards real kcsg-aware diagnostics to it.
             //
-            // Still wholly flag-gated on the frontend (lspEnabled, default OFF) and the
+            // Still wholly flag-gated on the frontend (lspEnabled, default ON since
+            // 2026-08-21 — the flag still exists, only its default moved) and the
             // bridge degrades to an inert server when no kotlin-lsp binary is configured
             // (CI), so the absence of the engine never crashes konstructor.
             BridgeLanguageServer(config, workspaceId, id, client)
