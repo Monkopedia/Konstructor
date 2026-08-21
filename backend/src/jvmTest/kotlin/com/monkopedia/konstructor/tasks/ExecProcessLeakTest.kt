@@ -26,6 +26,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 
 /**
@@ -106,7 +107,23 @@ class ExecProcessLeakTest {
         )
     }
 
-    /** Runs [block] with a recording default uncaught handler, restoring the previous one. */
+    /**
+     * Runs [block] with a recording default uncaught handler, restoring the previous one,
+     * then DRAINS anything `kotlinx-coroutines-test` stashed on the way past.
+     *
+     * The drain is not tidiness — without it this file reproduces the very bug it guards.
+     * `ExceptionCollector.handleException` stashes an exception into `unprocessedExceptions`
+     * whenever no `runTest` is active (and still forwards it to the thread handler, which is
+     * how the recorder sees it), and that collector latches on for the rest of the fork after
+     * the first `runTest`. The next `TestScope.enter()` drains the stash and throws
+     * `UncaughtExceptionsBeforeTest` — so the deliberate leak below would fail an unrelated
+     * test later in the run, which is exactly konstructor#101's signature.
+     *
+     * It was green only by ordering luck: every `runTest` class in this module currently
+     * happens to be scanned before this one. Adding a `runTest` class that sorts after it
+     * would have turned this red on a stranger. Entering and discarding one `runTest` here
+     * consumes the stash at a known point instead.
+     */
     private inline fun recordUncaught(block: () -> Unit): List<Throwable> {
         val seen = CopyOnWriteArrayList<Throwable>()
         val previous = Thread.getDefaultUncaughtExceptionHandler()
@@ -115,6 +132,7 @@ class ExecProcessLeakTest {
             block()
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(previous)
+            runCatching { runTest { } }
         }
         return seen
     }

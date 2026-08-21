@@ -130,6 +130,14 @@ object ExecUtil {
                     // built on are closed when the process exits. Leave `connection`
                     // uncompleted — callers already handle a process that died before it
                     // could be attached to.
+                    //
+                    // Logged, unlike the stderr pump, because the two failures are not
+                    // equally expected here. `connection` is awaited in one place
+                    // (ScriptManager, inside withTimeout), so a GENUINE I/O failure while
+                    // attaching would otherwise present only as a timeout with the cause
+                    // discarded and no trace anywhere. Debug level keeps the ordinary
+                    // shutdown case from being noise.
+                    hauler.debug("Process streams closed before the channel attached: ${t.message}")
                 }
             }
             parentScope.launch {
