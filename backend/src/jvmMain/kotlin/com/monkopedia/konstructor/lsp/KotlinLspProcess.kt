@@ -53,6 +53,12 @@ class KotlinLspProcess private constructor(private val config: Config) {
     private var process: Process? = null
     private var connection: SingleChannelConnection<String>? = null
 
+    /** Spawn timestamps inside the current window, used to bound respawn attempts. */
+    private val recentSpawns = ArrayDeque<Long>()
+
+    /** While `now < this`, spawning is refused outright and the bridge stays inert. */
+    private var cooldownUntil = 0L
+
     /**
      * Lazily spawn (once) the warm subprocess and return a fresh subprocess-facing
      * [KsrpcLanguageServer] stub wired to [forwarder]. Returns `null` if the binary is
@@ -76,13 +82,21 @@ class KotlinLspProcess private constructor(private val config: Config) {
         }
     }
 
-    private suspend fun ensureConnection(): SingleChannelConnection<String>? {
+    /**
+     * Internal rather than private so a test can drive the spawn path directly, without
+     * needing a [KsrpcLanguageClient] forwarder for a subprocess that is never going to
+     * answer. Not part of the public surface.
+     */
+    internal suspend fun ensureConnection(): SingleChannelConnection<String>? {
         connection?.let { existing ->
             if (process?.isAlive == true) return existing
             // The warm process died; drop the stale handles and respawn below.
             shutdownLocked()
         }
         val binary = config.kotlinLspBinary ?: return null
+        val now = System.currentTimeMillis()
+        if (now < cooldownUntil) return null
+        if (!admitSpawn(now)) return null
         return try {
             val systemPath = config.kotlinLspSystemPath.absolutePath
             hauler.info("Spawning kotlin-lsp: ${binary.absolutePath} (system-path=$systemPath)")
@@ -95,6 +109,26 @@ class KotlinLspProcess private constructor(private val config: Config) {
                 .redirectOutput(ProcessBuilder.Redirect.PIPE)
                 .redirectError(ProcessBuilder.Redirect.INHERIT)
                 .start()
+            if (!isStillRunning(proc)) {
+                // An EXPIRED engine lands here (konstructor#84). It is present, executable,
+                // and `start()` returns normally — it just prints "This build of
+                // intellij-server has expired" and exits. Every other availability check
+                // passes, so without this the connection is cached as live and the bridge
+                // never degrades to inert.
+                //
+                // Deliberately "did it exit immediately" rather than "does stderr say
+                // expired": it catches a bad launcher, a missing JRE and a wrong argument
+                // the same way, and it does not depend on JetBrains' wording. A healthy
+                // engine stays up for its ~120s cold index, so it is never confused with
+                // one that dies in the first second.
+                hauler.error(
+                    "kotlin-lsp exited immediately (code ${proc.exitValue()}) — treating the " +
+                        "engine as unavailable; LSP stays off. An expired build looks exactly " +
+                        "like this."
+                )
+                runCatching { proc.destroyForcibly() }
+                return null
+            }
             val conn = (proc.inputStream to proc.outputStream).asLspConnection()
             process = proc
             connection = conn
@@ -104,6 +138,40 @@ class KotlinLspProcess private constructor(private val config: Config) {
             shutdownLocked()
             null
         }
+    }
+
+    /**
+     * True if [proc] is still alive after a short readiness window.
+     *
+     * Costs [READY_PROBE_MILLIS] once per spawn, not per request — and only on the spawn
+     * path, which already takes seconds. `waitFor` returns as soon as the process exits,
+     * so the full wait is only paid by an engine that is actually staying up.
+     */
+    private fun isStillRunning(proc: Process): Boolean =
+        !proc.waitFor(READY_PROBE_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+    /**
+     * Bound respawns. Without this, a dead-but-startable engine is re-spawned on every
+     * editor event — and `textDocumentHover` fires on every cursor move, so "paced by
+     * request traffic" means paced by how fast someone moves the mouse. Each attempt is a
+     * fresh ~2GB JVM; #84 records that taking prod down for six days.
+     */
+    private suspend fun admitSpawn(now: Long): Boolean {
+        while (recentSpawns.isNotEmpty() && now - recentSpawns.first() > SPAWN_WINDOW_MILLIS) {
+            recentSpawns.removeFirst()
+        }
+        if (recentSpawns.size >= MAX_SPAWNS_PER_WINDOW) {
+            cooldownUntil = now + COOLDOWN_MILLIS
+            recentSpawns.clear()
+            hauler.error(
+                "kotlin-lsp failed to stay up $MAX_SPAWNS_PER_WINDOW times in " +
+                    "${SPAWN_WINDOW_MILLIS / 1000}s — no further spawns for " +
+                    "${COOLDOWN_MILLIS / 1000}s. LSP is off until then."
+            )
+            return false
+        }
+        recentSpawns.addLast(now)
+        return true
     }
 
     /** Tear the subprocess down (best-effort, bounded). Safe to call multiple times. */
@@ -125,6 +193,15 @@ class KotlinLspProcess private constructor(private val config: Config) {
 
     companion object {
         private const val GRACE_MILLIS = 1_000L
+
+        /** How long a freshly spawned engine must stay up to count as usable. */
+        internal const val READY_PROBE_MILLIS = 1_500L
+
+        /** Spawn attempts allowed inside [SPAWN_WINDOW_MILLIS] before the cooldown. */
+        internal const val MAX_SPAWNS_PER_WINDOW = 3
+
+        internal const val SPAWN_WINDOW_MILLIS = 60_000L
+        internal const val COOLDOWN_MILLIS = 5 * 60_000L
 
         // One warm subprocess per Config (i.e. per backend). The classpath is fixed, so
         // a single instance serves all konstructions (Phase 5 hardens multiplexing).
