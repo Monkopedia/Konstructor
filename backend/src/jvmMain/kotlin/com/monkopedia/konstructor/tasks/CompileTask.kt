@@ -46,7 +46,7 @@ class CompileTask(private val config: Config, private val input: File, private v
     ).use { executeThread ->
         val callSign = coroutineContext[CallSign.Key]
         runInterruptible(executeThread + (callSign ?: EmptyCoroutineContext)) {
-            val opts = "${config.compilerOpts} ${config.runtimeOpts}"
+            val opts = compileOpts(config.compilerOpts, config.runtimeOpts)
             val command = "kotlinc $opts -d ${output.absolutePath} ${input.absolutePath}"
             val (stdOut, stdError, result) = executeAndWait(command)
             if (result == 0) {
@@ -68,6 +68,17 @@ class CompileTask(private val config: Config, private val input: File, private v
     companion object {
         @OptIn(DelicateCoroutinesApi::class)
         private val hauler = hauler().asAsync(GlobalScope)
+
+        /**
+         * The `kotlinc` flag string: [Config.compilerOpts] ahead of [Config.runtimeOpts],
+         * with blank entries dropped so an unset [Config.compilerOpts] contributes no
+         * argument (and no stray leading space) to the command line.
+         */
+        internal fun compileOpts(compilerOpts: String, runtimeOpts: String): String =
+            listOf(compilerOpts, runtimeOpts)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+
         private val errorRegex = Regex("^(.*):([0-9]+):([0-9]+): (.*)$")
         private val headerLines = KcsgScript.HEADER.split("\n").size
         private val footerLines = KcsgScript.FOOTER.split("\n").size
