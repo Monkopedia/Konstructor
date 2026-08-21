@@ -131,19 +131,24 @@ class ThemeAndKeymapTest : BaseE2eTest() {
     fun testLspEnabledToggle() {
         setupWorkspaceWithCode()
 
-        // Default is opt-out: LSP off, so the editor is unchanged for users who
-        // never enable it.
-        assertEquals(false, bridgeStateBoolean("lspEnabled"))
-
-        // The Settings switch (and its bridge action) flips the persisted flag;
-        // the snapshot reflects it so the toggle shows the right state.
-        bridgeAction("setLspEnabled", "true")
-        page.waitForTimeout(3000.0)
+        // Default is opt-OUT as of 2026-08-21: a browser with nothing stored gets
+        // LSP on. Config.isKotlinLspAvailable is still the second gate, so on a
+        // runner with no kotlin-lsp binary the flag being true changes nothing the
+        // user can see — which is exactly why this asserts the flag and not an
+        // editor behaviour.
         assertEquals(true, bridgeStateBoolean("lspEnabled"))
 
+        // The Settings switch (and its bridge action) flips the persisted flag;
+        // the snapshot reflects it so the toggle shows the right state. Toggling
+        // off first, then back, leaves the stored value matching the default so
+        // this test does not change what a later test sees.
         bridgeAction("setLspEnabled", "false")
         page.waitForTimeout(3000.0)
         assertEquals(false, bridgeStateBoolean("lspEnabled"))
+
+        bridgeAction("setLspEnabled", "true")
+        page.waitForTimeout(3000.0)
+        assertEquals(true, bridgeStateBoolean("lspEnabled"))
     }
 
     @Test
