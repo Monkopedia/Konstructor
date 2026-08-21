@@ -18,6 +18,7 @@ package com.monkopedia.konstructor.tasks
 import com.monkopedia.hauler.CallSign
 import com.monkopedia.hauler.asAsync
 import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.ksrpc.ErrorListener
@@ -25,10 +26,12 @@ import com.monkopedia.ksrpc.channels.Connection
 import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.sockets.asConnection
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -67,8 +70,25 @@ object ExecUtil {
 
     class ExecProcess(private val proc: Process) {
         private val parentJob = SupervisorJob()
+
+        /**
+         * Nothing from this process's plumbing may reach the global handler.
+         *
+         * [parentJob] is a [SupervisorJob] with no handler of its own, so a child that
+         * throws does not cancel its siblings — it goes straight to the JVM's default
+         * uncaught-exception handler instead, where nothing connects it back to this
+         * class. In CI that surfaced as an unrelated test failing with
+         * `UncaughtExceptionsBeforeTest` and a stack trace pointing at this file
+         * (konstructor#101). Anything unexpected is logged here instead, naming its
+         * actual source.
+         */
+        private val exceptionHandler = CoroutineExceptionHandler { _, thrown ->
+            if (thrown !is CancellationException) {
+                hauler.error("Uncaught failure in subprocess plumbing", thrown)
+            }
+        }
         val parentScope = CoroutineScope(
-            parentJob + Dispatchers.IO + (
+            parentJob + Dispatchers.IO + exceptionHandler + (
                 CallSign.threadLoggingName?.let(::CallSign)
                     ?: EmptyCoroutineContext
                 )
@@ -82,6 +102,12 @@ object ExecUtil {
                     proc.errorStream.copyTo(System.err)
                 } catch (t: CancellationException) {
                     // That's fine.
+                } catch (t: IOException) {
+                    // Also fine, and the normal way this pump ends: the waitFor coroutine
+                    // below closes the process streams once it exits, and a read that was
+                    // blocked at that moment wakes with "Stream closed". The process ending
+                    // is not an error, so catching only CancellationException here left an
+                    // ordinary outcome escaping as an uncaught exception (konstructor#101).
                 }
             }
             parentScope.launch {
@@ -99,6 +125,19 @@ object ExecUtil {
                     )
                 } catch (t: CancellationException) {
                     // That's fine.
+                } catch (t: IOException) {
+                    // Same shutdown race as the stderr pump above: the streams this is
+                    // built on are closed when the process exits. Leave `connection`
+                    // uncompleted — callers already handle a process that died before it
+                    // could be attached to.
+                    //
+                    // Logged, unlike the stderr pump, because the two failures are not
+                    // equally expected here. `connection` is awaited in one place
+                    // (ScriptManager, inside withTimeout), so a GENUINE I/O failure while
+                    // attaching would otherwise present only as a timeout with the cause
+                    // discarded and no trace anywhere. Debug level keeps the ordinary
+                    // shutdown case from being noise.
+                    hauler.debug("Process streams closed before the channel attached: ${t.message}")
                 }
             }
             parentScope.launch {
