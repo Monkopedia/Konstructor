@@ -40,8 +40,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.decodeFromStream
-import kotlinx.serialization.json.encodeToStream
 
 @OptIn(DelicateCoroutinesApi::class)
 class KonstructorImpl(private val config: Config) :
@@ -66,14 +64,7 @@ class KonstructorImpl(private val config: Config) :
     }
 
     override suspend fun list(u: Unit): List<Space> = callContext("list") {
-        config.dataDir.listFiles()?.mapNotNull {
-            if (!it.isDirectory) return@mapNotNull null
-            val infoFile = File(it, "info.json")
-            if (!infoFile.exists()) return@mapNotNull null
-            infoFile.inputStream().use { input ->
-                config.json.decodeFromStream<Space>(input)
-            }
-        } ?: emptyList()
+        config.dataDir.listInfo<Space>(config.json)
     }
 
     override suspend fun konstruction(id: Konstruction): KonstructionService =
@@ -97,24 +88,12 @@ class KonstructorImpl(private val config: Config) :
         val newItemWithId = newItem.copy(
             id = newItem.id.ifEmpty { generateId() }
         )
-        val targetInfo = newItemWithId.infoFile
-        if (targetInfo.exists() || targetInfo.parentFile.exists()) {
-            throw IllegalArgumentException("${newItemWithId.id} has been used already")
-        }
-        targetInfo.parentFile.mkdirs()
-        targetInfo.outputStream().use { output ->
-            config.json.encodeToStream(newItemWithId, output)
-        }
+        writeNewInfo(newItemWithId.infoFile, newItemWithId.id, config.json, newItemWithId)
         newItemWithId
     }
 
     private suspend fun generateId(): String = callContext("generateId") {
-        val usedIds = list().map { it.id }
-        var id = 0
-        while (usedIds.contains(id.toString())) {
-            id++
-        }
-        id.toString()
+        firstFreeId(list().map { it.id })
     }
 
     override suspend fun delete(item: Space): Unit = callContext("delete") {
@@ -134,5 +113,5 @@ class KonstructorImpl(private val config: Config) :
     fun getInputStream(target: String): InputStream = File(config.dataDir, target).inputStream()
 
     private val Space.infoFile: File
-        get() = File(File(config.dataDir, id), "info.json")
+        get() = File(File(config.dataDir, id), INFO_JSON)
 }

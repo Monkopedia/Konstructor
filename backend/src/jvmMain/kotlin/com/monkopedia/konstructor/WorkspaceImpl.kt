@@ -36,14 +36,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         get() = "Workspace"
 
     override suspend fun list(u: Unit): List<Konstruction> = callContext("list") {
-        workspaceDir.listFiles()?.mapNotNull {
-            if (!it.isDirectory) return@mapNotNull null
-            val infoFile = File(it, "info.json")
-            if (!infoFile.exists()) return@mapNotNull null
-            infoFile.inputStream().use { input ->
-                config.json.decodeFromStream<KonstructionInfo>(input).konstruction
-            }
-        } ?: emptyList()
+        workspaceDir.listInfo<KonstructionInfo>(config.json).map { it.konstruction }
     }
 
     override suspend fun getName(u: Unit): String = callContext("getName") {
@@ -68,25 +61,16 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         val newItemWithId = newItem.copy(
             id = newItem.id.ifEmpty { generateId() }
         )
-        val targetInfo = newItemWithId.infoFile
-        if (targetInfo.exists() || targetInfo.parentFile.exists()) {
-            throw IllegalArgumentException("${newItemWithId.id} has been used already")
-        }
-        targetInfo.parentFile.mkdirs()
-        targetInfo.outputStream().use { output ->
-            config.json.encodeToStream(KonstructionInfo(newItemWithId, CLEAN, emptyList()), output)
-        }
+        writeNewInfo(
+            newItemWithId.infoFile,
+            newItemWithId.id,
+            config.json,
+            KonstructionInfo(newItemWithId, CLEAN, emptyList())
+        )
         newItemWithId
     }
 
-    private suspend fun generateId(): String {
-        val usedIds = list().map { it.id }
-        var id = 0
-        while (usedIds.contains(id.toString())) {
-            id++
-        }
-        return id.toString()
-    }
+    private suspend fun generateId(): String = firstFreeId(list().map { it.id })
 
     override suspend fun delete(item: Konstruction): Unit = callContext("delete") {
         val targetInfo = item.infoFile
@@ -97,7 +81,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
     }
 
     private val workspaceDir = File(config.dataDir, workspaceId)
-    private val infoFile = File(workspaceDir, "info.json")
+    private val infoFile = File(workspaceDir, INFO_JSON)
     private val Konstruction.infoFile: File
-        get() = File(File(workspaceDir, id), "info.json")
+        get() = File(File(workspaceDir, id), INFO_JSON)
 }
