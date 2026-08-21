@@ -18,6 +18,7 @@ package com.monkopedia.konstructor
 import com.monkopedia.konstructor.common.Space
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 
@@ -53,5 +54,20 @@ class ConfigTest {
     fun testCachingEnabled() {
         val config = Config()
         assertTrue(config.cachingEnabled)
+    }
+
+    @Test
+    fun testCachingEnabledIsOverridable() {
+        assertFalse(Config(cachingEnabled = false).cachingEnabled)
+    }
+
+    @Test
+    fun testCompilerOptsDefaultsToEmpty() {
+        assertEquals("", Config().compilerOpts)
+    }
+
+    @Test
+    fun testCompilerOptsIsOverridable() {
+        assertEquals("-Xfoo", Config(compilerOpts = "-Xfoo").compilerOpts)
     }
 }

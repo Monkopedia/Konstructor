@@ -25,6 +25,17 @@ import kotlinx.coroutines.runBlocking
 
 class CompileTaskTest {
     @Test
+    fun `compile opts omit a blank compilerOpts entirely`() {
+        assertEquals("-cp lib.jar", CompileTask.compileOpts("", "-cp lib.jar"))
+        assertEquals("-cp lib.jar", CompileTask.compileOpts("   ", "-cp lib.jar"))
+    }
+
+    @Test
+    fun `compile opts put compilerOpts ahead of runtimeOpts`() {
+        assertEquals("-Xfoo -cp lib.jar", CompileTask.compileOpts("-Xfoo", "-cp lib.jar"))
+    }
+
+    @Test
     fun `parse sample kotlinc output`() {
         val offset = KcsgScript.HEADER.split("\n").size
         val testOutput = """

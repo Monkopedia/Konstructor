@@ -40,12 +40,21 @@ class Config(
     val kotlinLspBinary: File? = (
         System.getenv("KONSTRUCTOR_KOTLIN_LSP")
             ?: System.getProperty("konstructor.kotlinLsp")
-        )?.let(::File)
+        )?.let(::File),
+    /**
+     * Whether the script host advertises STL caching to running scripts
+     * ([com.monkopedia.konstructor.lib.HostService.supportsCaching]). Turning it off
+     * makes every execution recompute its geometry, which is useful when diagnosing a
+     * stale-cache result.
+     */
+    val cachingEnabled: Boolean = true,
+    /**
+     * Extra flags handed to `kotlinc` when compiling a konstruction, ahead of
+     * [runtimeOpts]. Empty by default; whitespace-only values contribute nothing to the
+     * command line.
+     */
+    val compilerOpts: String = ""
 ) {
-    val cachingEnabled: Boolean
-        get() = true
-    val compilerOpts: String
-        get() = ""
     val runtimeOpts: String
         get() = "-cp ${LibsJar.getLibsJar(this).absolutePath} -J-Xmx4g -J-Xms4g"
     val json: Json = Json {

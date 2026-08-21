@@ -15,9 +15,11 @@
  */
 package com.monkopedia.konstructor.hostservices
 
+import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.testutil.TestEnvironment
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -53,6 +55,20 @@ class ScriptHostImplTest {
     fun testSupportsCaching() = runBlocking {
         val result = host.supportsCaching(Unit)
         assertTrue(result)
+        Unit
+    }
+
+    @Test
+    fun testSupportsCachingFollowsConfig() = runBlocking {
+        val config = Config(env.tempDir, cachingEnabled = false)
+        val disabled = ScriptHostImpl(
+            scriptManager = ScriptManager(config),
+            config = config,
+            workspaceId = "ws1",
+            konstructionId = "k1",
+            cacheDir = cacheDir
+        )
+        assertFalse(disabled.supportsCaching(Unit))
         Unit
     }
 
