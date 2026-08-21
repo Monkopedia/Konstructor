@@ -21,6 +21,7 @@ import com.monkopedia.ksrpc.ktor.websocket.asWebsocketConnection
 import com.monkopedia.ksrpc.toStub
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
+import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
@@ -38,9 +39,12 @@ import org.junit.Test
  *
  * This test therefore asserts the flag-ON path is wired and harmless WITHOUT a
  * binary: the editor mounts, the session establishes, the app stays on the main
- * screen, and no spurious diagnostics appear. The flag-OFF behavior (editor
- * byte-for-byte unchanged) is covered by the rest of the suite running with the
- * default-off flag.
+ * screen, and no spurious diagnostics appear.
+ *
+ * Flag-OFF used to be covered implicitly, by the whole suite running under the
+ * default-off flag. **That stopped being true when the default flipped to ON**
+ * (2026-08-21), so [testEditorWorksWithLspFlagOff] now covers it explicitly rather
+ * than the coverage disappearing silently along with the default.
  */
 class LspPipeTest : BaseE2eTest() {
 
@@ -116,6 +120,60 @@ class LspPipeTest : BaseE2eTest() {
         assert(count == 0) {
             "With no kotlin-lsp binary on CI the bridge is inert; expected 0 " +
                 "diagnostics, got count=$count"
+        }
+    }
+
+    @Test
+    fun testEditorWorksWithLspFlagOff() {
+        loadApp()
+        waitForBridge()
+
+        bridgeAction("createWorkspace", "LspOffWs")
+        waitForState(
+            "globalThis.__konstructor.state.workspaceIds && " +
+                "globalThis.__konstructor.state.workspaceIds.length >= 1"
+        )
+        val wsId = bridgeStateStringList("workspaceIds").first()
+
+        val konId = runBlocking {
+            val env = ksrpcEnvironment { }
+            val client = HttpClient { install(WebSockets) }
+            val conn = client.asWebsocketConnection("${server.baseUrl}/konstructor", env)
+            val service = conn.defaultChannel().toStub<Konstructor, String>()
+            val workspace = service.get(wsId)
+            val kon = workspace.create(
+                Konstruction(name = "LspOffTest", workspaceId = wsId, id = "")
+            )
+            service.konstruction(kon).set(validScript)
+            kon.id
+        }
+
+        page.reload()
+        waitForBridge()
+        waitForMainScreen()
+
+        // Explicitly OFF. Since 2026-08-21 the default is ON, so this is the only place
+        // the flag-off editor is exercised — it is not the ambient state of the suite
+        // any more.
+        bridgeAction("setLspEnabled", "false")
+        assertEquals(false, bridgeStateBoolean("lspEnabled"))
+
+        bridgeAction("setCodePaneMode", "EDITOR")
+        bridgeActionNoWait("selectKonstruction", konId)
+        page.waitForTimeout(5000.0)
+
+        // With the flag off the editor takes the pre-LSP path: no lsp() call, no
+        // languageServerSupport, and therefore nothing can publish diagnostics.
+        waitForMainScreen()
+        assertEquals(false, bridgeStateBoolean("lspEnabled"))
+        val count = (
+            page.evaluate(
+                "() => (globalThis.__konstructor.lspDiagnostics && " +
+                    "globalThis.__konstructor.lspDiagnostics.count) || 0"
+            ) as? Number
+            )?.toInt() ?: 0
+        assert(count == 0) {
+            "With lspEnabled=false nothing should publish diagnostics, got count=$count"
         }
     }
 }

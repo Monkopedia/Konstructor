@@ -82,10 +82,21 @@ class SettingsViewModel {
     private val vimDisplayLineMotionStore =
         PersistedStateFlow.boolean("vimDisplayLineMotion", false)
 
-    // LSP editor support (epic #35). Default OFF: with this off the editor
-    // behaves byte-for-byte as before — no lsp() call, no languageServerSupport.
+    // LSP editor support (epic #35). Default ON as of 2026-08-21, on the owner's
+    // ruling: "sure, flip it on, we have basically no users, so no real harm".
+    // That is a BLAST-RADIUS judgement, not a verdict that the LSP is good enough
+    // for everyone — the PoC found accurate kcsg diagnostics with no false
+    // positives, but nobody has a month of real editing behind it and the cost
+    // figures (~2GB heap, ~120s cold index, ~8s didOpen->diagnostics) are PoC
+    // numbers. If konstructor acquires real users the premise is gone and this
+    // gets re-asked rather than silently carried forward.
+    //
+    // This is the DEFAULT only. It applies where nothing is stored; anyone who has
+    // already toggled the setting keeps their stored value in either direction.
+    // Config.isKotlinLspAvailable remains the second gate, so a missing kotlin-lsp
+    // binary still means the feature is inert and the editor behaves as before.
     private val lspEnabledStore =
-        PersistedStateFlow.boolean("lspEnabled", false)
+        PersistedStateFlow.boolean("lspEnabled", true)
     private val showCodeLeftStore =
         PersistedStateFlow.boolean("showCodeLeft", false)
     private val showFpsStore =

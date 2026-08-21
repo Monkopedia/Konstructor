@@ -66,7 +66,7 @@ The backend's `shadowJar` task orchestrates the full build:
 - Koin for dependency injection with ViewModels (`koin-compose-viewmodel`).
 - State management via Kotlin StateFlows, collected in Composables via `collectAsState()`.
 - JsBridge (formerly TestBridge) pattern for Playwright e2e testing: exposes app state to `globalThis.__konstructor` since Compose renders to a WebGL canvas (no DOM elements for Playwright selectors).
-- **LSP**: a kcsg-aware language server (completion/hover/pull-diagnostics) is wired through `backend/src/jvmMain/.../lsp/` (a `BridgeLanguageServer` fronting a standalone kotlin-lsp/intellij-server engine spawned via `KONSTRUCTOR_KOTLIN_LSP`) and the frontend editor's LSP client. Opt-in via a Settings toggle.
+- **LSP**: a kcsg-aware language server (completion/hover/pull-diagnostics) is wired through `backend/src/jvmMain/.../lsp/` (a `BridgeLanguageServer` fronting a standalone kotlin-lsp/intellij-server engine spawned via `KONSTRUCTOR_KOTLIN_LSP`) and the frontend editor's LSP client. On by default since 2026-08-21; opt out via a Settings toggle.
 
 ## Frontend Structure (src/wasmJsMain/)
 

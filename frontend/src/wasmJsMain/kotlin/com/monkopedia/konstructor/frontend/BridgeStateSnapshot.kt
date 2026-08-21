@@ -47,7 +47,9 @@ data class AppStateSnapshot(
     val codePaneMode: String = "EDITOR",
     val editorTheme: String = "DRACULA",
     val keymap: String = "VIM",
-    val lspEnabled: Boolean = false,
+    // Matches SettingsViewModel's default so a snapshot built before the settings
+    // flow emits does not momentarily report the opposite of the real setting.
+    val lspEnabled: Boolean = true,
     val screen: String = "loading",
     val konstructionCount: Int = 0,
     val konstructionNames: List<String> = emptyList(),
