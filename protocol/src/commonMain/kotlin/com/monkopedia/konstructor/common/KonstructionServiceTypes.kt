@@ -39,6 +39,11 @@ data class TaskMessage(
 
 @Serializable
 data class TaskResult(
+    /**
+     * The targets this result covers: for a render, the targets that actually BUILT — a
+     * target that failed at execute time is absent, which is what keeps it dirty and
+     * retriable. Empty for a compile, which is not per-target.
+     */
     val taskArguments: List<String> = emptyList(),
     val status: TaskStatus,
     val messages: List<TaskMessage> = emptyList()

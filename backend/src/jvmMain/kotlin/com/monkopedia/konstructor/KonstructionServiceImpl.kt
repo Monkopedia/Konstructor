@@ -272,6 +272,10 @@ class KonstructionServiceImpl(
                         if (target in latestBuilt) {
                             CLEAN
                         } else {
+                            // Not built — either never attempted, or attempted and failed.
+                            // Either way it keeps whatever dirty state it had, so a target
+                            // that failed at execute time stays NEEDS_EXEC and the guard
+                            // above lets a later request re-enter render() (#104).
                             existingTargets[target]?.state ?: NEEDS_EXEC
                         }
                     existingTargets[target]?.let {
