@@ -22,6 +22,8 @@ import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -84,23 +86,36 @@ class InfoStoreTest {
     }
 
     @Test
-    fun writeNewInfoWritesTheItemAndRejectsAReusedId() {
-        val target = File(File(root, "0"), INFO_JSON)
-        writeNewInfo(target, "0", json, Space(id = "0", name = "first"))
-        val written = target.inputStream().use { json.decodeFromStream<Space>(it) }
+    fun createWithClaimedIdWritesTheItemAndRejectsAReusedExplicitId() {
+        val claimed = createWithClaimedId(root, "0", json) { id -> Space(id = id, name = "first") }
+        assertEquals("0", claimed)
+        val written = File(File(root, "0"), INFO_JSON).inputStream().use {
+            json.decodeFromStream<Space>(it)
+        }
         assertEquals("first", written.name)
 
         val failure = assertFailsWith<IllegalArgumentException> {
-            writeNewInfo(target, "0", json, Space(id = "0", name = "second"))
+            createWithClaimedId(root, "0", json) { id -> Space(id = id, name = "second") }
         }
         assertEquals("0 has been used already", failure.message)
     }
 
     @Test
-    fun writeNewInfoRejectsAnIdWhoseDirectoryExistsWithoutInfo() {
+    fun anEmptyRequestedIdAllocatesTheLowestFree() {
+        assertEquals("0", createWithClaimedId(root, "", json) { id -> Space(id, "a") })
+        assertEquals("1", createWithClaimedId(root, "", json) { id -> Space(id, "b") })
+    }
+
+    @Test
+    fun usedIdsCountsDirectoriesEvenWithoutInfoJson() {
         File(root, "7").mkdirs()
-        assertFailsWith<IllegalArgumentException> {
-            writeNewInfo(File(File(root, "7"), INFO_JSON), "7", json, Space(id = "7", name = "x"))
-        }
+        File(root, "loose.txt").writeText("not a directory")
+        assertEquals(listOf("7"), root.usedIds().toList())
+    }
+
+    @Test
+    fun tryClaimIdSucceedsOnceAndOnlyOnce() {
+        assertNotNull(tryClaimId(root, "5"), "the first claim must win")
+        assertNull(tryClaimId(root, "5"), "a second claim on the same id must lose")
     }
 }

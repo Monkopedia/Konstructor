@@ -88,9 +88,11 @@ class KonstructionControllerImpl(
             GlobalScope.launch(saveContext + callSign) {
                 runCatching {
                     contentFileLock.withLock {
-                        paths.infoFile.outputStream().use { output ->
-                            config.json.encodeToStream(value, output)
-                        }
+                        // Atomic: this is the SAME file WorkspaceImpl.list() decodes, and
+                        // this setter fires on rename, dirty-state and target updates —
+                        // far more often than create writes it. In-place, 28% of
+                        // concurrent listings saw a torn file (#102).
+                        writeInfo(paths.infoFile, config.json, value)
                     }
                 }.onFailure { hauler.error("Failed to persist info for $workspaceId/$id", it) }
                 // Always set one more time after write to settle out any race conditions.

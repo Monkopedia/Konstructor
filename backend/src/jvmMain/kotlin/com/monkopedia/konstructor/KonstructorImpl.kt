@@ -85,15 +85,13 @@ class KonstructorImpl(private val config: Config) :
     }
 
     override suspend fun create(newItem: Space): Space = callContext("create") {
-        val newItemWithId = newItem.copy(
-            id = newItem.id.ifEmpty { generateId() }
-        )
-        writeNewInfo(newItemWithId.infoFile, newItemWithId.id, config.json, newItemWithId)
-        newItemWithId
-    }
-
-    private suspend fun generateId(): String = callContext("generateId") {
-        firstFreeId(list().map { it.id })
+        // The id is chosen and claimed in one atomic step; see createWithClaimedId. Doing
+        // it as "pick a free id, then write" let two concurrent creates pick the same id
+        // and silently overwrite each other (konstructor#102).
+        val claimedId = createWithClaimedId(config.dataDir, newItem.id, config.json) { id ->
+            newItem.copy(id = id)
+        }
+        newItem.copy(id = claimedId)
     }
 
     override suspend fun delete(item: Space): Unit = callContext("delete") {
