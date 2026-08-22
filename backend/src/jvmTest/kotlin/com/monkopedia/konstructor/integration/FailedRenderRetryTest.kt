@@ -21,16 +21,22 @@ import com.monkopedia.konstructor.KonstructionServiceImpl
 import com.monkopedia.konstructor.common.DirtyState.CLEAN
 import com.monkopedia.konstructor.common.DirtyState.NEEDS_EXEC
 import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.KonstructionCallbacks.RENDER_CHANGE
 import com.monkopedia.konstructor.common.KonstructionInfo
+import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.logging.WarehouseWrapper
+import com.monkopedia.konstructor.testutil.FakeKonstructionListener
 import com.monkopedia.konstructor.testutil.TestEnvironment
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.encodeToStream
 import org.junit.After
@@ -47,6 +53,10 @@ import org.junit.Test
  * target CLEAN the guard in `KonstructionServiceImpl.konstruct()` skipped `render()` entirely
  * on the next request and just re-broadcast the stale failure — so re-running did nothing and
  * only an edit-and-recompile could clear it.
+ *
+ * Covered in both positions a target can be in: failing on its first render, and failing on a
+ * later one after it had already built and been recorded CLEAN. The second is the one that
+ * survives a fix which only asks "was it built?" and otherwise keeps the state it had.
  *
  * These drive the real pipeline (kotlinc + the script subprocess) through
  * [KonstructionServiceImpl], because the defect only shows up in the interaction between what
@@ -98,6 +108,8 @@ class FailedRenderRetryTest {
      */
     @Test
     fun failedTargetStaysDirtyWhileBuiltTargetGoesClean() = runBlocking {
+        val listener = FakeKonstructionListener(callbacks = listOf(RENDER_CHANGE))
+        service.register(listener)
         service.set(
             """
             val bad by primitive {
@@ -129,6 +141,152 @@ class FailedRenderRetryTest {
             "A target that failed at execute time must stay dirty so it can be retried. " +
                 "Targets: $targets"
         )
+
+        // The render deleted both STLs up front, so the failed target has no model any more
+        // and the editor has to be told — otherwise it keeps drawing geometry whose file is
+        // gone, and its own "have I got this render?" bookkeeping blocks a rebuild.
+        val renders = awaitRenders(listener, "bad", "good")
+        assertNotNull(
+            renders["good"],
+            "The built target must broadcast its model. Renders: $renders"
+        )
+        assertNull(
+            renders["bad"],
+            "The failed target must broadcast a null render to clear the stale model. " +
+                "Renders: $renders"
+        )
+    }
+
+    /**
+     * Wait for a render callback to arrive for each of [names] — they are dispatched on the
+     * service's own scope, so they land after `konstruct()` returns — and return the render
+     * path each one carried, by target name.
+     */
+    private suspend fun awaitRenders(
+        listener: FakeKonstructionListener,
+        vararg names: String
+    ): Map<String, String?> {
+        withTimeoutOrNull(5_000) {
+            while (!listener.renderChanges.map { it.name }.containsAll(names.toList())) {
+                delay(10)
+            }
+        }
+        val renders = listener.renderChanges.associate { it.name to it.renderPath }
+        assertTrue(
+            renders.keys.containsAll(names.toList()),
+            "Expected a render callback for each of ${names.toList()}, got $renders — a " +
+                "target whose model was deleted and never rebuilt is left uncleared."
+        )
+        return renders
+    }
+
+    /**
+     * The case the two tests above cannot reach: a target that already BUILT (so it is
+     * recorded CLEAN) and then fails on a later render.
+     *
+     * Deriving its state as "not built, so keep whatever it had" is only right for a target's
+     * first render — after that the state it had is CLEAN, and keeping it puts the target back
+     * in exactly the #104 hole. Failing at execute time must make it dirty again regardless of
+     * what it was before.
+     */
+    @Test
+    fun alreadyCleanTargetThatFailsBecomesDirtyAgain() = runBlocking {
+        val (_, second) = renderUntilACleanTargetFails()
+
+        assertEquals(FAILURE, second.status, "Second render must fail. Result: $second")
+        val targets = service.getInfo(Unit).targets.associate { it.name to it.state }
+        assertEquals(
+            CLEAN,
+            targets["bad"],
+            "The target that built on the second render must be clean. Targets: $targets"
+        )
+        assertEquals(
+            NEEDS_EXEC,
+            targets["other"],
+            "A target that failed at execute time must go dirty again even though it had " +
+                "already built once and was recorded CLEAN. Targets: $targets"
+        )
+    }
+
+    /**
+     * The end-to-end half of the same case: once a previously-clean target has failed, a
+     * re-request must re-enter `render()` rather than re-broadcast the stale failure.
+     *
+     * As above, nothing about the konstruction changes between the failing render and the
+     * retry — no edit, no recompile — so SUCCESS is only reachable by really rendering again.
+     */
+    @Test
+    fun reRequestRetriesATargetThatFailedAfterAlreadyBuilding() = runBlocking {
+        val (otherMarker, second) = renderUntilACleanTargetFails()
+        assertEquals(FAILURE, second.status, "Second render must fail. Result: $second")
+
+        otherMarker.delete()
+
+        val third = service.konstruct("other")
+        assertEquals(
+            SUCCESS,
+            third.status,
+            "A target that failed after already building must still be retriable — a FAILURE " +
+                "here is the stale result being re-broadcast because render() was skipped. " +
+                "Result: $third"
+        )
+        assertEquals(
+            CLEAN,
+            service.getInfo(Unit).targets.single { it.name == "other" }.state,
+            "The retried target must end up clean"
+        )
+    }
+
+    /**
+     * Drives the two renders both of the tests above need: a first one that leaves `other`
+     * CLEAN and `bad` dirty, then a second (reached through `bad`, with the failures swapped
+     * out of band) in which the already-clean `other` fails at execute time.
+     *
+     * Returns `other`'s marker file — deleting it un-breaks the target — and the second
+     * render's result.
+     */
+    private suspend fun renderUntilACleanTargetFails(): Pair<File, TaskResult> {
+        val badMarker = File(env.tempDir, "break-bad")
+        val otherMarker = File(env.tempDir, "break-other")
+        service.set(
+            """
+            val bad by primitive {
+               if (java.io.File("${badMarker.absolutePath}").exists()) {
+                   throw RuntimeException("bad-boom")
+               }
+               cube {
+                   dimensions = xyz(1.0, 1.0, 1.0)
+               }
+            }
+            val other by primitive {
+               if (java.io.File("${otherMarker.absolutePath}").exists()) {
+                   throw RuntimeException("other-boom")
+               }
+               cube {
+                   dimensions = xyz(2.0, 2.0, 2.0)
+               }
+            }
+            export("bad")
+            export("other")
+            """.trimIndent()
+        )
+        assertEquals(SUCCESS, service.compile(Unit).status, "The script must compile")
+
+        badMarker.writeText("break")
+        val first = service.konstruct("bad")
+        assertEquals(FAILURE, first.status, "First render must fail. Result: $first")
+        assertEquals(
+            CLEAN,
+            service.getInfo(Unit).targets.single { it.name == "other" }.state,
+            "Setup expects 'other' to have built and be clean before it starts failing"
+        )
+
+        // Swap which target is broken. No edit and no recompile, so the only thing that can
+        // change 'other' from clean to failed is the render itself.
+        badMarker.delete()
+        otherMarker.writeText("break")
+
+        return otherMarker to service.konstruct("bad")
     }
 
     /**

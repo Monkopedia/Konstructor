@@ -44,6 +44,15 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 
+/**
+ * What a render touched.
+ *
+ * [attemptedTargets] is the subset of [allTargets] the render actually tried to build — the
+ * script's exports plus any requested extras that exist. Which of those succeeded is reported
+ * separately, in the render's [TaskResult.taskArguments].
+ */
+data class RenderedTargets(val allTargets: List<String>, val attemptedTargets: List<String>)
+
 interface KonstructionController {
     val callSign: CallSign
     val paths: PathController.Paths
@@ -55,7 +64,7 @@ interface KonstructionController {
     suspend fun write(content: ByteReadChannel)
     suspend fun compile()
     suspend fun lastCompileResult(): TaskResult
-    suspend fun render(targets: List<String>): List<String>
+    suspend fun render(targets: List<String>): RenderedTargets
     suspend fun lastRenderResult(): TaskResult
     suspend fun renderFile(target: String): File?
 }
@@ -114,7 +123,7 @@ class KonstructionControllerImpl(
         }
     }
 
-    override suspend fun render(targets: List<String>): List<String> {
+    override suspend fun render(targets: List<String>): RenderedTargets {
         contentFileLock.withLock {
             for (target in targets) {
                 val targetFile = File(paths.renderOutput, "$target.stl")
@@ -131,11 +140,11 @@ class KonstructionControllerImpl(
                 extraTargets = targets,
                 subprocessExit = scriptExit
             )
-            val (result, executedTargets) = executeTask.execute()
+            val (result, renderedTargets) = executeTask.execute()
             paths.renderResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
             }
-            return executedTargets
+            return renderedTargets
         }
     }
 

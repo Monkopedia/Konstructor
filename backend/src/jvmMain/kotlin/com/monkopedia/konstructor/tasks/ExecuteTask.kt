@@ -20,6 +20,7 @@ import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.Config
+import com.monkopedia.konstructor.RenderedTargets
 import com.monkopedia.konstructor.common.MessageImportance
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
@@ -58,7 +59,7 @@ class ExecuteTask(
     private val subprocessExit: Deferred<Int>? = null
 ) {
     private val hauler by lazy { hauler() }
-    suspend fun execute(): Pair<TaskResult, List<String>> {
+    suspend fun execute(): Pair<TaskResult, RenderedTargets> {
         val messages = mutableListOf<TaskMessage>()
         var isSuccessful = true
         val exports = script.listTargets(onlyExports = true)
@@ -116,7 +117,7 @@ class ExecuteTask(
             builtTargets,
             if (isSuccessful) SUCCESS else FAILURE,
             messages
-        ) to allTargets
+        ) to RenderedTargets(allTargets, attemptedTargets)
     }
 
     /**
