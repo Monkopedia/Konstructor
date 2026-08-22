@@ -49,9 +49,9 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         val info = infoFile.inputStream().use { input ->
             config.json.decodeFromStream<Space>(input)
         }.copy(name = name)
-        infoFile.outputStream().use { output ->
-            config.json.encodeToStream(info, output)
-        }
+        // Atomic, for the same reason create() is — an in-place rewrite is visible to a
+        // concurrent reader as a truncated file. See writeInfo.
+        writeInfo(infoFile, config.json, info)
     }
 
     override suspend fun create(newItem: Konstruction): Konstruction = callContext("create") {

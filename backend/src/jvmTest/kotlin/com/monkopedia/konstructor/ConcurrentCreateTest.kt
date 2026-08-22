@@ -138,8 +138,52 @@ class ConcurrentCreateTest {
         assertEquals("1", claimed, "id 0 is taken by an info-less directory; 1 is the next free")
     }
 
+    @Test
+    fun listingNeverSeesAHalfWrittenInfoFile() = runBlocking {
+        // The second symptom in the issue: `outputStream()` truncates on open, so an
+        // in-place rewrite is briefly a PREFIX of valid JSON — and listInfo decodes every
+        // entry, so one torn file failed the WHOLE listing. Measured before the fix at
+        // 1.5% of listings with realistic payloads and 15% with larger ones.
+        //
+        // Asserted as ZERO failures over many cycles rather than as a rate: with an atomic
+        // move there is no window at all, so any failure here is a real regression.
+        val dir = File(env.tempDir, "torn").also { it.mkdirs() }
+        createWithClaimedId(dir, "0", env.config.json) { id -> Space(id = id, name = PADDING) }
+        val target = File(File(dir, "0"), INFO_JSON)
+
+        var listings = 0
+        var failures = 0
+        withContext(Dispatchers.IO) {
+            val writer = async {
+                repeat(REWRITES) { n ->
+                    writeInfo(target, env.config.json, Space(id = "0", name = "$PADDING-$n"))
+                }
+            }
+            val reader = async {
+                while (writer.isActive) {
+                    listings++
+                    runCatching { dir.listInfo<Space>(env.config.json) }
+                        .onFailure { failures++ }
+                }
+            }
+            writer.await()
+            reader.await()
+        }
+        assertEquals(
+            0,
+            failures,
+            "$failures of $listings concurrent listings saw a torn info.json. An atomic " +
+                "move leaves no window, so any failure is a regression to in-place writes."
+        )
+        assertTrue(listings > 100, "the probe only proves something if it listed a lot: $listings")
+    }
+
     private companion object {
         const val RACERS = 8
         const val ROUNDS = 25
+        const val REWRITES = 400
+
+        /** Big enough that a truncated write is very likely to land mid-token. */
+        val PADDING = "n".repeat(2_000)
     }
 }
