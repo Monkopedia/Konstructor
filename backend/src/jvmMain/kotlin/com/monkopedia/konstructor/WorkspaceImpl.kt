@@ -58,19 +58,12 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         if (newItem.workspaceId != workspaceId) {
             throw IllegalArgumentException("Trying to create item in wrong workspace")
         }
-        val newItemWithId = newItem.copy(
-            id = newItem.id.ifEmpty { generateId() }
-        )
-        writeNewInfo(
-            newItemWithId.infoFile,
-            newItemWithId.id,
-            config.json,
-            KonstructionInfo(newItemWithId, CLEAN, emptyList())
-        )
-        newItemWithId
+        // Atomic claim — see createWithClaimedId and konstructor#102.
+        val claimedId = createWithClaimedId(workspaceDir, newItem.id, config.json) { id ->
+            KonstructionInfo(newItem.copy(id = id), CLEAN, emptyList())
+        }
+        newItem.copy(id = claimedId)
     }
-
-    private suspend fun generateId(): String = firstFreeId(list().map { it.id })
 
     override suspend fun delete(item: Konstruction): Unit = callContext("delete") {
         val targetInfo = item.infoFile

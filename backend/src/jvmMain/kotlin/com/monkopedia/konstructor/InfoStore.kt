@@ -52,6 +52,19 @@ internal inline fun <reified T> File.listInfo(json: Json): List<T> =
     } ?: emptyList()
 
 /**
+ * Every immediate subdirectory name under [this], i.e. every id that is TAKEN.
+ *
+ * Deliberately based on directory names rather than on successfully decoded [INFO_JSON]
+ * files. A directory whose info has not been written yet — because a concurrent create is
+ * mid-flight, or because [com.monkopedia.konstructor.PathController] created it eagerly on
+ * a read path — still owns its id. Deriving free ids from decoded info instead re-offered
+ * those ids forever: [listInfo] skipped them, so they never looked used, while the claim
+ * below always rejected them. See konstructor#102.
+ */
+internal fun File.usedIds(): Collection<String> =
+    listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
+
+/**
  * The lowest non-negative integer, as a string, that is not in [usedIds].
  *
  * Membership is tested against a hash set, so allocating an id is linear in the number
@@ -67,17 +80,66 @@ internal fun firstFreeId(usedIds: Collection<String>): String {
 }
 
 /**
- * Claim [targetInfo] for a new item and write [value] to it.
+ * Attempts to claim [id] under [parent], atomically.
  *
- * Both the file and its directory must be absent — an existing directory means the id is
- * taken even when its [INFO_JSON] was never written — otherwise this throws
- * [IllegalArgumentException] naming [id].
+ * `mkdir` (single, not `mkdirs`) is the claim primitive because on POSIX exactly one
+ * concurrent caller can create a given directory — everyone else gets `false`. The
+ * previous `exists()`-then-`mkdirs()` pair was a TOCTOU window wide enough that eight
+ * concurrent creates produced five records with zero exceptions (konstructor#102).
+ *
+ * Returns the claimed directory, or `null` if someone else already owns the id.
  */
-internal inline fun <reified T> writeNewInfo(targetInfo: File, id: String, json: Json, value: T) {
-    if (targetInfo.exists() || targetInfo.parentFile.exists()) {
-        throw IllegalArgumentException("$id has been used already")
+internal fun tryClaimId(parent: File, id: String): File? {
+    parent.mkdirs()
+    val dir = File(parent, id)
+    return if (dir.mkdir()) dir else null
+}
+
+/**
+ * Create a new item under [parent] and write its [INFO_JSON], claiming the id atomically.
+ *
+ * If [requestedId] is non-empty the caller chose it, and losing the claim is an ERROR —
+ * they asked for a specific id and it is taken, which is exactly what
+ * [IllegalArgumentException] should tell them. If it is empty the id is ours to pick, so
+ * losing a race is not a failure: re-derive the lowest free id and try again. Retrying a
+ * caller-supplied id would silently hand them a different object than they asked for.
+ *
+ * [buildValue] receives the id that was actually claimed, so callers can stamp it into the
+ * payload they persist.
+ */
+internal inline fun <reified T> createWithClaimedId(
+    parent: File,
+    requestedId: String,
+    json: Json,
+    buildValue: (String) -> T
+): String {
+    if (requestedId.isNotEmpty()) {
+        val dir = tryClaimId(parent, requestedId)
+            ?: throw IllegalArgumentException("$requestedId has been used already")
+        writeInfo(File(dir, INFO_JSON), json, buildValue(requestedId))
+        return requestedId
     }
-    targetInfo.parentFile.mkdirs()
+    repeat(ID_CLAIM_ATTEMPTS) {
+        val candidate = firstFreeId(parent.usedIds())
+        val dir = tryClaimId(parent, candidate)
+        if (dir != null) {
+            writeInfo(File(dir, INFO_JSON), json, buildValue(candidate))
+            return candidate
+        }
+        // Lost the race for this id. `usedIds` reads directory names, so the winner's
+        // claim is already visible and the next pass picks a different candidate — this
+        // converges rather than spinning on the same number.
+    }
+    throw IllegalStateException(
+        "Could not claim a free id under ${parent.absolutePath} after $ID_CLAIM_ATTEMPTS " +
+            "attempts; something is creating items faster than ids can be allocated."
+    )
+}
+
+/** How many times to re-derive a free id when losing a concurrent claim. */
+internal const val ID_CLAIM_ATTEMPTS = 32
+
+internal inline fun <reified T> writeInfo(targetInfo: File, json: Json, value: T) {
     targetInfo.outputStream().use { output ->
         json.encodeToStream(value, output)
     }
