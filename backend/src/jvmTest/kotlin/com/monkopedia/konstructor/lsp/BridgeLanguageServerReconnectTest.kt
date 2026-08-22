@@ -31,7 +31,6 @@ import com.monkopedia.lsp.DocumentDiagnosticReport
 import com.monkopedia.lsp.InitializeParams
 import com.monkopedia.lsp.InitializeResult
 import com.monkopedia.lsp.InitializedParams
-import com.monkopedia.lsp.KsrpcLanguageServer
 import com.monkopedia.lsp.Position
 import com.monkopedia.lsp.RelatedFullDocumentDiagnosticReport
 import com.monkopedia.lsp.ServerCapabilities
@@ -178,8 +177,20 @@ class BridgeLanguageServerReconnectTest {
         object : DefaultLanguageClient() {}
     ) {
         val handedOut = CopyOnWriteArrayList<FakeEngine>()
-        override suspend fun connectEngine(): KsrpcLanguageServer? =
-            engines()?.also { handedOut.add(it) }
+
+        /**
+         * Mirrors [KotlinLspProcess.connect]: acquiring an engine INCLUDES driving it through
+         * `initialize`, so the seam hands back a session only for an engine that answered.
+         */
+        override suspend fun connectEngine(params: InitializeParams): EngineSession? {
+            val engine = engines() ?: return null
+            handedOut.add(engine)
+            // ...including the swallow: a handshake that throws (or never answers) means the
+            // engine is unusable, and the real connect() reports that as null rather than
+            // letting it escape. The bridge's initialize/reconnect now call this OUTSIDE any
+            // guard, so a propagating fake would test a contract production does not have.
+            return runCatching { EngineSession(engine, engine.initialize(params)) }.getOrNull()
+        }
     }
 
     private fun seedContent(text: String) {

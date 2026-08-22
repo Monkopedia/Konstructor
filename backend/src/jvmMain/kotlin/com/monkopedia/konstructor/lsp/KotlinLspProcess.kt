@@ -20,12 +20,27 @@ import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.Config
 import com.monkopedia.ksrpc.channels.SingleChannelConnection
+import com.monkopedia.lsp.InitializeParams
+import com.monkopedia.lsp.InitializeResult
 import com.monkopedia.lsp.KsrpcLanguageClient
 import com.monkopedia.lsp.KsrpcLanguageServer
 import com.monkopedia.lsp.ksrpc.asLspConnection
 import com.monkopedia.lsp.ksrpc.connectAsLspClient
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+
+/**
+ * A kotlin-lsp engine that has ANSWERED the LSP `initialize` handshake: the
+ * subprocess-facing [server] stub and the [initializeResult] it replied with.
+ *
+ * [KotlinLspProcess.connect] hands out no other shape, so holding one of these is proof the
+ * engine is *usable* rather than merely running.
+ */
+class EngineSession(val server: KsrpcLanguageServer, val initializeResult: InitializeResult)
 
 /**
  * Manages ONE warm JetBrains `kotlin-lsp` (`intellij-server --stdio`) subprocess and
@@ -53,29 +68,63 @@ class KotlinLspProcess private constructor(private val config: Config) {
     private var process: Process? = null
     private var connection: SingleChannelConnection<String>? = null
 
-    /** Spawn timestamps inside the current window, used to bound respawn attempts. */
-    private val recentSpawns = ArrayDeque<Long>()
+    /**
+     * Consecutive spawns that failed to produce a *usable* engine, used to bound respawns.
+     * Reset only by an answered handshake — the same definition of usable [connect] uses.
+     */
+    private var consecutiveFailures = 0
 
     /** While `now < this`, spawning is refused outright and the bridge stays inert. */
     private var cooldownUntil = 0L
 
     /**
-     * Lazily spawn (once) the warm subprocess and return a fresh subprocess-facing
-     * [KsrpcLanguageServer] stub wired to [forwarder]. Returns `null` if the binary is
-     * not available, or if spawning/connecting fails (LSP degrades to off).
+     * Lazily spawn (once) the warm subprocess, drive it through the LSP `initialize`
+     * handshake with [params], and return the resulting [EngineSession] — a stub wired to
+     * [forwarder] plus the engine's own [InitializeResult].
+     *
+     * Returns `null`, i.e. LSP degrades to off, whenever the engine is not *usable*. That
+     * is one definition, and all three shapes an unusable engine takes collapse onto it:
+     *  1. the binary is unset/missing/not executable ([Config.isKotlinLspAvailable]),
+     *  2. it starts and immediately exits — an expired build (#84), or
+     *  3. it starts, stays up, and never answers `initialize` (#109).
+     *
+     * Shape 3 is why the handshake belongs HERE and not in the caller: "still breathing a
+     * moment later" is not readiness. An expired build that hangs rather than exits passes
+     * that probe, so the connection was cached as live and the whole editor queued behind an
+     * `initialize` that never returned — silently, with the LSP toggle still reading on.
+     * Readiness therefore means *answered*, behind [Config.kotlinLspCallTimeout].
      *
      * The subprocess itself is a singleton; each call returns a stub bound to the given
      * forwarder so server→client pushes (diagnostics) for THIS session land on the right
      * editor. For Phase 2 we scope to the active konstruction, so a single warm process
      * suffices.
      */
-    suspend fun connect(forwarder: KsrpcLanguageClient): KsrpcLanguageServer? {
+    suspend fun connect(forwarder: KsrpcLanguageClient, params: InitializeParams): EngineSession? {
         if (!config.isKotlinLspAvailable) return null
         return lock.withLock {
             val conn = ensureConnection() ?: return@withLock null
             try {
-                conn.connectAsLspClient(forwarder)
+                val server = conn.connectAsLspClient(forwarder)
+                val result = withTimeout(config.kotlinLspCallTimeout) { server.initialize(params) }
+                // An answered handshake is the only thing that clears the respawn budget.
+                consecutiveFailures = 0
+                EngineSession(server, result)
+            } catch (t: TimeoutCancellationException) {
+                hauler.error(
+                    "kotlin-lsp did not answer `initialize` within " +
+                        "${config.kotlinLspCallTimeout} — treating the engine as unavailable; " +
+                        "LSP stays off. An expired build that hangs instead of exiting looks " +
+                        "exactly like this."
+                )
+                // Discard the corpse rather than caching it: the next connect then respawns
+                // (bounded by [admitSpawn]) instead of queueing behind an engine that has
+                // already proved it will not answer.
+                shutdownLocked()
+                consecutiveFailures++
+                null
             } catch (t: Throwable) {
+                // Our own cancellation must propagate; anything else degrades LSP to off.
+                coroutineContext.ensureActive()
                 hauler.error("Failed to connect to kotlin-lsp subprocess", t)
                 null
             }
@@ -127,6 +176,7 @@ class KotlinLspProcess private constructor(private val config: Config) {
                         "like this."
                 )
                 runCatching { proc.destroyForcibly() }
+                consecutiveFailures++
                 return null
             }
             val conn = (proc.inputStream to proc.outputStream).asLspConnection()
@@ -136,6 +186,7 @@ class KotlinLspProcess private constructor(private val config: Config) {
         } catch (t: Throwable) {
             hauler.error("Failed to spawn kotlin-lsp subprocess", t)
             shutdownLocked()
+            consecutiveFailures++
             null
         }
     }
@@ -155,23 +206,24 @@ class KotlinLspProcess private constructor(private val config: Config) {
      * editor event — and `textDocumentHover` fires on every cursor move, so "paced by
      * request traffic" means paced by how fast someone moves the mouse. Each attempt is a
      * fresh ~2GB JVM; #84 records that taking prod down for six days.
+     *
+     * Counts CONSECUTIVE FAILURES rather than spawns-per-time-window, because a window is a
+     * bound whose reachability depends on how long each failure takes: with a handshake
+     * deadline in play a failed attempt costs the probe plus the deadline, so the earliest
+     * attempts age out of the window before the last one arrives and the cap can never trip.
+     * A failure count cannot be outrun that way, and it is the more accurate rule besides —
+     * a healthy engine that crashes and respawns cleanly should not be counted against a cap
+     * whose whole purpose is to stop hammering a BROKEN one.
      */
     private suspend fun admitSpawn(now: Long): Boolean {
-        while (recentSpawns.isNotEmpty() && now - recentSpawns.first() > SPAWN_WINDOW_MILLIS) {
-            recentSpawns.removeFirst()
-        }
-        if (recentSpawns.size >= MAX_SPAWNS_PER_WINDOW) {
-            cooldownUntil = now + COOLDOWN_MILLIS
-            recentSpawns.clear()
-            hauler.error(
-                "kotlin-lsp failed to stay up $MAX_SPAWNS_PER_WINDOW times in " +
-                    "${SPAWN_WINDOW_MILLIS / 1000}s — no further spawns for " +
-                    "${COOLDOWN_MILLIS / 1000}s. LSP is off until then."
-            )
-            return false
-        }
-        recentSpawns.addLast(now)
-        return true
+        if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) return true
+        cooldownUntil = now + COOLDOWN_MILLIS
+        consecutiveFailures = 0
+        hauler.error(
+            "kotlin-lsp failed to become usable $MAX_CONSECUTIVE_FAILURES times running — no " +
+                "further spawns for ${COOLDOWN_MILLIS / 1000}s. LSP is off until then."
+        )
+        return false
     }
 
     /** Tear the subprocess down (best-effort, bounded). Safe to call multiple times. */
@@ -197,10 +249,9 @@ class KotlinLspProcess private constructor(private val config: Config) {
         /** How long a freshly spawned engine must stay up to count as usable. */
         internal const val READY_PROBE_MILLIS = 1_500L
 
-        /** Spawn attempts allowed inside [SPAWN_WINDOW_MILLIS] before the cooldown. */
-        internal const val MAX_SPAWNS_PER_WINDOW = 3
+        /** Failed spawns in a row before the cooldown kicks in. */
+        internal const val MAX_CONSECUTIVE_FAILURES = 3
 
-        internal const val SPAWN_WINDOW_MILLIS = 60_000L
         internal const val COOLDOWN_MILLIS = 5 * 60_000L
 
         // One warm subprocess per Config (i.e. per backend). The classpath is fixed, so
