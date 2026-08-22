@@ -133,6 +133,10 @@ internal inline fun <reified T> createWithClaimedId(
         // claim is already visible and the next pass picks a different candidate — this
         // converges rather than spinning on the same number.
     }
+    // Loud, not silent: callContext logs it and the caller sees the failure. Exhaustion
+    // is reachable under sustained concurrent creation (measured: ~1% at 4 concurrent
+    // writers, 6% at 8) — NOT, as an earlier version of this comment claimed, bounded by
+    // "N creators lose at most N-1 times". That holds only for a single burst.
     throw IllegalStateException(
         "Could not claim a free id under ${parent.absolutePath} after $ID_CLAIM_ATTEMPTS " +
             "attempts; something is creating items faster than ids can be allocated."
@@ -156,13 +160,22 @@ internal const val ID_CLAIM_ATTEMPTS = 32
  * file is a sibling so the move stays within one filesystem, which is what makes it atomic.
  */
 internal inline fun <reified T> writeInfo(targetInfo: File, json: Json, value: T) {
-    val tmp = File(targetInfo.parentFile, "${targetInfo.name}.tmp")
+    // The temp name must be UNIQUE per write, and it must NOT be deleted on success.
+    // A fixed name plus `finally { delete() }` made two concurrent writers to the same
+    // info.json collide: writer A's cleanup unlinked writer B's in-flight temp, and
+    // 628 of 1200 writes threw NoSuchFileException on the move. No corruption — the
+    // target always decoded — but a rename that used to succeed started failing.
+    val tmp = File.createTempFile("${targetInfo.name}.", ".tmp", targetInfo.parentFile)
+    var moved = false
     try {
         tmp.outputStream().use { output ->
             json.encodeToStream(value, output)
         }
         Files.move(tmp.toPath(), targetInfo.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
+        moved = true
     } finally {
-        tmp.delete()
+        // On success the temp no longer exists under this name; deleting unconditionally
+        // is what let one writer reach into another's.
+        if (!moved) tmp.delete()
     }
 }

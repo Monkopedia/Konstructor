@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.Space
@@ -27,6 +29,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.decodeFromStream
 import org.junit.After
 import org.junit.Before
 
@@ -178,10 +182,59 @@ class ConcurrentCreateTest {
         assertTrue(listings > 100, "the probe only proves something if it listed a lot: $listings")
     }
 
+    @Test
+    fun concurrentWritersToOneFileDoNotBreakEachOther() = runBlocking {
+        // A fixed temp name plus an unconditional `finally { delete() }` made writer A's
+        // cleanup unlink writer B's in-flight temp: 628 of 1200 writes threw
+        // NoSuchFileException on the move. Nothing was corrupted — the target always
+        // decoded — but a rename that used to succeed started failing, which is a
+        // regression introduced BY the atomicity fix. Reachable via two concurrent
+        // setName calls on one workspace.
+        val dir = File(env.tempDir, "onefile").also { it.mkdirs() }
+        val target = File(dir, INFO_JSON)
+        writeInfo(target, env.config.json, Space(id = "0", name = "seed"))
+
+        val failures = java.util.concurrent.atomic.AtomicInteger()
+        withContext(Dispatchers.IO) {
+            (0 until WRITERS).map { w ->
+                async {
+                    repeat(WRITES_EACH) { n ->
+                        runCatching {
+                            writeInfo(target, env.config.json, Space(id = "0", name = "w$w-$n"))
+                        }.onFailure { failures.incrementAndGet() }
+                    }
+                }
+            }.awaitAll()
+        }
+        assertEquals(
+            0,
+            failures.get(),
+            "${failures.get()} of ${WRITERS * WRITES_EACH} concurrent writes to one " +
+                "info.json failed — writers are colliding on a shared temp name."
+        )
+        // And the file must still be readable, i.e. the fix did not trade one defect for
+        // another. Decoded directly rather than through listInfo — listInfo scans
+        // SUBDIRECTORIES for their info.json, and this probe writes one file straight into
+        // `dir`, so listInfo would return 0 here and the assertion would fail against
+        // perfectly good code. (It did, first time round.)
+        val decoded = target.inputStream().use { env.config.json.decodeFromStream<Space>(it) }
+        assertTrue(
+            decoded.name.startsWith("w"),
+            "the target must still decode to one of the writers' values, got '${decoded.name}'"
+        )
+        assertEquals(
+            emptyList(),
+            dir.listFiles()?.filter { it.name.endsWith(".tmp") }?.map { it.name },
+            "no temp files may be left behind"
+        )
+    }
+
     private companion object {
         const val RACERS = 8
         const val ROUNDS = 25
         const val REWRITES = 400
+        const val WRITERS = 4
+        const val WRITES_EACH = 300
 
         /** Big enough that a truncated write is very likely to land mid-token. */
         val PADDING = "n".repeat(2_000)
