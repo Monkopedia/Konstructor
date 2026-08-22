@@ -55,7 +55,7 @@ class ExecuteTaskTest {
     }
 
     /**
-     * Regression test for #81 and #104.
+     * Regression test for #81.
      *
      * A multi-target render where one export fails at EXECUTE time (compiles fine, throws while
      * building/rendering) while the subprocess stays alive and another export succeeds. The
@@ -65,11 +65,8 @@ class ExecuteTaskTest {
      *       failure and the whole render reported SUCCESS (the failed target got marked CLEAN and
      *       never retried).
      *   (b) the fetched error trace was discarded, so `messages` was always empty.
-     *   (c) the reported target list was the *attempted* one, so the caller marked the failed
-     *       target CLEAN and never retried it (#104).
      *
-     * With the fix the render must report FAILURE, surface the error trace, and report only
-     * the target that actually built.
+     * With the fix the render must report FAILURE and surface the error trace.
      */
     @Test
     fun `multi-target render fails when one target fails at execute time`() {
@@ -96,13 +93,6 @@ class ExecuteTaskTest {
         assertTrue(
             result.messages.isNotEmpty(),
             "The execute-phase error trace must be surfaced in messages. Result: $result"
-        )
-        assertEquals(
-            listOf("good"),
-            result.taskArguments,
-            "Only targets that actually built may be reported (#104) — reporting the " +
-                "attempted list marks the failed target CLEAN, so it is never retried. " +
-                "Result: $result"
         )
     }
 

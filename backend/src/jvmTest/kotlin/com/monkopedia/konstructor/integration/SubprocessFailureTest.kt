@@ -307,7 +307,7 @@ class SubprocessFailureTest {
         paths.renderResultFile.outputStream().use { out ->
             cfg.json.encodeToStream(result, out)
         }
-        return executed.allTargets
+        return executed
     }
 
     /** Poll a non-blocking check of the coroutine Mutex until it is free. */

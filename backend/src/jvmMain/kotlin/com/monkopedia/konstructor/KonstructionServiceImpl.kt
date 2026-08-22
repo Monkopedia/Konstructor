@@ -263,24 +263,17 @@ class KonstructionServiceImpl(
             if (info.dirtyState == NEEDS_EXEC ||
                 info.targets.any { it.name in targets && it.state == NEEDS_EXEC }
             ) {
-                val rendered = konstructionController.render(targets)
+                val allTargets = konstructionController.render(targets)
                 val latestBuilt = konstructionController.lastRenderResult().taskArguments
                 val existingTargets = info.targets.associateBy { it.name }
                 val changedTargets = mutableListOf<KonstructionTarget>()
-                val targets = rendered.allTargets.map { target ->
-                    val dirtyState = when {
-                        target in latestBuilt -> CLEAN
-
-                        // Attempted but not built: leave it dirty so the guard above lets a
-                        // later request re-enter render(). Keeping its previous state would
-                        // record a target that had already built as CLEAN even though its
-                        // render just failed, and the retry would be skipped in favour of
-                        // re-broadcasting the stale failure (#104).
-                        target in rendered.attemptedTargets -> NEEDS_EXEC
-
-                        // Untouched by this render, so its state is still whatever it was.
-                        else -> existingTargets[target]?.state ?: NEEDS_EXEC
-                    }
+                val targets = allTargets.map { target ->
+                    val dirtyState =
+                        if (target in latestBuilt) {
+                            CLEAN
+                        } else {
+                            existingTargets[target]?.state ?: NEEDS_EXEC
+                        }
                     existingTargets[target]?.let {
                         if (it.state != dirtyState) {
                             it.copy(state = dirtyState).also(changedTargets::add)
@@ -296,16 +289,12 @@ class KonstructionServiceImpl(
                 konstructionController.info = newInfo
                 broadcast {
                     onInfoChanged(newInfo, changedTargets)
-                    // Every attempted target, not only the built ones: render() deleted the
-                    // STL of each target it was asked for, so one that then failed to build
-                    // must broadcast a null render (konstructed() finds no file) to clear the
-                    // geometry the editor is still showing for it.
-                    for (attempted in rendered.attemptedTargets) {
+                    for (rendered in latestBuilt) {
                         onRenderChanged(
                             KonstructionRender(
                                 info.konstruction,
-                                attempted,
-                                konstructed(attempted)
+                                rendered,
+                                konstructed(rendered)
                             )
                         )
                     }
