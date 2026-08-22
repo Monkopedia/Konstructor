@@ -20,7 +20,6 @@ import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.Config
-import com.monkopedia.konstructor.RenderedTargets
 import com.monkopedia.konstructor.common.MessageImportance
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
@@ -59,15 +58,14 @@ class ExecuteTask(
     private val subprocessExit: Deferred<Int>? = null
 ) {
     private val hauler by lazy { hauler() }
-    suspend fun execute(): Pair<TaskResult, RenderedTargets> {
+    suspend fun execute(): Pair<TaskResult, List<String>> {
         val messages = mutableListOf<TaskMessage>()
         var isSuccessful = true
         val exports = script.listTargets(onlyExports = true)
         val allTargets = script.listTargets(onlyExports = false).map { it.name }
         val validExtraTargets = extraTargets.filter { it in allTargets }
-        val attemptedTargets = (exports.map { it.name } + validExtraTargets).distinct()
-        val builtTargets = mutableListOf<String>()
-        for (export in attemptedTargets) {
+        val builtTargets = (exports.map { it.name } + validExtraTargets).distinct()
+        for (export in builtTargets) {
             hauler.debug("Starting building $export")
             val exportService = script.buildTarget(export)
             val status = awaitTerminalStatus(export, exportService)
@@ -75,14 +73,10 @@ class ExecuteTask(
             val targetBuilt = status == BUILT
             // Accumulate — one failed target must fail the whole render. This previously
             // ASSIGNED (`isSuccessful = status == BUILT`), i.e. last-target-wins: with a live
-            // subprocess, target A failing then target B succeeding reported SUCCESS (#81).
+            // subprocess, target A failing then target B succeeding reported SUCCESS and the
+            // caller marked the failed target CLEAN, so it never retried (#81).
             isSuccessful = isSuccessful && targetBuilt
-            if (targetBuilt) {
-                // Only targets that actually built are reported. The caller derives dirty
-                // state from this list, so a failed target must be left out of it to stay
-                // NEEDS_EXEC and be retried by a later render (#104).
-                builtTargets += export
-            } else {
+            if (!targetBuilt) {
                 val trace = runCatching { exportService.getErrorTrace() }.getOrNull()
                 hauler.error("Error: $trace")
                 // Surface the execute-phase error to the UI. The trace is a runtime error,
@@ -117,7 +111,7 @@ class ExecuteTask(
             builtTargets,
             if (isSuccessful) SUCCESS else FAILURE,
             messages
-        ) to RenderedTargets(allTargets, attemptedTargets)
+        ) to allTargets
     }
 
     /**
