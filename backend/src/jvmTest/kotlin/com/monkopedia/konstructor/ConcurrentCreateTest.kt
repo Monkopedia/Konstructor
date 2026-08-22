@@ -17,8 +17,15 @@
 
 package com.monkopedia.konstructor
 
+import com.monkopedia.konstructor.common.DirtyState
+import com.monkopedia.konstructor.common.Konstruction
+import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.Space
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -229,12 +236,69 @@ class ConcurrentCreateTest {
         )
     }
 
+    @Test
+    fun aListingNeverSeesTheControllersInfoFileHalfWritten() {
+        // The writer that #102 actually reported, and the one the rest of this class is
+        // BLIND to. Measured during the #111 review: revert KonstructionController's write
+        // to the in-place form and all five other tests here still pass, while 451 of 1299
+        // concurrent listings fail with #102's verbatim string —
+        // `Expected colon ':', but had 'EOF' instead at path: $konstruction`. The other
+        // tests exercise writeInfo and createWithClaimedId directly; none goes through the
+        // controller, which is exactly how this writer was missed for two rounds.
+        val root = env.tempDir
+        val wsDir = File(root, "ws1").also { it.mkdirs() }
+        writeInfo(File(wsDir, INFO_JSON), env.config.json, Space(id = "ws1", name = "ws"))
+        val kDir = File(wsDir, "k1").also { it.mkdirs() }
+        val base = KonstructionInfo(
+            Konstruction(name = "k", workspaceId = "ws1", id = "k1"),
+            DirtyState.CLEAN,
+            emptyList()
+        )
+        writeInfo(File(kDir, INFO_JSON), env.config.json, base)
+
+        // Unconfined so the setter's write happens inline rather than on its own thread —
+        // otherwise the loop below outruns the writes and the probe races nothing.
+        val controller =
+            KonstructionControllerImpl(env.config, "ws1", "k1", Dispatchers.Unconfined)
+        val listings = AtomicInteger()
+        val failures = AtomicInteger()
+        val stop = AtomicBoolean(false)
+        val pool = Executors.newFixedThreadPool(1)
+        try {
+            pool.submit {
+                while (!stop.get()) {
+                    listings.incrementAndGet()
+                    runCatching { wsDir.listInfo<KonstructionInfo>(env.config.json) }
+                        .onFailure { failures.incrementAndGet() }
+                }
+            }
+            val padding = "n".repeat(2_000)
+            repeat(CONTROLLER_WRITES) { n ->
+                controller.info =
+                    base.copy(konstruction = base.konstruction.copy(name = "$padding-$n"))
+            }
+        } finally {
+            stop.set(true)
+            pool.shutdown()
+            pool.awaitTermination(30, TimeUnit.SECONDS)
+        }
+
+        assertEquals(
+            0,
+            failures.get(),
+            "${failures.get()} of ${listings.get()} listings saw a torn info.json — the " +
+                "controller's write is no longer atomic (konstructor#102)."
+        )
+        assertTrue(listings.get() > 100, "the probe only proves something if it listed a lot")
+    }
+
     private companion object {
         const val RACERS = 8
         const val ROUNDS = 25
         const val REWRITES = 400
         const val WRITERS = 4
         const val WRITES_EACH = 300
+        const val CONTROLLER_WRITES = 800
 
         /** Big enough that a truncated write is very likely to land mid-token. */
         val PADDING = "n".repeat(2_000)
