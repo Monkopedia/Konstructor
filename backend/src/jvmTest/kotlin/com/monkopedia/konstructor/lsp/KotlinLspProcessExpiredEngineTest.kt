@@ -16,35 +16,48 @@
 package com.monkopedia.konstructor.lsp
 
 import com.monkopedia.konstructor.Config
+import com.monkopedia.lsp.ClientCapabilities
+import com.monkopedia.lsp.DefaultLanguageClient
+import com.monkopedia.lsp.InitializeParams
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Before
 
 /**
- * Regression test for konstructor#84: an **expired** kotlin-lsp engine must be treated as
- * unavailable, and a dead engine must not be respawned without limit.
+ * Regression test for the two shapes an **expired** kotlin-lsp engine takes: it may exit
+ * immediately (konstructor#84) or stay up and never answer `initialize` (konstructor#109).
+ * Either way it must be treated as unavailable so the bridge degrades to inert, and a dead
+ * engine must not be respawned without limit.
  *
- * The trap this covers is that an expired EAP build passes every availability check there
- * is — the binary exists, it is executable, and `ProcessBuilder.start()` returns normally.
- * It simply prints "This build of intellij-server has expired" and exits. So the bridge
- * cached the connection as live and never degraded to inert, and because
- * `textDocumentHover` fires on every cursor move, each one respawned a fresh ~2GB JVM.
- * #84 records that taking prod down for six days.
+ * The trap in both is that an expired EAP build passes every availability check there is —
+ * the binary exists, it is executable, and `ProcessBuilder.start()` returns normally.
  *
- * The fake engine here reproduces exactly that shape — starts fine, exits immediately —
- * and counts its own launches, so "how many JVMs would this have spawned" is measured
- * rather than argued.
+ *  - **#84** prints "This build of intellij-server has expired" and exits. The bridge cached
+ *    the connection as live and never degraded to inert, and because `textDocumentHover`
+ *    fires on every cursor move, each one respawned a fresh ~2GB JVM. #84 records that taking
+ *    prod down for six days.
+ *  - **#109** is the quiet one: the process stays up, so "is it still alive?" says yes, and
+ *    everything downstream parks forever on an `initialize` that never comes back. Nothing is
+ *    logged as failed and the LSP toggle still reads on — the editor just never produces
+ *    diagnostics or completions.
+ *
+ * The fake engines here reproduce both shapes and count their own launches, so "how many JVMs
+ * would this have spawned" is measured rather than argued.
  */
 class KotlinLspProcessExpiredEngineTest {
 
     private lateinit var tempDir: File
     private lateinit var launchLog: File
     private lateinit var fakeEngine: File
+    private lateinit var hangingEngine: File
 
     @Before
     fun setUp() {
@@ -57,6 +70,18 @@ class KotlinLspProcessExpiredEngineTest {
                 echo launch >> "${launchLog.absolutePath}"
                 echo "This build of intellij-server has expired" >&2
                 exit 1
+                """.trimIndent()
+            )
+            setExecutable(true)
+        }
+        // #109's shape: up, holding its pipes open, answering nothing. Sleeping well beyond any
+        // budget in this test is the whole point — the engine is never the thing that gives up.
+        hangingEngine = File(tempDir, "hanging-intellij-server").apply {
+            writeText(
+                """
+                #!/bin/bash
+                echo launch >> "${launchLog.absolutePath}"
+                sleep 600
                 """.trimIndent()
             )
             setExecutable(true)
@@ -105,11 +130,61 @@ class KotlinLspProcessExpiredEngineTest {
         )
     }
 
+    @Test
+    fun anEngineThatNeverAnswersInitializeIsTreatedAsUnavailable() = runBlocking {
+        val config = Config(
+            tempDir,
+            kotlinLspBinary = hangingEngine,
+            kotlinLspCallTimeout = ENGINE_DEADLINE
+        )
+        val lsp = KotlinLspProcess.forConfig(config)
+
+        // Bound the WHOLE call rather than asserting a flag: the defect IS the hang, so a test
+        // that merely waits on it would fail by timing out the entire suite instead of naming
+        // this. Null here means connect() never came back inside a budget many times the
+        // engine's own deadline — i.e. the editor would still be sitting there.
+        val reportedUnavailable = withTimeoutOrNull(HANG_BUDGET) {
+            lsp.connect(object : DefaultLanguageClient() {}, INIT_PARAMS) == null
+        }
+
+        assertNotNull(
+            reportedUnavailable,
+            "connect() did not return within $HANG_BUDGET against an engine that answers " +
+                "nothing. Readiness has to mean ANSWERED, not still-breathing: a process that " +
+                "stays up passes the liveness probe, and the editor then hangs behind an " +
+                "`initialize` that never comes back (#109)."
+        )
+        assertTrue(
+            reportedUnavailable,
+            "an engine that never answers `initialize` must be reported unavailable so the " +
+                "bridge degrades to inert"
+        )
+        assertEquals(1, launches(), "the probe should have actually launched the engine once")
+
+        // The hung engine must be DISCARDED, not cached: the next attempt spawns a fresh process
+        // (bounded by MAX_SPAWNS_PER_WINDOW) instead of queueing behind a corpse that has already
+        // proved it will not answer.
+        assertNotNull(lsp.ensureConnection(), "a live-but-mute process still passes liveness")
+        assertEquals(2, launches(), "the unresponsive engine must be discarded, not reused")
+        lsp.shutdown()
+    }
+
     private companion object {
         /**
          * Deliberately well above the cap: the point is to show the count STOPS, and a
          * value at or below the cap could not tell a working bound from a broken one.
          */
         const val ATTEMPTS = 8
+
+        /** What the fake engine gets to answer `initialize` in. Short: it never answers. */
+        val ENGINE_DEADLINE = 1.seconds
+
+        /** Generous against [ENGINE_DEADLINE], tight against "forever" — see the assertion. */
+        val HANG_BUDGET = 30.seconds
+
+        val INIT_PARAMS = InitializeParams(
+            capabilities = ClientCapabilities(),
+            rootUri = "file:///workspace"
+        )
     }
 }

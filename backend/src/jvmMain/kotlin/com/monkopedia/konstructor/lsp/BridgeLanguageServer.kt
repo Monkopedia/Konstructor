@@ -66,6 +66,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonNull
 
 /**
@@ -167,7 +168,7 @@ open class BridgeLanguageServer(
         /**
          * The event-driven pull→push publisher (#43). Non-null ONLY when the engine advertised
          * pull-mode ([ServerCapabilities.diagnosticProvider] != null); otherwise we run no pull
-         * machinery at all. Set by [handshakeEngine], which is where the capabilities land.
+         * machinery at all. Set by [adoptEngine], which is where the capabilities land.
          */
         var diagnostics: PullDiagnosticsPublisher? = null
     }
@@ -268,15 +269,17 @@ open class BridgeLanguageServer(
     }
 
     /**
-     * Obtain a fresh subprocess-facing stub wired to a new [Forwarder] for this session — the sole
-     * seam through which the bridge acquires an engine delegate, used by both the first
-     * [initialize] and the post-crash [reconnect] (#54). [KotlinLspProcess.connect] respawns a dead
-     * subprocess before handing back a stub, which is what makes reconnect self-healing. Returns
-     * `null` when the engine is unavailable. `open` so tests can substitute a fake engine (no real
-     * subprocess) to exercise the crash→respawn transition.
+     * Obtain a fresh [EngineSession] — a subprocess-facing stub wired to a new [Forwarder] for this
+     * session, already through the `initialize` handshake with [params] — the sole seam through
+     * which the bridge acquires an engine delegate, used by both the first [initialize] and the
+     * post-crash [reconnect] (#54). [KotlinLspProcess.connect] respawns a dead subprocess before
+     * handing back a session, which is what makes reconnect self-healing. Returns `null` when the
+     * engine is unavailable, which now includes an engine that stays up but never answers the
+     * handshake (#109). `open` so tests can substitute a fake engine (no real subprocess) to
+     * exercise the crash→respawn transition.
      */
-    protected open suspend fun connectEngine(): KsrpcLanguageServer? =
-        KotlinLspProcess.forConfig(config).connect(Forwarder())
+    protected open suspend fun connectEngine(params: InitializeParams): EngineSession? =
+        KotlinLspProcess.forConfig(config).connect(Forwarder(), params)
 
     override suspend fun initialize(params: InitializeParams): InitializeResult {
         // Stash the editor's params so a post-crash [reconnect] can replay the identical
@@ -285,53 +288,50 @@ open class BridgeLanguageServer(
         // Synthesize the per-konstruction workspace (wrapped .kt + workspace.json) and
         // spawn/connect the warm subprocess. NO blocking client-bound request here.
         lspWorkspace.synthesize()
-        val server = connectEngine()
-        if (server == null) {
+        val session = connectEngine(engineParams(params))
+        if (session == null) {
             hauler.error("kotlin-lsp engine unavailable; bridge is inert")
             return InitializeResult(capabilities = ServerCapabilities())
         }
-        val fresh = EngineConnection(server)
-        connection = fresh
-        return handshakeEngine(fresh, params)
+        connection = adoptEngine(session)
+        return session.initializeResult
     }
 
     /**
-     * Drive a freshly-[connect][KotlinLspProcess.connect]ed [connection] through the engine
-     * handshake and build its pull publisher, returning the engine's [InitializeResult]. Shared by
-     * the first [initialize] and by [reconnect] after a crash, so both replay the IDENTICAL init.
+     * The editor's [InitializeParams] rewritten for the engine. Built by both the first
+     * [initialize] and by [reconnect], so the respawned subprocess is driven through the
+     * IDENTICAL init the first one saw.
+     *
+     * Rooted at the synthesized workspace so the engine loads our workspace.json + classpath.
+     * The editor's LSPClient advertises EMPTY client capabilities; newer kotlin-lsp builds
+     * (LS-262.6274.0+) gate features on the client declaring support — with no
+     * `textDocument.completion` the engine returns no completions, and with no
+     * `textDocument.diagnostic` it omits the pull `diagnosticProvider` entirely (so
+     * [PullDiagnosticsPublisher] never runs). The bridge DOES support both (it forwards
+     * completion and runs the pull→push loop), so we advertise them on the client's behalf
+     * before forwarding.
      */
-    private suspend fun handshakeEngine(
-        connection: EngineConnection,
-        params: InitializeParams
-    ): InitializeResult {
-        // Drive the subprocess through the same handshake, but rooted at the synthesized
-        // workspace so it loads our workspace.json + classpath. The editor's LSPClient
-        // advertises EMPTY client capabilities; newer kotlin-lsp builds (LS-262.6274.0+)
-        // gate features on the client declaring support — with no `textDocument.completion`
-        // the engine returns no completions, and with no `textDocument.diagnostic` it omits
-        // the pull `diagnosticProvider` entirely (so [PullDiagnosticsPublisher] never runs).
-        // The bridge DOES support both (it forwards completion and runs the pull→push loop),
-        // so we advertise them on the client's behalf before forwarding.
-        val result = guardEngine(
-            "initialize",
-            InitializeResult(capabilities = ServerCapabilities())
-        ) {
-            connection.server.initialize(
-                params.copy(
-                    rootUri = lspWorkspace.rootUri,
-                    workspaceFolders = null,
-                    capabilities = params.capabilities.withBridgeFeatures()
-                )
-            )
+    private fun engineParams(params: InitializeParams): InitializeParams = params.copy(
+        rootUri = lspWorkspace.rootUri,
+        workspaceFolders = null,
+        capabilities = params.capabilities.withBridgeFeatures()
+    )
+
+    /**
+     * Take ownership of a freshly-[connect][KotlinLspProcess.connect]ed [session]: wrap its stub in
+     * an [EngineConnection] and build the pull publisher the engine's capabilities call for.
+     * Shared by the first [initialize] and by [reconnect] after a crash.
+     */
+    private fun adoptEngine(session: EngineSession): EngineConnection =
+        EngineConnection(session.server).apply {
+            // Detect pull-mode authoritatively (#43): a non-null diagnosticProvider in the
+            // engine's capabilities is the only signal (there is no push capability flag). Only
+            // then do we stand up the event-driven pull→push publisher; otherwise no pull
+            // machinery runs at all.
+            diagnostics = PullDiagnosticsPublisher
+                .pullProviderOf(session.initializeResult.capabilities)
+                ?.let { provider -> createPublisher(this, provider) }
         }
-        // Detect pull-mode authoritatively (#43): a non-null diagnosticProvider in the
-        // engine's capabilities is the only signal (there is no push capability flag). Only
-        // then do we stand up the event-driven pull→push publisher; otherwise no pull
-        // machinery runs at all.
-        connection.diagnostics = PullDiagnosticsPublisher.pullProviderOf(result.capabilities)
-            ?.let { provider -> createPublisher(connection, provider) }
-        return result
-    }
 
     /**
      * Build the [PullDiagnosticsPublisher] wired to THIS [connection]'s engine stub and the
@@ -472,10 +472,15 @@ open class BridgeLanguageServer(
      * silently stops compiling/executing. So every forward call degrades to inert here: the
      * worst a dead engine can do is "no completion / no hover", never kill the session.
      * Cooperative cancellation is re-thrown; everything else returns [fallback].
+     *
+     * Bounded by [Config.kotlinLspCallTimeout], because an engine that stops answering
+     * mid-session hangs the editor exactly as one that never answered `initialize` does (#109),
+     * and no probe at startup can prevent that. A deadline turns "never returns" into an
+     * ordinary engine failure, which everything above already knows how to degrade.
      */
     private suspend fun <T> guardEngine(label: String, fallback: T, block: suspend () -> T): T =
         try {
-            block()
+            withTimeout(config.kotlinLspCallTimeout) { block() }
         } catch (t: Throwable) {
             // Propagate ONLY a genuine cancellation of *this* coroutine (cooperative cancellation).
             // A FOREIGN CancellationException — the dead kotlin-lsp subprocess leg's MultiChannel
@@ -513,7 +518,8 @@ open class BridgeLanguageServer(
     ): T {
         val dead = connection ?: return fallback
         return try {
-            block(dead.server)
+            // Deadline as in [guardEngine]: a stalled engine must fail the call, not park it.
+            withTimeout(config.kotlinLspCallTimeout) { block(dead.server) }
         } catch (t: Throwable) {
             // Cooperative cancellation of THIS coroutine must propagate; a foreign cancellation
             // (the dead engine leg) must not — see [guardEngine] for the full rationale.
@@ -560,19 +566,18 @@ open class BridgeLanguageServer(
             // block the reconnect (holding [reconnectLock]) on work stuck against a dead engine.
             dead.scope.cancel()
             try {
-                // connectEngine respawns the subprocess if it died, and returns a fresh stub wired
-                // to a new Forwarder for THIS bridge's session.
-                val server = connectEngine()
+                // connectEngine respawns the subprocess if it died, replays the identical engine
+                // handshake, and returns a fresh stub wired to a new Forwarder for THIS bridge's
+                // session — or null if the respawned engine is still not usable.
+                val session = connectEngine(engineParams(params))
                     ?: return@withLock null.also {
                         hauler.error("kotlin-lsp reconnect failed to respawn; bridge stays inert")
                     }
-                val fresh = EngineConnection(server)
+                val fresh = adoptEngine(session)
                 connection = fresh
                 hauler.info("kotlin-lsp reconnected; replaying handshake + didOpen")
-                // Replay the engine handshake (this also builds the pull publisher against the
-                // fresh connection) and, if the editor had already initialized, its `initialized`.
-                handshakeEngine(fresh, params)
-                initializedParams?.let { runCatching { server.initialized(it) } }
+                // If the editor had already initialized, replay its `initialized` too.
+                initializedParams?.let { runCatching { session.server.initialized(it) } }
                 // Re-open the current document so the engine re-analyzes what the user has open.
                 replayDidOpen(fresh)
                 fresh

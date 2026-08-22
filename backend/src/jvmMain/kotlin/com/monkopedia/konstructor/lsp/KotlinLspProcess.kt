@@ -20,12 +20,27 @@ import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.Config
 import com.monkopedia.ksrpc.channels.SingleChannelConnection
+import com.monkopedia.lsp.InitializeParams
+import com.monkopedia.lsp.InitializeResult
 import com.monkopedia.lsp.KsrpcLanguageClient
 import com.monkopedia.lsp.KsrpcLanguageServer
 import com.monkopedia.lsp.ksrpc.asLspConnection
 import com.monkopedia.lsp.ksrpc.connectAsLspClient
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+
+/**
+ * A kotlin-lsp engine that has ANSWERED the LSP `initialize` handshake: the
+ * subprocess-facing [server] stub and the [initializeResult] it replied with.
+ *
+ * [KotlinLspProcess.connect] hands out no other shape, so holding one of these is proof the
+ * engine is *usable* rather than merely running.
+ */
+class EngineSession(val server: KsrpcLanguageServer, val initializeResult: InitializeResult)
 
 /**
  * Manages ONE warm JetBrains `kotlin-lsp` (`intellij-server --stdio`) subprocess and
@@ -60,22 +75,52 @@ class KotlinLspProcess private constructor(private val config: Config) {
     private var cooldownUntil = 0L
 
     /**
-     * Lazily spawn (once) the warm subprocess and return a fresh subprocess-facing
-     * [KsrpcLanguageServer] stub wired to [forwarder]. Returns `null` if the binary is
-     * not available, or if spawning/connecting fails (LSP degrades to off).
+     * Lazily spawn (once) the warm subprocess, drive it through the LSP `initialize`
+     * handshake with [params], and return the resulting [EngineSession] — a stub wired to
+     * [forwarder] plus the engine's own [InitializeResult].
+     *
+     * Returns `null`, i.e. LSP degrades to off, whenever the engine is not *usable*. That
+     * is one definition, and all three shapes an unusable engine takes collapse onto it:
+     *  1. the binary is unset/missing/not executable ([Config.isKotlinLspAvailable]),
+     *  2. it starts and immediately exits — an expired build (#84), or
+     *  3. it starts, stays up, and never answers `initialize` (#109).
+     *
+     * Shape 3 is why the handshake belongs HERE and not in the caller: "still breathing a
+     * moment later" is not readiness. An expired build that hangs rather than exits passes
+     * that probe, so the connection was cached as live and the whole editor queued behind an
+     * `initialize` that never returned — silently, with the LSP toggle still reading on.
+     * Readiness therefore means *answered*, behind [Config.kotlinLspCallTimeout].
      *
      * The subprocess itself is a singleton; each call returns a stub bound to the given
      * forwarder so server→client pushes (diagnostics) for THIS session land on the right
      * editor. For Phase 2 we scope to the active konstruction, so a single warm process
      * suffices.
      */
-    suspend fun connect(forwarder: KsrpcLanguageClient): KsrpcLanguageServer? {
+    suspend fun connect(forwarder: KsrpcLanguageClient, params: InitializeParams): EngineSession? {
         if (!config.isKotlinLspAvailable) return null
         return lock.withLock {
             val conn = ensureConnection() ?: return@withLock null
             try {
-                conn.connectAsLspClient(forwarder)
+                val server = conn.connectAsLspClient(forwarder)
+                EngineSession(
+                    server,
+                    withTimeout(config.kotlinLspCallTimeout) { server.initialize(params) }
+                )
+            } catch (t: TimeoutCancellationException) {
+                hauler.error(
+                    "kotlin-lsp did not answer `initialize` within " +
+                        "${config.kotlinLspCallTimeout} — treating the engine as unavailable; " +
+                        "LSP stays off. An expired build that hangs instead of exiting looks " +
+                        "exactly like this."
+                )
+                // Discard the corpse rather than caching it: the next connect then respawns
+                // (bounded by [admitSpawn]) instead of queueing behind an engine that has
+                // already proved it will not answer.
+                shutdownLocked()
+                null
             } catch (t: Throwable) {
+                // Our own cancellation must propagate; anything else degrades LSP to off.
+                coroutineContext.ensureActive()
                 hauler.error("Failed to connect to kotlin-lsp subprocess", t)
                 null
             }

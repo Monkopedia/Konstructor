@@ -19,6 +19,7 @@ import com.monkopedia.konstructor.tasks.LibsJar
 import java.io.File
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.serialization.json.Json
 
 class Config(
@@ -41,6 +42,20 @@ class Config(
         System.getenv("KONSTRUCTOR_KOTLIN_LSP")
             ?: System.getProperty("konstructor.kotlinLsp")
         )?.let(::File),
+    /**
+     * Deadline for a single request made to the kotlin-lsp subprocess — the `initialize`
+     * handshake that decides whether a freshly spawned engine is usable at all, and every
+     * delegated request after it.
+     *
+     * An engine that STAYS UP but never answers is indistinguishable from a healthy one
+     * until something bounds the wait, and the editor simply hangs with LSP apparently on
+     * (#109). A healthy engine answers `initialize` in well under a second — indexing
+     * happens afterwards, and diagnostic pulls are driven by
+     * [com.monkopedia.konstructor.lsp.PullDiagnosticsPublisher] on their own budget — so
+     * this is generous by an order of magnitude and only an engine that is already broken
+     * ever reaches it.
+     */
+    val kotlinLspCallTimeout: Duration = 30.seconds,
     /**
      * Whether the script host advertises STL caching to running scripts
      * ([com.monkopedia.konstructor.lib.HostService.supportsCaching]). Turning it off
