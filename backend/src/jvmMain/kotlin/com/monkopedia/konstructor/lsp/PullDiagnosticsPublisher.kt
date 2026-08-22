@@ -38,6 +38,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 
 /**
  * The event-driven **pull→push diagnostics bridge** for LSP #43 (epic #35).
@@ -65,7 +66,8 @@ import kotlinx.coroutines.sync.withLock
  * (uri, identifier?); `version` through the publish seam; `awaitReady` as a generic
  * `suspend () -> Unit`; the teardown contract — the publisher relies on its injected [scope]
  * being cancelled, which the bridge does whenever the engine connection it belongs to dies, is
- * replaced or is torn down (#80), and which is the ONLY thing that bounds its pulls).
+ * replaced or is torn down (#80), and which is what bounds its retry LOOP — each individual
+ * pull is bounded by [pullTimeout]).
  *  - [pull]: how to PULL a [DocumentDiagnosticReport] for a doc (the subprocess stub's
  *    `textDocumentDiagnostic`, with `previousResultId`),
  *  - [publish]: how to PUSH a doc's diagnostics up to the target client (the bridge wires
@@ -73,7 +75,7 @@ import kotlinx.coroutines.sync.withLock
  *    `textDocumentPublishDiagnostics`),
  *  - [awaitReady]: a gate suspended on until the target client is ready to receive (the
  *    `initialized` handshake), and
- *  - timing knobs ([debounce], [coldIndexRetry]).
+ *  - timing knobs ([debounce], [coldIndexRetry], [pullTimeout]).
  *
  * It tracks per-doc [previousResultId][DocumentDiagnosticParams.previousResultId] (see
  * [resultIds]); on each pull it threads the last id, and when the server answers an
@@ -114,6 +116,15 @@ internal class PullDiagnosticsPublisher(
     private val debounce: Duration = DEFAULT_DEBOUNCE,
     /** How long to wait between re-tries of the FIRST pull, while the index is still cold. */
     private val coldIndexRetry: Duration = DEFAULT_COLD_INDEX_RETRY,
+    /**
+     * Deadline for ONE [pull]. Distinct from [coldIndexRetry], which is a *cadence between
+     * completed pulls* and therefore bounds nothing on its own: an engine that accepts a pull
+     * and never answers parks [pullOnce] — and, behind its per-doc lock, every later trigger
+     * for that doc — for the rest of the session, silently, because a pull that never returns
+     * never logs (#109). With a deadline that becomes an ordinary failed pull: logged, and
+     * re-tried on the next cadence.
+     */
+    private val pullTimeout: Duration = DEFAULT_PULL_TIMEOUT,
     /**
      * Whether [onClose] emits a clearing `publish(uri, emptyList())` so the editor drops the
      * last squiggles when a doc closes (kodemirror does not always clear on its own didClose).
@@ -231,7 +242,7 @@ internal class PullDiagnosticsPublisher(
     private suspend fun pullOnce(uri: String): PullOutcome = lockFor(uri).withLock {
         val previousResultId = resultIds[uri]
         val report = try {
-            pull(uri, previousResultId)
+            withTimeout(pullTimeout) { pull(uri, previousResultId) }
         } catch (t: Throwable) {
             // Our own cancellation must propagate, not be logged as an engine error and retried:
             // it is how [pullUntilPublished] stops when the engine connection is cancelled (#80).
@@ -267,7 +278,9 @@ internal class PullDiagnosticsPublisher(
      * analysis lands; once it publishes (or the doc closes) we stop and rely on event-driven
      * [onRefresh]/[onChange]. It needs no attempt limit of its own: the loop is bounded by the
      * [scope] it runs in, which the caller cancels when the engine connection dies or is replaced
-     * (#80) — so it can never outlive the engine it is polling.
+     * (#80) — so it can never outlive the engine it is polling. What the scope does NOT bound
+     * is a single pull: only [pullTimeout] does, and without it a wedged engine parks this loop
+     * mid-iteration, where no cadence can reach it.
      */
     private suspend fun pullUntilPublished(uri: String) {
         while (uri in openDocs) {
@@ -281,6 +294,7 @@ internal class PullDiagnosticsPublisher(
     companion object {
         private val DEFAULT_DEBOUNCE = 300.milliseconds
         private val DEFAULT_COLD_INDEX_RETRY = 4.seconds
+        private val DEFAULT_PULL_TIMEOUT = 30.seconds
 
         /**
          * The authoritative pull-mode signal: the initialize result's

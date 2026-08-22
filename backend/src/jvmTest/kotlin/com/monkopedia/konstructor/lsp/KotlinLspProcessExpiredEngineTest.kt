@@ -121,12 +121,14 @@ class KotlinLspProcessExpiredEngineTest {
             assertNull(lsp.ensureConnection(), "a dead engine must never yield a connection")
         }
 
-        val spawned = launches()
-        assertTrue(
-            spawned <= KotlinLspProcess.MAX_SPAWNS_PER_WINDOW,
-            "A dead engine must stop being respawned. $ATTEMPTS attempts spawned $spawned " +
-                "JVMs; the cap is ${KotlinLspProcess.MAX_SPAWNS_PER_WINDOW}. Unbounded here " +
-                "is what took prod down (#84)."
+        // Equality, not <=: "at most the cap" is satisfied by a cap that never trips, which is
+        // how a bound ends up measuring nothing. $ATTEMPTS attempts must produce exactly the cap.
+        assertEquals(
+            KotlinLspProcess.MAX_CONSECUTIVE_FAILURES,
+            launches(),
+            "A dead engine must stop being respawned: $ATTEMPTS attempts must spawn exactly " +
+                "${KotlinLspProcess.MAX_CONSECUTIVE_FAILURES} JVMs and then stop. Unbounded " +
+                "here is what took prod down (#84)."
         )
     }
 
@@ -144,7 +146,7 @@ class KotlinLspProcessExpiredEngineTest {
         // this. Null here means connect() never came back inside a budget many times the
         // engine's own deadline — i.e. the editor would still be sitting there.
         val reportedUnavailable = withTimeoutOrNull(HANG_BUDGET) {
-            lsp.connect(object : DefaultLanguageClient() {}, INIT_PARAMS) == null
+            lsp.connect(client(), INIT_PARAMS) == null
         }
 
         assertNotNull(
@@ -169,6 +171,37 @@ class KotlinLspProcessExpiredEngineTest {
         lsp.shutdown()
     }
 
+    @Test
+    fun theRespawnCapTripsForAnEngineThatNeverAnswers() = runBlocking {
+        val config = Config(
+            tempDir,
+            kotlinLspBinary = hangingEngine,
+            kotlinLspCallTimeout = ENGINE_DEADLINE
+        )
+        val lsp = KotlinLspProcess.forConfig(config)
+
+        // Every attempt costs the liveness probe PLUS the handshake deadline, which is exactly
+        // what a spawns-per-time-window bound cannot survive: the early attempts age out of the
+        // window before the last one arrives, so the cap never trips and the JVM storm #84
+        // records is back. Counting consecutive failures is independent of how slow a failure
+        // is, which is what makes this assertion mean something at any deadline.
+        repeat(ATTEMPTS) {
+            assertTrue(
+                withTimeoutOrNull(HANG_BUDGET) { lsp.connect(client(), INIT_PARAMS) == null }
+                    == true,
+                "every attempt must RETURN and report the engine unavailable"
+            )
+        }
+
+        assertEquals(
+            KotlinLspProcess.MAX_CONSECUTIVE_FAILURES,
+            launches(),
+            "$ATTEMPTS attempts against an unresponsive engine must spawn exactly " +
+                "${KotlinLspProcess.MAX_CONSECUTIVE_FAILURES} JVMs and then stop"
+        )
+        lsp.shutdown()
+    }
+
     private companion object {
         /**
          * Deliberately well above the cap: the point is to show the count STOPS, and a
@@ -186,5 +219,8 @@ class KotlinLspProcessExpiredEngineTest {
             capabilities = ClientCapabilities(),
             rootUri = "file:///workspace"
         )
+
+        /** A do-nothing forwarder: the fake engines never push anything at it. */
+        fun client(): DefaultLanguageClient = object : DefaultLanguageClient() {}
     }
 }

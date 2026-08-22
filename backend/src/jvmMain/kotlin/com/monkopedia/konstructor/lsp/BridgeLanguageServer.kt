@@ -366,7 +366,13 @@ open class BridgeLanguageServer(
                 )
             )
         },
-        awaitReady = { lifecycle.awaitInitialized() }
+        awaitReady = { lifecycle.awaitInitialized() },
+        // The SAME deadline the delegated requests get. The pull is request-shaped — the
+        // publisher's 4s cold-index cadence exists precisely because a cold pull RETURNS
+        // (empty/failed) rather than blocking — so it needs no budget of its own, and leaving it
+        // as the one unbounded engine request would reproduce #109 at the seam a user notices
+        // first, with no self-heal (reconnect only ever fires from a request-shaped call).
+        pullTimeout = config.kotlinLspCallTimeout
     )
 
     override suspend fun initialized(params: InitializedParams) {
@@ -506,6 +512,15 @@ open class BridgeLanguageServer(
      * one a captured reference would hold. At most one reconnect + one retry per failing call: no
      * backoff/retry-limit machinery — recovery is paced by request traffic (a subsequent request
      * that still fails simply tries again).
+     *
+     * ⚠️ The deadline below bounds each engine request, not the whole method, so a call that
+     * wedges, reconnects into an engine that also wedges, and retries costs up to
+     * 3 × [Config.kotlinLspCallTimeout]. That is deliberate: a single outer deadline would have to
+     * cancel a [reconnect] mid-flight, which either skips [KotlinLspProcess.connect]'s discard of
+     * the unresponsive engine (re-creating exactly the bug this fixes) or lets a
+     * CancellationException escape an LSP method — the cascade [guardEngine] exists to prevent.
+     * The worst case is self-limiting anyway: the wedged engine is discarded on the way through,
+     * and the spawn cap stops re-spawning it after [KotlinLspProcess.MAX_CONSECUTIVE_FAILURES].
      *
      * Only ever called from an editor-facing method, i.e. NEVER from inside an
      * [EngineConnection.scope] — [reconnect] cancels that scope, and a caller running in it would

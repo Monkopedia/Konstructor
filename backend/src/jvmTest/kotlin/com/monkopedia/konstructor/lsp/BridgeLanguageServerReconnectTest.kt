@@ -185,7 +185,11 @@ class BridgeLanguageServerReconnectTest {
         override suspend fun connectEngine(params: InitializeParams): EngineSession? {
             val engine = engines() ?: return null
             handedOut.add(engine)
-            return EngineSession(engine, engine.initialize(params))
+            // ...including the swallow: a handshake that throws (or never answers) means the
+            // engine is unusable, and the real connect() reports that as null rather than
+            // letting it escape. The bridge's initialize/reconnect now call this OUTSIDE any
+            // guard, so a propagating fake would test a contract production does not have.
+            return runCatching { EngineSession(engine, engine.initialize(params)) }.getOrNull()
         }
     }
 

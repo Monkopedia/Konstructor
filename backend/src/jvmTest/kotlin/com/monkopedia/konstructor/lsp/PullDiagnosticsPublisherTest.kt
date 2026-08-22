@@ -30,6 +30,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
@@ -55,6 +56,9 @@ import kotlinx.coroutines.test.runTest
 class PullDiagnosticsPublisherTest {
 
     private val uri = "file:///0/0/content.csgs"
+
+    /** The pull deadline under test. Short so the virtual clock reaches it obviously. */
+    private val pullDeadline = 30.seconds
 
     private fun fullReport(resultId: String?, vararg messages: String): DocumentDiagnosticReport =
         RelatedFullDocumentDiagnosticReport(
@@ -275,8 +279,10 @@ class PullDiagnosticsPublisherTest {
         val publisher = newPublisher(rec)
 
         // Start a change-triggered pull and let it reach the (gated) pull seam, then hold it.
+        // Stepped rather than advanceUntilIdle(): a pull now has a deadline, and running the
+        // clock to idle would fire it and leave this test asserting nothing.
         publisher.onChange(uri)
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(1.seconds)
         assertEquals(1, rec.pullCalls.size, "the change pull reached the pull seam")
         // Nothing published yet (pull is suspended on the gate); also no clearing publish yet.
         val publishesWhileInFlight = rec.publishes.size
@@ -284,13 +290,13 @@ class PullDiagnosticsPublisherTest {
         // The doc closes while the pull is still in flight. This drops it from openDocs and
         // emits the clear-on-close publish.
         publisher.onClose(uri)
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(1.seconds)
         val afterClose = rec.publishes.size
 
         // Now let the in-flight pull complete: its (now-stale) full report must NOT publish,
         // because the doc is no longer open.
         gate.complete(Unit)
-        testScheduler.advanceUntilIdle()
+        testScheduler.advanceTimeBy(1.seconds)
 
         assertEquals(
             afterClose,
@@ -360,14 +366,46 @@ class PullDiagnosticsPublisherTest {
         )
     }
 
+    // --- a pull is bounded, not merely re-tried (#109) --------------------------------
+
+    @Test
+    fun `a pull the engine never answers is bounded and re-tried, not parked`() = runTest {
+        val rec = Recorder()
+        // The engine takes the pull and never answers — #109's shape at the seam a user
+        // notices first, and the one with no self-heal: reconnect only ever fires from a
+        // request-shaped call, and a user who is only typing makes none.
+        rec.pullGate = CompletableDeferred()
+        rec.reports = { fullReport(resultId = "rid", "boom") }
+        // Same shape as the cancellation guard below: the retry loop is unbounded by design, so
+        // it runs in the engine connection's scope and the test ends it the way the bridge does.
+        val connectionScope = CoroutineScope(coroutineContext + Job())
+        val publisher = connectionScope.newPublisher(rec)
+
+        publisher.onOpen(uri)
+        // Long enough for several deadline+cadence cycles. [coldIndexRetry] cannot rescue
+        // this on its own: it is the gap BETWEEN completed pulls, so an unbounded pull never
+        // reaches it and pullCalls stays stuck at 1 for the life of the session.
+        testScheduler.advanceTimeBy((pullDeadline + 10.seconds) * 3)
+        val attempts = rec.pullCalls.size
+        connectionScope.cancel()
+
+        assertTrue(
+            attempts > 1,
+            "a pull that never answers must hit its deadline and be re-tried; the loop only " +
+                "made $attempts attempt(s), i.e. it is parked on the first one"
+        )
+    }
+
     private fun CoroutineScope.newPublisher(
         rec: Recorder,
+        pullTimeout: Duration = pullDeadline,
         provider: com.monkopedia.lsp.ServerCapabilitiesDiagnosticProvider = DiagnosticOptions(
             interFileDependencies = false,
             workspaceDiagnostics = false
         )
     ): PullDiagnosticsPublisher = PullDiagnosticsPublisher(
         scope = this,
+        pullTimeout = pullTimeout,
         diagnosticProvider = provider,
         pull = { _, previousResultId ->
             rec.pullCalls.add(previousResultId)

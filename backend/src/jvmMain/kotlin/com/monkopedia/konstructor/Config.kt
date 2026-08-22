@@ -43,19 +43,32 @@ class Config(
             ?: System.getProperty("konstructor.kotlinLsp")
         )?.let(::File),
     /**
-     * Deadline for a single request made to the kotlin-lsp subprocess — the `initialize`
-     * handshake that decides whether a freshly spawned engine is usable at all, and every
-     * delegated request after it.
+     * Deadline for a single request made to the kotlin-lsp subprocess. It covers EVERY
+     * request-shaped call: the `initialize` handshake that decides whether a freshly spawned
+     * engine is usable at all, the delegated editor requests (completion, hover,
+     * signatureHelp), and the `textDocument/diagnostic` PULL that
+     * [com.monkopedia.konstructor.lsp.PullDiagnosticsPublisher] drives. Notifications are not
+     * covered and need no cover — they complete on the write.
      *
-     * An engine that STAYS UP but never answers is indistinguishable from a healthy one
-     * until something bounds the wait, and the editor simply hangs with LSP apparently on
-     * (#109). A healthy engine answers `initialize` in well under a second — indexing
-     * happens afterwards, and diagnostic pulls are driven by
-     * [com.monkopedia.konstructor.lsp.PullDiagnosticsPublisher] on their own budget — so
-     * this is generous by an order of magnitude and only an engine that is already broken
-     * ever reaches it.
+     * An engine that STAYS UP but never answers is indistinguishable from a healthy one until
+     * something bounds the wait, and the editor simply hangs with LSP apparently on (#109).
+     * The pull seam matters most, because it is the one a user notices first and the one with
+     * no self-heal: the publisher's cold-index retry is a *cadence between completed pulls*,
+     * not a deadline, so an unbounded pull parks it for the session.
+     *
+     * A healthy engine answers `initialize` in well under a second (indexing happens
+     * afterwards) and a warm diagnostic pull in ~8s, so this is generous by design and only an
+     * engine that is already broken reaches it. A pull that does hit the deadline is an
+     * ordinary failed pull: it is logged and re-tried on the next cadence, which is strictly
+     * better than the silence it replaces.
+     *
+     * Sourced (in seconds) from `KONSTRUCTOR_KOTLIN_LSP_TIMEOUT`, or the
+     * `konstructor.kotlinLspTimeout` system property, like the other LSP knobs.
      */
-    val kotlinLspCallTimeout: Duration = 30.seconds,
+    val kotlinLspCallTimeout: Duration = (
+        System.getenv("KONSTRUCTOR_KOTLIN_LSP_TIMEOUT")
+            ?: System.getProperty("konstructor.kotlinLspTimeout")
+        )?.toLongOrNull()?.seconds ?: 30.seconds,
     /**
      * Whether the script host advertises STL caching to running scripts
      * ([com.monkopedia.konstructor.lib.HostService.supportsCaching]). Turning it off
