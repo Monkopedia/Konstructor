@@ -35,7 +35,9 @@ import com.monkopedia.konstructor.common.KonstructionListener
 import com.monkopedia.konstructor.common.KonstructionRender
 import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.KonstructionTarget
+import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
+import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.logging.LoggingService
 import com.monkopedia.konstructor.logging.WarehouseWrapper
@@ -61,6 +63,10 @@ import kotlinx.coroutines.withTimeout
 
 /** Upper bound on a single compile/konstruct/listener-callback before it's cancelled. */
 private val callTimeout = 120.seconds
+
+/** Reported by `konstruct` when there was nothing to render and nothing had ever been built. */
+private const val NOTHING_RENDERED =
+    "Nothing was built: this konstruction has no render yet. Compile it first."
 
 class KonstructionServiceImpl(
     private val config: Config,
@@ -300,12 +306,33 @@ class KonstructionServiceImpl(
                     }
                 }
             }
-            konstructionController.lastRenderResult().also { result ->
+            renderResult().also { result ->
                 broadcast {
                     onTaskComplete(result)
                 }
             }
         }
+
+    /**
+     * The result to report for a konstruct.
+     *
+     * Normally that is the last render's result — on the skip path the requested targets are
+     * already up to date, so the render that made them clean is the honest answer, and callers
+     * rely on an already-built target still reporting SUCCESS.
+     *
+     * A konstruction that has never rendered has no `result.json` at all, though, and reading
+     * it threw [java.io.FileNotFoundException] out of an ordinary `konstruct()` (#120). It
+     * can't be reported as an empty success either: nothing was built, and claiming otherwise
+     * turns the crash into a quiet wrong answer. Say what actually happened instead.
+     */
+    private suspend fun renderResult(): TaskResult = if (konstructionController.hasRenderResult()) {
+        konstructionController.lastRenderResult()
+    } else {
+        TaskResult(
+            status = FAILURE,
+            messages = listOf(TaskMessage(NOTHING_RENDERED))
+        )
+    }
 
     override suspend fun requestKonstruct(target: String): Unit =
         callContext("requestKonstruct", baseCallSign = konstructionController.callSign) {

@@ -56,6 +56,11 @@ interface KonstructionController {
     suspend fun compile()
     suspend fun lastCompileResult(): TaskResult
     suspend fun render(targets: List<String>): List<String>
+
+    /** Whether a render has ever completed, i.e. whether [lastRenderResult] has one to read. */
+    suspend fun hasRenderResult(): Boolean
+
+    /** The result of the last [render]; only valid when [hasRenderResult] is true. */
     suspend fun lastRenderResult(): TaskResult
     suspend fun renderFile(target: String): File?
 }
@@ -139,6 +144,10 @@ class KonstructionControllerImpl(
             }
             return executedTargets
         }
+    }
+
+    override suspend fun hasRenderResult(): Boolean = withContext(Dispatchers.IO) {
+        paths.renderResultFile.exists()
     }
 
     override suspend fun lastRenderResult(): TaskResult = withContext(Dispatchers.IO) {
