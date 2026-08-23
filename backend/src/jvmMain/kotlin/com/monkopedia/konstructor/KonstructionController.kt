@@ -44,6 +44,15 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 
+/**
+ * What a render touched.
+ *
+ * [attemptedTargets] is the subset of [allTargets] the render actually tried to build — the
+ * script's exports plus any requested extras that exist. Which of those succeeded is reported
+ * separately, in the render's [TaskResult.taskArguments].
+ */
+data class RenderedTargets(val allTargets: List<String>, val attemptedTargets: List<String>)
+
 interface KonstructionController {
     val callSign: CallSign
     val paths: PathController.Paths
@@ -55,7 +64,7 @@ interface KonstructionController {
     suspend fun write(content: ByteReadChannel)
     suspend fun compile()
     suspend fun lastCompileResult(): TaskResult
-    suspend fun render(targets: List<String>): List<String>
+    suspend fun render(targets: List<String>): RenderedTargets
 
     /** Whether a render has ever completed, i.e. whether [lastRenderResult] has one to read. */
     suspend fun hasRenderResult(): Boolean
@@ -88,7 +97,15 @@ class KonstructionControllerImpl(
         }
         set(value) {
             if (infoImpl == value) return
-            // Optimistically set now, to have the info available immediately.
+            // The in-memory value is published HERE, synchronously, and nowhere else. The
+            // persist below used to repeat `infoImpl = value` after its write "to settle out
+            // any race conditions", which did the opposite: the job captures the value it was
+            // launched with, so a slow write resurrected stale info over a newer assignment.
+            // `compile()` holds contentFileLock for the whole compile, so the job launched by
+            // the preceding `set()` was still queued on that lock when compile() published
+            // NEEDS_EXEC — and then overwrote it with NEEDS_COMPILE. A konstruct() landing in
+            // that window read the stale state, skipped render() and reported a render that
+            // never happened (#122).
             infoImpl = value
             GlobalScope.launch(saveContext + callSign) {
                 runCatching {
@@ -100,8 +117,6 @@ class KonstructionControllerImpl(
                         writeInfo(paths.infoFile, config.json, value)
                     }
                 }.onFailure { hauler.error("Failed to persist info for $workspaceId/$id", it) }
-                // Always set one more time after write to settle out any race conditions.
-                infoImpl = value
             }
         }
     override val scriptLock: Mutex = Mutex()
@@ -121,7 +136,7 @@ class KonstructionControllerImpl(
         }
     }
 
-    override suspend fun render(targets: List<String>): List<String> {
+    override suspend fun render(targets: List<String>): RenderedTargets {
         contentFileLock.withLock {
             for (target in targets) {
                 val targetFile = File(paths.renderOutput, "$target.stl")
@@ -138,11 +153,11 @@ class KonstructionControllerImpl(
                 extraTargets = targets,
                 subprocessExit = scriptExit
             )
-            val (result, executedTargets) = executeTask.execute()
+            val (result, renderedTargets) = executeTask.execute()
             paths.renderResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
             }
-            return executedTargets
+            return renderedTargets
         }
     }
 

@@ -22,9 +22,11 @@ import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.testutil.TestEnvironment
 import java.io.File
+import kotlin.coroutines.CoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -115,6 +117,52 @@ class KonstructionControllerConcurrencyTest {
             controller.write("survivor")
             assertEquals("survivor", controller.read())
         }
+    }
+
+    /**
+     * Regression for #122: a queued persist must not publish the info it captured over a
+     * newer assignment.
+     *
+     * The setter publishes the value synchronously and then persists it asynchronously. The
+     * persist used to end by repeating `infoImpl = value` "to settle out any race conditions",
+     * which did the opposite — each job captures the value it was launched with, so a job
+     * still queued when a later assignment landed resurrected the older one.
+     *
+     * The window is real in production: `compile()` holds the content lock for the whole
+     * kotlinc run and the persist needs the same lock, so the job launched by `set()`
+     * (NEEDS_COMPILE) was still waiting on it when `compile()` published NEEDS_EXEC. A
+     * `konstruct()` reading the resurrected NEEDS_COMPILE failed the dirty-state guard and
+     * skipped `render()` entirely.
+     *
+     * Draining the save dispatcher by hand makes that interleaving exact rather than
+     * load-dependent: after every persist runs, the info must still be the newest assigned.
+     */
+    @Test
+    fun aQueuedPersistDoesNotResurrectOlderInfo() = runBlocking {
+        val queue = ArrayDeque<Runnable>()
+        val queueing = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) {
+                synchronized(queue) { queue.addLast(block) }
+            }
+        }
+        val controller = KonstructionControllerImpl(env.config, "ws1", "k1", queueing)
+
+        controller.info = controller.info.copy(dirtyState = DirtyState.NEEDS_COMPILE)
+        controller.info = controller.info.copy(dirtyState = DirtyState.NEEDS_EXEC)
+
+        val observed = mutableListOf<DirtyState>()
+        var guard = 0
+        while (guard++ < 100) {
+            val next = synchronized(queue) { queue.removeFirstOrNull() } ?: break
+            next.run()
+            observed += controller.info.dirtyState
+        }
+
+        assertTrue(observed.isNotEmpty(), "The setter must have queued a persist to drain")
+        assertTrue(
+            observed.all { it == DirtyState.NEEDS_EXEC },
+            "A persist must never publish the info it captured over a newer one. Saw: $observed"
+        )
     }
 
     @Test
