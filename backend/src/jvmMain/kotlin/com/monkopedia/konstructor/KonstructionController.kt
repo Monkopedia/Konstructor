@@ -88,7 +88,15 @@ class KonstructionControllerImpl(
         }
         set(value) {
             if (infoImpl == value) return
-            // Optimistically set now, to have the info available immediately.
+            // The in-memory value is published HERE, synchronously, and nowhere else. The
+            // persist below used to repeat `infoImpl = value` after its write "to settle out
+            // any race conditions", which did the opposite: the job captures the value it was
+            // launched with, so a slow write resurrected stale info over a newer assignment.
+            // `compile()` holds contentFileLock for the whole compile, so the job launched by
+            // the preceding `set()` was still queued on that lock when compile() published
+            // NEEDS_EXEC — and then overwrote it with NEEDS_COMPILE. A konstruct() landing in
+            // that window read the stale state, skipped render() and reported a render that
+            // never happened (#122).
             infoImpl = value
             GlobalScope.launch(saveContext + callSign) {
                 runCatching {
@@ -100,8 +108,6 @@ class KonstructionControllerImpl(
                         writeInfo(paths.infoFile, config.json, value)
                     }
                 }.onFailure { hauler.error("Failed to persist info for $workspaceId/$id", it) }
-                // Always set one more time after write to settle out any race conditions.
-                infoImpl = value
             }
         }
     override val scriptLock: Mutex = Mutex()
