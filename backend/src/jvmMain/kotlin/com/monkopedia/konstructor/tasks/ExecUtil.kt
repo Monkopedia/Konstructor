@@ -27,7 +27,10 @@ import com.monkopedia.ksrpc.ksrpcEnvironment
 import com.monkopedia.ksrpc.sockets.asConnection
 import java.io.BufferedReader
 import java.io.IOException
-import java.io.InputStreamReader
+import java.io.InputStream
+import java.util.concurrent.Callable
+import java.util.concurrent.FutureTask
+import kotlin.concurrent.thread
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -44,11 +47,7 @@ object ExecUtil {
     @OptIn(DelicateCoroutinesApi::class)
     private val hauler by lazy { hauler().asAsync(GlobalScope) }
 
-    data class ExecResult(
-        val stdOut: BufferedReader,
-        val stdErr: BufferedReader,
-        val returnCode: Int
-    )
+    data class ExecResult(val stdOut: String, val stdErr: String, val returnCode: Int)
 
     fun executeAndWait(command: String): ExecResult {
         val rt = Runtime.getRuntime()
@@ -59,14 +58,21 @@ object ExecUtil {
             command
         )
         val proc = rt.exec(commands)
-        return ExecResult(
-            BufferedReader(InputStreamReader(proc.inputStream)),
-            BufferedReader(InputStreamReader(proc.errorStream)),
-            proc.waitFor()
-        ).also {
+        // Both pipes have to be drained while the child is still running. Once either one
+        // fills the OS pipe buffer (65536 bytes on Linux) the child blocks in write() and
+        // never exits, so waiting first deadlocks for anything but a quiet command
+        // (konstructor#125). ExecProcess below pumps its stderr for the same reason.
+        val stdOut = proc.inputStream.drainAsync("stdout")
+        val stdErr = proc.errorStream.drainAsync("stderr")
+        return ExecResult(stdOut.get(), stdErr.get(), proc.waitFor()).also {
             hauler.debug("Done executing: $command (${it.returnCode})")
         }
     }
+
+    private fun InputStream.drainAsync(name: String): FutureTask<String> =
+        FutureTask(Callable { bufferedReader().use(BufferedReader::readText) }).also { drain ->
+            thread(isDaemon = true, name = "exec-$name", block = drain::run)
+        }
 
     class ExecProcess(private val proc: Process) {
         private val parentJob = SupervisorJob()

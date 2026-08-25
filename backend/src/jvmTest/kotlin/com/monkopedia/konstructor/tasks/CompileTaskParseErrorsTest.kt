@@ -28,15 +28,15 @@ class CompileTaskParseErrorsTest {
 
     @Test
     fun testParseEmptyOutput() {
-        val reader = "".reader().buffered()
-        val result = CompileTask.parseErrors(reader)
+        val output = ""
+        val result = CompileTask.parseErrors(output)
         assertTrue(result.isEmpty())
     }
 
     @Test
     fun testParseErrorPrefixed() {
-        val reader = "error: something went wrong".reader().buffered()
-        val result = CompileTask.parseErrors(reader)
+        val output = "error: something went wrong"
+        val result = CompileTask.parseErrors(output)
         assertEquals(1, result.size)
         assertEquals("error: something went wrong", result[0].message)
         assertEquals(ERROR, result[0].importance)
@@ -44,8 +44,8 @@ class CompileTaskParseErrorsTest {
 
     @Test
     fun testParseWarningPrefixed() {
-        val reader = "warning: deprecated".reader().buffered()
-        val result = CompileTask.parseErrors(reader)
+        val output = "warning: deprecated"
+        val result = CompileTask.parseErrors(output)
         assertEquals(1, result.size)
         assertEquals("warning: deprecated", result[0].message)
         assertEquals(WARNING, result[0].importance)
@@ -54,8 +54,8 @@ class CompileTaskParseErrorsTest {
     @Test
     fun testParseRegexError() {
         val line = headerLines + 5
-        val reader = "file.kt:$line:5: some error message".reader().buffered()
-        val result = CompileTask.parseErrors(reader)
+        val output = "file.kt:$line:5: some error message"
+        val result = CompileTask.parseErrors(output)
         assertEquals(1, result.size)
         assertEquals("some error message", result[0].message)
         assertEquals(5, result[0].line)
@@ -66,8 +66,8 @@ class CompileTaskParseErrorsTest {
     @Test
     fun testParseRegexWarning() {
         val line = headerLines + 3
-        val reader = "file.kt:$line:10: warning: something".reader().buffered()
-        val result = CompileTask.parseErrors(reader)
+        val output = "file.kt:$line:10: warning: something"
+        val result = CompileTask.parseErrors(output)
         assertEquals(1, result.size)
         assertEquals("warning: something", result[0].message)
         assertEquals(WARNING, result[0].importance)
@@ -76,8 +76,8 @@ class CompileTaskParseErrorsTest {
     @Test
     fun testParseErrorInHeaderRegion() {
         val line = headerLines - 1
-        val reader = "file.kt:$line:3: bad syntax".reader().buffered()
-        val result = CompileTask.parseErrors(reader)
+        val output = "file.kt:$line:3: bad syntax"
+        val result = CompileTask.parseErrors(output)
         assertEquals(1, result.size)
         assertEquals("Internal error: bad syntax", result[0].message)
         assertEquals(0, result[0].line)
@@ -92,8 +92,8 @@ class CompileTaskParseErrorsTest {
             warning: global warning
             file.kt:$errorLine:2: actual error
         """.trimIndent()
-        val reader = input.reader().buffered()
-        val result = CompileTask.parseErrors(reader)
+        val output = input
+        val result = CompileTask.parseErrors(output)
         assertEquals(3, result.size)
         assertEquals(ERROR, result[0].importance)
         assertEquals(WARNING, result[1].importance)
@@ -107,8 +107,8 @@ class CompileTaskParseErrorsTest {
             another line
             Compilation completed
         """.trimIndent()
-        val reader = input.reader().buffered()
-        val result = CompileTask.parseErrors(reader)
+        val output = input
+        val result = CompileTask.parseErrors(output)
         assertTrue(result.isEmpty())
     }
 }
