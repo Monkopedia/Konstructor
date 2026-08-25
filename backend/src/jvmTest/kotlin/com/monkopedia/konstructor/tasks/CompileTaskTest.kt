@@ -77,7 +77,7 @@ class CompileTaskTest {
                 TaskMessage("error: unresolved reference: classpath", 9, 9),
 
             ),
-            CompileTask.parseErrors(testOutput.byteInputStream().bufferedReader())
+            CompileTask.parseErrors(testOutput)
         )
     }
 
@@ -88,7 +88,7 @@ class CompileTaskTest {
         """.trimIndent()
         assertEquals(
             listOf(TaskMessage("error: source entry is not a Kotlin file: gradle.properties")),
-            CompileTask.parseErrors(testOutput.byteInputStream().bufferedReader())
+            CompileTask.parseErrors(testOutput)
         )
     }
 

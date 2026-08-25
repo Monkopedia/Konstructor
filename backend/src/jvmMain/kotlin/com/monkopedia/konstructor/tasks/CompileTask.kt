@@ -30,7 +30,6 @@ import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.FAILURE
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.tasks.ExecUtil.executeAndWait
-import java.io.BufferedReader
 import java.io.File
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.coroutineContext
@@ -83,8 +82,8 @@ class CompileTask(private val config: Config, private val input: File, private v
         private val headerLines = KcsgScript.HEADER.split("\n").size
         private val footerLines = KcsgScript.FOOTER.split("\n").size
 
-        fun parseErrors(stdOut: BufferedReader, isError: Boolean = false): List<TaskMessage> =
-            stdOut.lineSequence().onEach {
+        fun parseErrors(output: String, isError: Boolean = false): List<TaskMessage> =
+            output.lineSequence().onEach {
                 if (isError) {
                     hauler.error(it)
                 } else {
