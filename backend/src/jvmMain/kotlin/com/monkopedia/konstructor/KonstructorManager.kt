@@ -16,10 +16,27 @@
 package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.Konstruction
-import java.util.WeakHashMap
 
 class KonstructorManager private constructor(private val config: Config) {
-    private val controllers = WeakHashMap<Pair<String, String>, KonstructionController>()
+    // Strong map, entries never evicted. This used to be a WeakHashMap, which holds its
+    // KEYS weakly -- and the key here is `workspaceId to id`, a Pair allocated fresh on
+    // every call that nothing outside the map ever references. Every entry was therefore
+    // weakly reachable the instant it was inserted, so any GC could drop it even while the
+    // controller itself was strongly held by KonstructionServiceImpl. The next lookup then
+    // built a second KonstructionControllerImpl with its own contentFileLock/scriptLock,
+    // and the script path and service path locked different Mutexes for the same
+    // konstruction -- silently, permanently, from the first GC onward (#126).
+    //
+    // Controller identity is load-bearing precisely because those Mutexes are per-instance
+    // fields, so this cache must not evict: adding an eviction policy here reintroduces the
+    // same defect. Nothing is scoped to a controller's lifecycle (there is no close/shutdown
+    // on KonstructionController), so retaining one per konstruction for the process lifetime
+    // is the accepted cost. Matches the strong per-Config caches in PathController and
+    // ScriptManager.
+    //
+    // Mutation is confined to controllerFor below, entirely under `synchronized(controllers)`,
+    // which is what makes the get-construct-put sequence atomic.
+    private val controllers = mutableMapOf<Pair<String, String>, KonstructionController>()
 
     fun controllerFor(konstruction: Konstruction): KonstructionController =
         controllerFor(konstruction.workspaceId, konstruction.id)
