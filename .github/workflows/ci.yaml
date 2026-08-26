@@ -54,6 +54,15 @@ jobs:
         # a real kotlin-lsp engine, absent on the runner); soak stays off.
         run: ./gradlew test :backend:jvmTest :protocol:jvmTest -Dintegration=true
 
+      - name: Run frontend wasmJs unit tests (Karma + headless Chrome)
+        run: |
+          export CHROME_BIN="${CHROME_BIN:-$(command -v google-chrome \
+            || command -v google-chrome-stable \
+            || command -v chromium-browser \
+            || command -v chromium)}"
+          echo "Using CHROME_BIN=$CHROME_BIN"
+          ./gradlew :frontend:wasmJsBrowserTest
+
       - name: Run e2e tests under Xvfb
         run: xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' ./gradlew :e2e:test -Pe2e
 
