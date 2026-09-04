@@ -23,6 +23,7 @@ import com.monkopedia.konstructor.common.DirtyState
 import com.monkopedia.konstructor.common.DirtyState.CLEAN
 import com.monkopedia.konstructor.common.DirtyState.NEEDS_COMPILE
 import com.monkopedia.konstructor.common.DirtyState.NEEDS_EXEC
+import com.monkopedia.konstructor.common.DirtyState.RENDER_FAILED
 import com.monkopedia.konstructor.common.KonstructionCallbacks
 import com.monkopedia.konstructor.common.KonstructionCallbacks.CONTENT_CHANGE
 import com.monkopedia.konstructor.common.KonstructionCallbacks.DIRTY_CHANGE
@@ -270,7 +271,8 @@ class KonstructionServiceImpl(
                 info.targets.any { it.name in targets && it.state == NEEDS_EXEC }
             ) {
                 val rendered = konstructionController.render(targets)
-                val latestBuilt = konstructionController.lastRenderResult().taskArguments
+                val lastRender = konstructionController.lastRenderResult()
+                val latestBuilt = lastRender.taskArguments
                 val existingTargets = info.targets.associateBy { it.name }
                 val changedTargets = mutableListOf<KonstructionTarget>()
                 val targets = rendered.allTargets.map { target ->
@@ -296,7 +298,18 @@ class KonstructionServiceImpl(
                     } ?: KonstructionTarget(target, dirtyState).also(changedTargets::add)
                 }
                 val newInfo = info.copy(
-                    dirtyState = CLEAN,
+                    // What the render reported, not an unconditional CLEAN. `ExecuteTask`
+                    // fails the whole render when any attempted target errors, so this says
+                    // "the last build worked" / "it did not" — and a konstruction whose
+                    // render just failed no longer reads CLEAN to `ScriptHostImpl.findScript`
+                    // or to anything else treating the flag as "last build was good" (#117).
+                    //
+                    // Deliberately NOT NEEDS_EXEC: that is the frontend's auto-build trigger
+                    // (`KonstructionViewModel.onInfoChanged`), so a permanently-failing target
+                    // would loop render -> fail -> re-request. RENDER_FAILED carries the
+                    // failure without asking for a retry; the retry route is the per-target
+                    // NEEDS_EXEC above, which the second clause of the guard reads (#104).
+                    dirtyState = if (lastRender.status == SUCCESS) CLEAN else RENDER_FAILED,
                     targets = targets
                 )
                 konstructionController.info = newInfo

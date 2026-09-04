@@ -48,6 +48,16 @@ enum class UiState {
     EXECUTING
 }
 
+/**
+ * Dirty states that mean "a build has already run for this konstruction", so the UI should
+ * show what exists rather than kicking off a compile/build cycle of its own.
+ *
+ * [DirtyState.RENDER_FAILED] belongs here for the same reason it must never join the
+ * [DirtyState.NEEDS_EXEC] branch: auto-requesting a build for a render that just failed
+ * simply fails again and re-notifies, forever (#117).
+ */
+private val SETTLED_STATES = setOf(DirtyState.CLEAN, DirtyState.RENDER_FAILED)
+
 class KonstructionViewModel(
     private val serviceHolder: ServiceHolder,
     private val targetDisplayRepo: TargetDisplayRepository
@@ -212,9 +222,13 @@ class KonstructionViewModel(
                 if (info != null) {
                     targetDisplayRepo.mergeTargets(info.targets.map { it.name })
                 }
-                // If already CLEAN, fetch existing render paths in parallel;
-                // otherwise trigger a compile/build cycle.
-                if (info != null && info.dirtyState == DirtyState.CLEAN) {
+                // If the last build already ran, fetch existing render paths in parallel;
+                // otherwise trigger a compile/build cycle. RENDER_FAILED counts as "already
+                // ran": the render was attempted and failed, so re-driving compile+build on
+                // every load would just repeat it. Its targets that DID build are still
+                // CLEAN, and applyCleanRenders only reads those — which is exactly what this
+                // did while a failed render reported the konstruction CLEAN (#117).
+                if (info != null && info.dirtyState in SETTLED_STATES) {
                     applyCleanRenders(ks, info)
                 } else {
                     autoCompileAndBuild(ks)
@@ -321,7 +335,11 @@ class KonstructionViewModel(
                     }
                 }
 
-                DirtyState.CLEAN -> {
+                // RENDER_FAILED shares this branch and must NOT share the NEEDS_EXEC one:
+                // requesting a build for a render that just failed loops forever. Settling
+                // here (and showing whatever did build) is what the frontend already did
+                // back when a failed render reported the konstruction CLEAN (#117).
+                DirtyState.CLEAN, DirtyState.RENDER_FAILED -> {
                     _state.value = UiState.DEFAULT
                     applyCleanRenders(ks, info)
                 }

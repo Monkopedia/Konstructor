@@ -147,10 +147,12 @@ class KonstructorTypesTest {
     @Test
     fun testDirtyStateValues() {
         val values = DirtyState.entries
-        assertEquals(3, values.size)
+        assertEquals(4, values.size)
         assertEquals(DirtyState.CLEAN, values[0])
         assertEquals(DirtyState.NEEDS_COMPILE, values[1])
         assertEquals(DirtyState.NEEDS_EXEC, values[2])
+        // Appended last (#117) so the entries above keep their ordinals and serial names.
+        assertEquals(DirtyState.RENDER_FAILED, values[3])
     }
 
     @Test
