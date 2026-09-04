@@ -36,7 +36,22 @@ data class Konstruction(
 enum class DirtyState {
     CLEAN,
     NEEDS_COMPILE,
-    NEEDS_EXEC
+    NEEDS_EXEC,
+
+    /**
+     * The last render was attempted and failed: at least one target it tried to build
+     * errored out at execute time.
+     *
+     * Distinct from [NEEDS_EXEC] on purpose. [NEEDS_EXEC] means "not built yet, go build it",
+     * and the frontend auto-requests a build whenever it sees it. Reporting a failed render as
+     * [NEEDS_EXEC] would therefore drive render -> fail -> info change -> re-request forever,
+     * which is why the konstruction-level state used to be forced to [CLEAN] instead (#117).
+     * This state says "the build ran and did not work" without asking anyone to run it again;
+     * a retry is still available through the per-target states, which stay [NEEDS_EXEC].
+     *
+     * Appended last so the ordinals and serial names of the existing entries are unchanged.
+     */
+    RENDER_FAILED
 }
 
 @Serializable
