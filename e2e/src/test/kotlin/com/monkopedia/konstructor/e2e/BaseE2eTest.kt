@@ -36,25 +36,15 @@ abstract class BaseE2eTest {
     protected lateinit var server: ServerFixture
     protected lateinit var page: Page
 
-    private var playwright: Playwright? = null
-    private var browser: Browser? = null
-
     protected val json = Json { ignoreUnknownKeys = true }
 
     @org.junit.Before
     fun setUpBase() {
         server = ServerFixture()
         server.start()
-        if (playwright == null) {
-            playwright = Playwright.create()
-            // Compose/Skiko needs a real display for WebGL rendering.
-            // Use headed mode (Xvfb provides a virtual display in CI).
-            browser = playwright!!.chromium().launch(
-                BrowserType.LaunchOptions()
-                    .setHeadless(false)
-            )
-        }
-        page = browser!!.newPage()
+        // One page (and so one fresh browser context) per test method; the
+        // browser and driver behind it are shared for the whole class.
+        page = browser().newPage()
         page.onConsoleMessage { msg ->
             if (msg.type() == "error" || msg.type() == "warning" || msg.type() == "log") {
                 System.err.println("[browser:${msg.type()}] ${msg.text()}")
@@ -69,12 +59,6 @@ abstract class BaseE2eTest {
     fun tearDownBase() {
         if (::page.isInitialized) page.close()
         server.stop()
-    }
-
-    // Clean up Playwright at end (called by JVM shutdown, not per-test)
-    protected fun finalize() {
-        browser?.close()
-        playwright?.close()
     }
 
     // -- Bridge helpers -------------------------------------------------------
@@ -271,6 +255,45 @@ abstract class BaseE2eTest {
     protected fun waitOpts(timeout: Double) = Page.WaitForSelectorOptions().setTimeout(timeout)
 
     companion object {
+        /**
+         * The Playwright driver and browser are held on the **class**, not on the
+         * instance: JUnit 4 constructs a new test-class instance for every `@Test`
+         * method, so instance fields here meant one Node driver process plus one
+         * headed Chromium per test method, all of them retained for the life of
+         * the test JVM (issue #124). They are created once per test class in
+         * [startBrowser] and closed in [stopBrowser], so at most one of each is
+         * ever alive. [HarnessLifecycleTest] asserts that property.
+         */
+        private var playwright: Playwright? = null
+        private var browser: Browser? = null
+
+        @JvmStatic
+        @org.junit.BeforeClass
+        fun startBrowser() {
+            if (playwright == null) {
+                playwright = Playwright.create()
+                // Compose/Skiko needs a real display for WebGL rendering.
+                // Use headed mode (Xvfb provides a virtual display in CI).
+                browser = playwright!!.chromium().launch(
+                    BrowserType.LaunchOptions()
+                        .setHeadless(false)
+                )
+            }
+        }
+
+        @JvmStatic
+        @org.junit.AfterClass
+        fun stopBrowser() {
+            browser?.close()
+            browser = null
+            playwright?.close()
+            playwright = null
+        }
+
+        private fun browser(): Browser = checkNotNull(browser) {
+            "Browser not started; @BeforeClass startBrowser() did not run"
+        }
+
         /** Default timeout for a generic [waitForState] predicate. */
         const val DEFAULT_STATE_TIMEOUT: Double = 30000.0
 
