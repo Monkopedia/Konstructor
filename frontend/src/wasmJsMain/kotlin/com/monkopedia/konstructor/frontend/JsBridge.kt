@@ -148,7 +148,7 @@ object JsBridge {
                     val workspaceId = args["workspaceId"]!!.jsonPrimitive.content
                     mutations.createKonstruction(workspaceId, name)
                     // Refresh state so konstructions list updates
-                    refreshKonstructions(serviceHolder, spaceListVm)
+                    refreshKonstructions(serviceHolder, spaceListVm, settingsVm, konstructionVm)
                 } catch (e: Exception) {
                     setError("createKonstruction failed: ${e.message}")
                 }
@@ -163,7 +163,7 @@ object JsBridge {
                     val kon = mutations.findKonstruction(wsId, konId)
                     if (kon != null) {
                         mutations.deleteKonstruction(kon)
-                        refreshKonstructions(serviceHolder, spaceListVm)
+                        refreshKonstructions(serviceHolder, spaceListVm, settingsVm, konstructionVm)
                     }
                 } catch (e: Exception) {
                     setError("deleteKonstruction failed: ${e.message}")
@@ -178,7 +178,7 @@ object JsBridge {
                     val konId = args["konId"]!!.jsonPrimitive.content
                     val name = args["name"]!!.jsonPrimitive.content
                     mutations.renameKonstruction(wsId, konId, name)
-                    refreshKonstructions(serviceHolder, spaceListVm)
+                    refreshKonstructions(serviceHolder, spaceListVm, settingsVm, konstructionVm)
                 } catch (e: Exception) {
                     setError("renameKonstruction failed: ${e.message}")
                 }
@@ -441,9 +441,23 @@ object JsBridge {
 
     private var refreshTriggerRef: kotlinx.coroutines.flow.MutableStateFlow<Int>? = null
 
-    private suspend fun refreshKonstructions(
+    /**
+     * Publish a snapshot after a konstruction-list mutation, without waiting for
+     * the reactive `combine` in [install] to catch up.
+     *
+     * Every field comes from [buildSnapshot] (issue #106). This used to hand-build
+     * its own [AppStateSnapshot], which hardcoded `codePaneMode = "EDITOR"` and
+     * left `lspEnabled`/`editorTheme`/`keymap`/targets/diagnostics on their
+     * data-class defaults — so the bridge, which is the only instrument e2e has
+     * for reading app state, reported state the app was not in. Keep the single
+     * construction site: a new snapshot field must only ever be added inside
+     * [buildSnapshot].
+     */
+    internal suspend fun refreshKonstructions(
         serviceHolder: ServiceHolder,
-        spaceListVm: SpaceListViewModel
+        spaceListVm: SpaceListViewModel,
+        settingsVm: SettingsViewModel,
+        konstructionVm: KonstructionViewModel?
     ) {
         // Directly update the state snapshot with current konstruction list
         spaceListVm.refreshWorkspaces()
@@ -454,18 +468,13 @@ object JsBridge {
             if (service != null && wsId != null) {
                 val ws = service.get(wsId)
                 val kons = ws.list()
-                val workspaces = spaceListVm.workspaces.value
-                val snapshot = AppStateSnapshot(
-                    ready = true,
+                val snapshot = buildSnapshot(
                     connected = serviceHolder.connected.value,
-                    workspaceCount = workspaces?.size ?: 0,
-                    workspaceNames = workspaces?.map { it.name } ?: emptyList(),
-                    workspaceIds = workspaces?.map { it.id } ?: emptyList(),
-                    selectedWorkspaceId = wsId,
-                    codePaneMode = "EDITOR",
-                    screen = "main",
-                    konstructionCount = kons.size,
-                    konstructionNames = kons.map { it.name }
+                    workspaces = spaceListVm.workspaces.value,
+                    selectedWsId = wsId,
+                    konNames = kons.map { it.name },
+                    settingsVm = settingsVm,
+                    konstructionVm = konstructionVm
                 )
                 val stateJson = json.encodeToString(AppStateSnapshot.serializer(), snapshot)
                 setState(stateJson)
