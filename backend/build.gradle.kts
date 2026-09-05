@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import java.io.File
 import java.time.Duration
+import java.util.zip.ZipFile
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
@@ -132,6 +134,156 @@ val copyLib = tasks.register<Copy>("copyLibToKtor") {
         fileName.replace(".jar", ".raj")
     }
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// Packaging guards for `backend-all.jar` (#137)
+//
+// The Shadow 8.3.6 -> 9.6.1 migration (#64 / PR #90) shipped TWO artifact
+// regressions that passed the full build, the unit tests, the integration tests
+// AND e2e. Both were caught only because a human unzipped the jar and diffed it
+// against a baseline. Nothing in the repo would have caught either one, and the
+// next Shadow bump has exactly the same exposure. These checks are that missing
+// automation:
+//
+//   * no nested `*.jar` entries   -> defect 1 (44.9 MB -> 63.9 MB opaque copy)
+//   * every multi-contributor `META-INF/services/*` file is fully merged
+//                                 -> defect 2 (merger silently stopped merging)
+//
+// ⚠️ MORDANT IS THE POSITIVE CONTROL FOR THE SERVICE-FILE MERGE. ⚠️
+// Of the 87 jars on `jvmRuntimeClasspath`, exactly one `META-INF/services/*`
+// file has more than one contributor:
+// `com.github.ajalt.mordant.terminal.TerminalInterfaceProvider`, contributed by
+// mordant-jvm-jna, mordant-jvm-ffm and mordant-jvm-graal-ffi (pulled in by
+// `libs.clikt`). Every other service file on the classpath has a single
+// contributor and comes out BYTE-IDENTICAL from a completely dead merger —
+// which is why the "diff the SLF4J service file" check originally proposed for
+// #64 is a false negative and passes on a broken jar.
+//
+// So: if clikt/mordant is ever dropped, this guard loses the only input that
+// can make it fail. That must not be silent. The check below FAILS when the
+// classpath has no multi-contributor service file at all, rather than passing
+// vacuously over an empty set. If you are removing mordant, you are removing
+// the merge guard's positive control — replace it or accept that #64 defect 2
+// becomes undetectable again.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Shadow's own ServiceFileTransformer skips this path, so it is legitimately
+// unmerged. No Groovy on this classpath today; mirroring the exclusion keeps the
+// guard from inventing a failure if one ever arrives. (Noted in the #90 review.)
+val unmergedServicePaths = setOf(
+    "META-INF/services/org.codehaus.groovy.runtime.ExtensionModule"
+)
+
+// A service file is a newline-separated list of implementation class names,
+// with `#` comments and blank lines allowed (java.util.ServiceLoader spec).
+fun serviceProviders(text: String): List<String> = text.lineSequence()
+    .map { it.substringBefore('#').trim() }
+    .filter { it.isNotEmpty() }
+    .toList()
+
+fun readServiceFiles(jar: File): Map<String, List<String>> = ZipFile(jar).use { zip ->
+    zip.entries().asSequence()
+        .filter { !it.isDirectory && it.name.startsWith("META-INF/services/") }
+        .filter { it.name !in unmergedServicePaths }
+        .mapNotNull { entry ->
+            val providers = serviceProviders(
+                zip.getInputStream(entry).readBytes().toString(Charsets.UTF_8)
+            )
+            if (providers.isEmpty()) null else entry.name to providers
+        }
+        .toMap()
+}
+
+fun checkPackagedJar(archive: File, runtimeClasspath: Collection<File>) {
+    val problems = mutableListOf<String>()
+
+    // What the inputs offer: service path -> (contributing jar -> providers).
+    val contributed = linkedMapOf<String, MutableMap<String, List<String>>>()
+    runtimeClasspath.filter { it.isFile && it.name.endsWith(".jar") }.forEach { jar ->
+        readServiceFiles(jar).forEach { (path, providers) ->
+            contributed.getOrPut(path) { linkedMapOf() }[jar.name] = providers
+        }
+    }
+    val multiContributor = contributed.filterValues { it.size > 1 }
+
+    if (multiContributor.isEmpty()) {
+        problems += "POSITIVE CONTROL GONE: no META-INF/services file on " +
+            "jvmRuntimeClasspath has more than one contributor, so this guard can " +
+            "no longer detect a broken service-file merge (#64 defect 2) at all. " +
+            "Mordant's TerminalInterfaceProvider used to be that control — if you " +
+            "just removed clikt/mordant, add another multi-contributor service " +
+            "file or accept that the regression becomes undetectable."
+    }
+
+    ZipFile(archive).use { zip ->
+        // Defect 1: Shadow 9's `from(jvmJar)` copies a jar as an opaque FILE.
+        // `lib-all.raj` is the one deliberately-embedded archive and is renamed
+        // precisely so it is not mistaken for classpath content.
+        val nested = zip.entries().asSequence()
+            .filter { !it.isDirectory && it.name.endsWith(".jar", ignoreCase = true) }
+            .map { it.name }
+            .toList()
+        if (nested.isNotEmpty()) {
+            problems += "nested jar entries in ${archive.name} that no classloader " +
+                "reads (#64 defect 1): $nested"
+        }
+
+        // Defect 2: every service file with >1 contributor must come out merged.
+        multiContributor.forEach { (path, byJar) ->
+            val expected = byJar.values.flatten().distinct()
+            val entry = zip.getEntry(path)
+            if (entry == null) {
+                problems += "$path is missing from ${archive.name}; expected the " +
+                    "merge of ${byJar.keys}"
+                return@forEach
+            }
+            val actual = serviceProviders(
+                zip.getInputStream(entry).readBytes().toString(Charsets.UTF_8)
+            )
+            val missing = expected - actual.toSet()
+            if (missing.isNotEmpty()) {
+                problems += "$path was NOT merged (#64 defect 2): packaged " +
+                    "${actual.size} of ${expected.size} providers, missing " +
+                    "$missing. Contributed by ${byJar.keys}."
+            }
+        }
+    }
+
+    if (problems.isNotEmpty()) {
+        throw GradleException(
+            "${archive.name} failed its packaging guards (#137):\n" +
+                problems.joinToString("\n") { "  - $it" }
+        )
+    }
+    logger.lifecycle(
+        "verifyShadowJarPackaging: ${archive.name} OK - no nested jars, " +
+            "${multiContributor.size} multi-contributor service file(s) merged " +
+            multiContributor.entries.joinToString(prefix = "(", postfix = ")") {
+                "${it.key.substringAfterLast('.')}: " +
+                    "${it.value.values.flatten().distinct().size} providers " +
+                    "from ${it.value.size} jars"
+            }
+    )
+}
+
+// Always re-verify: the check is a couple of seconds of zip reading, and a guard
+// that can go UP-TO-DATE is a guard that can be absent when it matters.
+val verifyShadowJarPackaging = tasks.register("verifyShadowJarPackaging") {
+    group = "verification"
+    description = "Assert backend-all.jar has no nested jars and that every " +
+        "multi-contributor META-INF/services file was actually merged (#137)."
+    dependsOn("shadowJar")
+    outputs.upToDateWhen { false }
+    doLast {
+        val shadow = tasks.named<
+            com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+            >("shadowJar").get()
+        checkPackagedJar(
+            shadow.archiveFile.get().asFile,
+            configurations.getByName("jvmRuntimeClasspath").files
+        )
+    }
+}
+
 afterEvaluate {
 
     tasks.named("copyJsBundleToKtor") {
@@ -177,6 +329,16 @@ afterEvaluate {
             duplicatesStrategy = DuplicatesStrategy.INCLUDE
         }
         mergeServiceFiles()
+        // Guard 1 (#137). `duplicatesStrategy = INCLUDE` above lets duplicate
+        // service files reach the ServiceFileTransformer, which is the only thing
+        // that then collapses them back into one entry. If that merger is ever
+        // removed or stops matching, the INCLUDE silently writes the SAME path
+        // several times into the archive and the JVM's ServiceLoader reads
+        // whichever copy it hits first. Shadow can fail the build on that instead
+        // of shipping it. Verified red: deleting `mergeServiceFiles()` above makes
+        // `:backend:shadowJar` fail with 3 duplicate entries.
+        failOnDuplicateEntries.set(true)
+        finalizedBy(verifyShadowJarPackaging)
         mustRunAfter("copyJsBundleToKtor")
         mustRunAfter("copyLibToKtor")
     }
