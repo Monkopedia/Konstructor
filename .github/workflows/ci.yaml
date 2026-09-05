@@ -36,11 +36,6 @@ jobs:
             libhyphen0 \
             libicu74 || true
 
-      # The Ktor CIO / Netty server and WebSocket use a lot of file descriptors
-      # during the e2e runs; bump the limit.
-      - name: Raise file descriptor limit
-        run: ulimit -n 4096 || true
-
       - name: Spotless check
         run: ./gradlew spotlessCheck
 
