@@ -48,19 +48,8 @@ class CompileTask(private val config: Config, private val input: File, private v
             val opts = compileOpts(config.compilerOpts, config.runtimeOpts)
             val command = "kotlinc $opts -d ${output.absolutePath} ${input.absolutePath}"
             val (stdOut, stdError, result) = executeAndWait(command)
-            if (result == 0) {
-                TaskResult(
-                    emptyList(),
-                    SUCCESS,
-                    parseErrors(stdOut) + parseErrors(stdError, isError = true)
-                )
-            } else {
-                TaskResult(
-                    emptyList(),
-                    FAILURE,
-                    parseErrors(stdOut) + parseErrors(stdError, isError = true)
-                )
-            }
+            val messages = parseErrors(stdOut) + parseErrors(stdError, isError = true)
+            TaskResult(emptyList(), if (result == 0) SUCCESS else FAILURE, messages)
         }
     }
 
