@@ -87,14 +87,13 @@ kotlin {
         implementation("com.monkopedia.kodemirror:theme-tomorrow")
         implementation("com.monkopedia.kodemirror:material-theme")
         implementation("com.monkopedia.kodemirror:legacy-modes")
-        implementation("com.monkopedia.kodemirror:vim:${libs.versions.kodemirror.get()}")
+        implementation("com.monkopedia.kodemirror:vim")
         implementation("com.monkopedia.kodemirror:commands")
         implementation("com.monkopedia.kodemirror:language")
         implementation("com.monkopedia.kodemirror:lezer-highlight")
         implementation("com.monkopedia.kodemirror:lint")
         // LSP editor support (transport-agnostic LSPClient / languageServerSupport).
-        // Not BOM-managed, so pin the version explicitly like vim.
-        implementation("com.monkopedia.kodemirror:lsp-client:${libs.versions.kodemirror.get()}")
+        implementation("com.monkopedia.kodemirror:lsp-client")
 
         // LSP ksrpc service interfaces (KsrpcLanguageServer / KsrpcLanguageClient,
         // DefaultLanguageClient) for the wasmJs editor side. lsp-ksrpc is api in
