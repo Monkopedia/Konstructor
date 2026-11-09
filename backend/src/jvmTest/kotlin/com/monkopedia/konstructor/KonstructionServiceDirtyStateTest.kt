@@ -17,6 +17,8 @@ package com.monkopedia.konstructor
 
 import com.monkopedia.hauler.CallSign
 import com.monkopedia.konstructor.common.DirtyState.CLEAN
+import com.monkopedia.konstructor.common.DirtyState.COMPILE_FAILED
+import com.monkopedia.konstructor.common.DirtyState.NEEDS_COMPILE
 import com.monkopedia.konstructor.common.DirtyState.NEEDS_EXEC
 import com.monkopedia.konstructor.common.DirtyState.RENDER_FAILED
 import com.monkopedia.konstructor.common.Konstruction
@@ -25,6 +27,7 @@ import com.monkopedia.konstructor.common.KonstructionTarget
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus
 import com.monkopedia.konstructor.logging.WarehouseWrapper
+import com.monkopedia.konstructor.testutil.FakeKonstructionListener
 import com.monkopedia.konstructor.testutil.TestEnvironment
 import io.ktor.utils.io.ByteReadChannel
 import java.io.File
@@ -33,11 +36,13 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withTimeout
 
 /**
- * The konstruction-level [KonstructionInfo.dirtyState] after a render (#117).
+ * The konstruction-level [KonstructionInfo.dirtyState] after a render (#117) or a compile (#139).
  *
  * `konstruct()` used to write `dirtyState = CLEAN` unconditionally, so a konstruction whose
  * render had just failed reported itself clean — misleading on its own, and actively wrong for
@@ -54,7 +59,8 @@ import kotlinx.coroutines.sync.Mutex
  * Every case asserts [FakeController.renderCalls] as well as the state. Dirty-state tests in
  * this repo have passed vacuously before by never entering `render()` at all — the `:263`
  * guard skips it silently — so "the render actually ran" is part of what is being asserted,
- * not an assumption.
+ * not an assumption. The compile cases assert [FakeController.compileCalls] for the same
+ * reason: `compile()` is skipped silently unless the konstruction is NEEDS_COMPILE.
  */
 class KonstructionServiceDirtyStateTest {
 
@@ -179,6 +185,77 @@ class KonstructionServiceDirtyStateTest {
     }
 
     /**
+     * The defect in #139: a compile that failed left the konstruction CLEAN, so
+     * `ScriptHostImpl.findScript` (which compiles an import only when it is not CLEAN) skipped
+     * compiling a broken import.
+     */
+    @Test
+    fun failedCompileDoesNotLeaveTheKonstructionClean() = runBlocking {
+        controller.needsCompile()
+        controller.compileStatus = TaskStatus.FAILURE
+
+        val result = service.compile(Unit)
+
+        assertEquals(1, controller.compileCalls, "the compile has to have been attempted")
+        assertEquals(TaskStatus.FAILURE, result.status, "the compile failed. Result: $result")
+        val info = service.getInfo(Unit)
+        assertNotEquals(
+            CLEAN,
+            info.dirtyState,
+            "a konstruction whose compile just failed must not report itself clean. Info: $info"
+        )
+        assertEquals(
+            COMPILE_FAILED,
+            info.dirtyState,
+            "the failure has to be stated, not just 'not clean'. Info: $info"
+        )
+    }
+
+    /** The other direction: a compile that worked still hands over to the render. */
+    @Test
+    fun successfulCompileNeedsExec() = runBlocking {
+        controller.needsCompile()
+
+        val result = service.compile(Unit)
+
+        assertEquals(1, controller.compileCalls, "the compile has to have been attempted")
+        assertEquals(TaskStatus.SUCCESS, result.status, "the compile succeeded. Result: $result")
+        assertEquals(NEEDS_EXEC, service.getInfo(Unit).dirtyState)
+    }
+
+    /**
+     * COMPILE_FAILED must not start a loop. The frontend's only reaction to it is the
+     * load-time `requestCompile` (it is not a settled state there); that has to re-deliver
+     * the stored result without compiling again or broadcasting an info change, which is what
+     * would re-trigger the frontend.
+     */
+    @Test
+    fun aFailedCompileIsNotRecompiledOnRequest() = runBlocking {
+        controller.needsCompile()
+        controller.compileStatus = TaskStatus.FAILURE
+        val listener = FakeKonstructionListener()
+        service.register(listener)
+        service.compile(Unit)
+        awaitUntil { listener.taskCompletes.size == 1 && listener.infoChanges.size == 1 }
+
+        val again = service.compile(Unit)
+
+        awaitUntil { listener.taskCompletes.size == 2 }
+        assertEquals(1, controller.compileCalls, "the second request must not recompile")
+        assertEquals(TaskStatus.FAILURE, again.status, "the stored failure is re-delivered")
+        assertEquals(COMPILE_FAILED, service.getInfo(Unit).dirtyState)
+        assertEquals(1, listener.infoChanges.size, "no info change for the second request")
+    }
+
+    private suspend fun awaitUntil(condition: () -> Boolean) {
+        withTimeout(5_000) {
+            while (!condition()) {
+                delay(10)
+            }
+        }
+    }
+
+    /**
      * Put [controller] into the process-wide [KonstructorManager] cache so the
      * [KonstructionServiceImpl] built afterwards picks it up.
      *
@@ -208,7 +285,7 @@ class KonstructionServiceDirtyStateTest {
 
 /**
  * A [KonstructionController] whose `render` reports what [ExecuteTask] would report, without
- * kotlinc or a script subprocess.
+ * kotlinc or a script subprocess. `compile` just reports [compileStatus].
  *
  * Targets named in [failing] error out; the rest build. Matching the real pipeline, the STL of
  * every attempted target is deleted up front and only written back for the ones that built,
@@ -233,6 +310,23 @@ private class FakeController(
         private set
 
     private var renderResult: TaskResult? = null
+
+    /** What the next `compile` reports. */
+    var compileStatus: TaskStatus = TaskStatus.SUCCESS
+
+    /** How many times `compile` was entered. */
+    var compileCalls: Int = 0
+        private set
+
+    private var compileResult: TaskResult? = null
+
+    /** Put the konstruction and its targets where an edit leaves them, so `compile()` runs. */
+    fun needsCompile() {
+        info = info.copy(
+            dirtyState = NEEDS_COMPILE,
+            targets = info.targets.map { it.copy(state = NEEDS_COMPILE) }
+        )
+    }
 
     override suspend fun render(targets: List<String>): RenderedTargets {
         renderCalls++
@@ -269,10 +363,13 @@ private class FakeController(
 
     override suspend fun write(content: ByteReadChannel) = unsupported("write")
 
-    override suspend fun compile() = unsupported("compile")
+    override suspend fun compile() {
+        compileCalls++
+        compileResult = TaskResult(status = compileStatus)
+    }
 
-    override suspend fun lastCompileResult(): TaskResult = unsupported("lastCompileResult")
+    override suspend fun lastCompileResult(): TaskResult = compileResult ?: error("no compile")
 
     private fun unsupported(name: String): Nothing =
-        throw UnsupportedOperationException("$name is not part of the render path under test")
+        throw UnsupportedOperationException("$name is not part of the paths under test")
 }
