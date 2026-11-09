@@ -51,7 +51,21 @@ enum class DirtyState {
      *
      * Appended last so the ordinals and serial names of the existing entries are unchanged.
      */
-    RENDER_FAILED
+    RENDER_FAILED,
+
+    /**
+     * The last compile was attempted and failed. The compile-path twin of [RENDER_FAILED]:
+     * it used to be reported as [CLEAN], which told `ScriptHostImpl.findScript` that a broken
+     * import needed no compile (#139).
+     *
+     * Not [NEEDS_COMPILE], which would be a request to compile again rather than the result
+     * of having done so. The frontend does not auto-build on this state; the compile errors
+     * are delivered through the task result, and editing the content moves it back to
+     * [NEEDS_COMPILE].
+     *
+     * Appended last, like [RENDER_FAILED], for wire and `info.json` compatibility.
+     */
+    COMPILE_FAILED
 }
 
 @Serializable

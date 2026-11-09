@@ -55,6 +55,11 @@ enum class UiState {
  * [DirtyState.RENDER_FAILED] belongs here for the same reason it must never join the
  * [DirtyState.NEEDS_EXEC] branch: auto-requesting a build for a render that just failed
  * simply fails again and re-notifies, forever (#117).
+ *
+ * [DirtyState.COMPILE_FAILED] is deliberately absent: on load it takes the requestCompile
+ * path, and the server's `compile()` only recompiles NEEDS_COMPILE, so that request just
+ * re-delivers the stored compile errors through onTaskComplete — once, with no info change
+ * to re-trigger anything (#139).
  */
 private val SETTLED_STATES = setOf(DirtyState.CLEAN, DirtyState.RENDER_FAILED)
 
@@ -344,7 +349,11 @@ class KonstructionViewModel(
                     applyCleanRenders(ks, info)
                 }
 
-                else -> { /* other dirty states: no-op */ }
+                // Nothing to request. NEEDS_COMPILE is the server's to act on. COMPILE_FAILED
+                // must not join either branch above: auto-requesting a build for a compile
+                // that just failed has nothing to build, and the errors and the return to
+                // UiState.DEFAULT arrive through onTaskComplete (#139).
+                DirtyState.NEEDS_COMPILE, DirtyState.COMPILE_FAILED -> {}
             }
         }
 

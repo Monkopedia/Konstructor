@@ -21,6 +21,7 @@ import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.konstructor.common.DirtyState
 import com.monkopedia.konstructor.common.DirtyState.CLEAN
+import com.monkopedia.konstructor.common.DirtyState.COMPILE_FAILED
 import com.monkopedia.konstructor.common.DirtyState.NEEDS_COMPILE
 import com.monkopedia.konstructor.common.DirtyState.NEEDS_EXEC
 import com.monkopedia.konstructor.common.DirtyState.RENDER_FAILED
@@ -200,11 +201,13 @@ class KonstructionServiceImpl(
             if (info.dirtyState == NEEDS_COMPILE) {
                 konstructionController.compile()
                 var changedTargets = mutableListOf<KonstructionTarget>()
+                // A failed compile is COMPILE_FAILED, not CLEAN: CLEAN told
+                // `ScriptHostImpl.findScript` a broken import needed no compile (#139).
                 val newState =
                     if (konstructionController.lastCompileResult().status == SUCCESS) {
                         NEEDS_EXEC
                     } else {
-                        CLEAN
+                        COMPILE_FAILED
                     }
                 val newInfo = info.copy(
                     dirtyState = newState,
