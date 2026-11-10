@@ -17,11 +17,15 @@
 
 package com.monkopedia.konstructor
 
+import com.monkopedia.hauler.error
+import com.monkopedia.hauler.hauler
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
@@ -38,19 +42,35 @@ import kotlinx.serialization.json.encodeToStream
 internal const val INFO_JSON = "info.json"
 
 /**
- * Every immediate subdirectory of [this] that holds an [INFO_JSON], decoded as [T].
+ * Every immediate subdirectory of [this] that holds a readable [INFO_JSON], decoded as [T].
  *
  * Non-directories and directories with no [INFO_JSON] are skipped (a half-created or
  * hand-made directory must not fail the whole listing), and an unreadable parent yields
  * an empty list.
+ *
+ * An [INFO_JSON] that exists but cannot be decoded is skipped TOO, and logged. One bad file
+ * used to throw for the whole listing, so a single konstruction made its entire workspace
+ * unlistable (konstructor#140). The common way to get one is a rollback: a newer backend
+ * persists a [com.monkopedia.konstructor.common.DirtyState] this one does not know.
+ * Skipping is deliberate rather than decoding to some default: an unknown or missing state
+ * is not CLEAN, and the file is left untouched so rolling forward reads it again. Its
+ * directory still counts in [usedIds], so its id is never handed out to a new item.
  */
-internal inline fun <reified T> File.listInfo(json: Json): List<T> =
+internal suspend inline fun <reified T> File.listInfo(json: Json): List<T> =
     listFiles()?.mapNotNull { child ->
         if (!child.isDirectory) return@mapNotNull null
         val infoFile = File(child, INFO_JSON)
         if (!infoFile.exists()) return@mapNotNull null
-        infoFile.inputStream().use { input ->
-            json.decodeFromStream<T>(input)
+        try {
+            infoFile.inputStream().use { input ->
+                json.decodeFromStream<T>(input)
+            }
+        } catch (e: SerializationException) {
+            hauler("InfoStore").error("Skipping unreadable ${infoFile.absolutePath}", e)
+            null
+        } catch (e: IOException) {
+            hauler("InfoStore").error("Skipping unreadable ${infoFile.absolutePath}", e)
+            null
         }
     } ?: emptyList()
 
@@ -150,8 +170,9 @@ internal const val ID_CLAIM_ATTEMPTS = 32
  * Write [value] to [targetInfo] so a concurrent reader never sees it half-written.
  *
  * `outputStream()` TRUNCATES on open, so writing in place leaves a window where the file
- * exists but is incomplete — and [listInfo] decodes every entry, so one torn file fails
- * the WHOLE listing. Measured on the in-place version: 18 of 1167 concurrent listings
+ * exists but is incomplete — and [listInfo] decoded every entry, so one torn file failed
+ * the WHOLE listing (it now skips that entry instead, which is still a konstruction missing
+ * from the list). Measured on the in-place version: 18 of 1167 concurrent listings
  * failed (1.5%), rising to 15% with larger payloads, with errors like
  * `JsonDecodingException: Expected colon ':', but had 'EOF' instead at path: $.id`.
  *

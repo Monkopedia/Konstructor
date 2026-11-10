@@ -24,6 +24,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -54,7 +55,7 @@ class InfoStoreTest {
     }
 
     @Test
-    fun listInfoDecodesEveryItemDirectory() {
+    fun listInfoDecodesEveryItemDirectory() = runBlocking {
         writeSpace("0")
         writeSpace("1")
         assertEquals(
@@ -64,7 +65,7 @@ class InfoStoreTest {
     }
 
     @Test
-    fun listInfoSkipsLooseFilesAndDirectoriesWithoutInfo() {
+    fun listInfoSkipsLooseFilesAndDirectoriesWithoutInfo() = runBlocking {
         writeSpace("0")
         File(root, "stray.txt").writeText("not a workspace")
         File(root, "half-created").mkdirs()
@@ -72,7 +73,17 @@ class InfoStoreTest {
     }
 
     @Test
-    fun listInfoOnMissingDirectoryIsEmpty() {
+    fun listInfoSkipsAnUndecodableInfoJsonInsteadOfFailingTheListing() = runBlocking {
+        // #140 at the workspace level: KonstructorImpl.list() uses this too, so one bad
+        // workspace info.json must not hide every other workspace.
+        writeSpace("0")
+        File(File(root, "1").also { it.mkdirs() }, INFO_JSON).writeText("""{"id":"1"}""")
+        writeSpace("2")
+        assertEquals(listOf("0", "2"), root.listInfo<Space>(json).map { it.id }.sorted())
+    }
+
+    @Test
+    fun listInfoOnMissingDirectoryIsEmpty() = runBlocking {
         assertEquals(emptyList(), File(root, "nope").listInfo<Space>(json))
     }
 
