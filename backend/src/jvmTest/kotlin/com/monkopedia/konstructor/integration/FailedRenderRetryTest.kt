@@ -158,6 +158,72 @@ class FailedRenderRetryTest {
     }
 
     /**
+     * The same null broadcast for a failed target that was NOT the one requested (#116).
+     *
+     * `beta` is an export, so every render attempts it, but the failing render is entered by
+     * requesting `gamma`. Its STL from the earlier successful render must not survive the
+     * failure: a stale file is what `konstructed()` hands the editor in place of `null`, so the
+     * viewport keeps drawing the old geometry and the toggle-off/on rebuild route stays shut.
+     */
+    @Test
+    fun failedTargetThatWasNotRequestedClearsItsStaleModel() = runBlocking {
+        val betaMarker = File(env.tempDir, "break-beta")
+        val listener = FakeKonstructionListener(callbacks = listOf(RENDER_CHANGE))
+        service.register(listener)
+        service.set(
+            """
+            val alpha by primitive {
+               cube {
+                   dimensions = xyz(1.0, 1.0, 1.0)
+               }
+            }
+            val beta by primitive {
+               if (java.io.File("${betaMarker.absolutePath}").exists()) {
+                   throw RuntimeException("beta-boom")
+               }
+               cube {
+                   dimensions = xyz(2.0, 2.0, 2.0)
+               }
+            }
+            val gamma by primitive {
+               cube {
+                   dimensions = xyz(3.0, 3.0, 3.0)
+               }
+            }
+            export("alpha")
+            export("beta")
+            """.trimIndent()
+        )
+        assertEquals(SUCCESS, service.compile(Unit).status, "The script must compile")
+
+        val first = service.konstruct("alpha")
+        assertEquals(SUCCESS, first.status, "First render must succeed. Result: $first")
+        assertNotNull(
+            awaitRenders(listener, "alpha", "beta")["beta"],
+            "Setup expects 'beta' to have a model before it starts failing"
+        )
+        listener.renderChanges.clear()
+
+        betaMarker.writeText("break")
+        val second = service.konstruct("gamma")
+        assertEquals(FAILURE, second.status, "Second render must fail. Result: $second")
+        assertEquals(
+            NEEDS_EXEC,
+            service.getInfo(Unit).targets.single { it.name == "beta" }.state,
+            "The failed target must be dirty"
+        )
+
+        val renders = awaitRenders(listener, "alpha", "beta", "gamma")
+        assertNotNull(renders["gamma"], "The requested target must broadcast its model")
+        assertNull(
+            renders["beta"],
+            "A failed target must broadcast a null render even when it was not the requested " +
+                "one. Renders: $renders"
+        )
+        assertNull(service.konstructed("beta"), "A failed target must leave no model")
+    }
+
+    /**
      * Wait for a render callback to arrive for each of [names] — they are dispatched on the
      * service's own scope, so they land after `konstruct()` returns — and return the render
      * path each one carried, by target name.
