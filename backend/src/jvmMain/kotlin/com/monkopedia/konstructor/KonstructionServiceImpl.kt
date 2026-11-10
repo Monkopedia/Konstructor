@@ -318,10 +318,10 @@ class KonstructionServiceImpl(
                 konstructionController.info = newInfo
                 broadcast {
                     onInfoChanged(newInfo, changedTargets)
-                    // Every attempted target, not only the built ones: render() deleted the
-                    // STL of each target it was asked for, so one that then failed to build
-                    // must broadcast a null render (konstructed() finds no file) to clear the
-                    // geometry the editor is still showing for it.
+                    // Every attempted target, not only the built ones: render() leaves no STL
+                    // for an attempted target that failed to build, so it broadcasts a null
+                    // render (konstructed() finds no file) to clear the geometry the editor is
+                    // still showing for it.
                     for (attempted in rendered.attemptedTargets) {
                         onRenderChanged(
                             KonstructionRender(

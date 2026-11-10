@@ -154,6 +154,13 @@ class KonstructionControllerImpl(
                 subprocessExit = scriptExit
             )
             val (result, renderedTargets) = executeTask.execute()
+            // The loop above can only clear what was requested; the exports the script adds
+            // are known only now. One of those that failed would otherwise keep its previous
+            // STL, and konstructed() would hand the editor that stale model instead of null
+            // (#116). So drop the file of every attempted target that did not build.
+            for (target in renderedTargets.attemptedTargets - result.taskArguments.toSet()) {
+                File(paths.renderOutput, "$target.stl").delete()
+            }
             paths.renderResultFile.outputStream().use { output ->
                 config.json.encodeToStream(result, output)
             }
