@@ -152,9 +152,13 @@ class ConcurrentCreateTest {
     @Test
     fun listingNeverSeesAHalfWrittenInfoFile() = runBlocking {
         // The second symptom in the issue: `outputStream()` truncates on open, so an
-        // in-place rewrite is briefly a PREFIX of valid JSON — and listInfo decodes every
+        // in-place rewrite is briefly a PREFIX of valid JSON — and listInfo decoded every
         // entry, so one torn file failed the WHOLE listing. Measured before the fix at
         // 1.5% of listings with realistic payloads and 15% with larger ones.
+        //
+        // listInfo now SKIPS an undecodable entry (#140), so a torn read shows up as the item
+        // missing from the listing rather than as a throw. Counting only throws would make
+        // this probe unable to fail; a listing that is not exactly the one item is a failure.
         //
         // Asserted as ZERO failures over many cycles rather than as a rate: with an atomic
         // move there is no window at all, so any failure here is a real regression.
@@ -173,8 +177,11 @@ class ConcurrentCreateTest {
             val reader = async {
                 while (writer.isActive) {
                     listings++
-                    runCatching { dir.listInfo<Space>(env.config.json) }
-                        .onFailure { failures++ }
+                    if (runCatching { dir.listInfo<Space>(env.config.json) }
+                            .getOrNull()?.size != 1
+                    ) {
+                        failures++
+                    }
                 }
             }
             writer.await()
@@ -268,8 +275,11 @@ class ConcurrentCreateTest {
             pool.submit {
                 while (!stop.get()) {
                     listings.incrementAndGet()
-                    runCatching { wsDir.listInfo<KonstructionInfo>(env.config.json) }
-                        .onFailure { failures.incrementAndGet() }
+                    // A torn read is a MISSING entry now, not a throw (#140) — see above.
+                    val listed = runCatching {
+                        runBlocking { wsDir.listInfo<KonstructionInfo>(env.config.json) }
+                    }.getOrNull()
+                    if (listed?.size != 1) failures.incrementAndGet()
                 }
             }
             val padding = "n".repeat(2_000)

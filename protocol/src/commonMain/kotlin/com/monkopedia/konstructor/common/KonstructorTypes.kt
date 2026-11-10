@@ -32,6 +32,25 @@ data class Konstruction(
     val type: KonstructionType = CSGS
 )
 
+/**
+ * ⚠️ Adding a case is a ONE-WAY DOOR for persisted data (konstructor#140).
+ *
+ * This is written into every konstruction's `info.json` (both [KonstructionInfo.dirtyState]
+ * and each [KonstructionTarget.state]). Appending a case keeps old files readable by new code,
+ * but once new code has written the new name, code WITHOUT that case cannot decode the file:
+ * `ignoreUnknownKeys` skips unknown keys, not unknown enum values, and neither field has a
+ * default. [RENDER_FAILED] (#138) and [COMPILE_FAILED] (#151) are both such cases, and
+ * COMPILE_FAILED is written by any failed compile, so nearly every edited konstruction has one.
+ *
+ * So a rollback past #138 or #151 cannot read those konstructions. On a backend that has the
+ * #140 fix, each unreadable one is logged and left out of `Workspace.list()` while the rest of
+ * the workspace lists normally; on an older backend the whole listing throws. Either way, to
+ * get them back, roll forward again, or rewrite the state in the affected `info.json` files
+ * (`"dirtyState"` and every target `"state"`) to `NEEDS_COMPILE`, which forces a fresh compile.
+ *
+ * Do not "fix" this by making unknown values decode as [CLEAN]: that turns a loud failure
+ * into a konstruction that claims to be built when it is not.
+ */
 @Serializable
 enum class DirtyState {
     CLEAN,

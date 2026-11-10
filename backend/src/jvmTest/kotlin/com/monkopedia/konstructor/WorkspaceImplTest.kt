@@ -17,6 +17,7 @@ package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.Konstruction
 import com.monkopedia.konstructor.testutil.TestEnvironment
+import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -90,5 +91,51 @@ class WorkspaceImplTest {
             workspace.create(Konstruction(name = "cube", workspaceId = "other", id = ""))
         }
         Unit
+    }
+
+    // konstructor#140. Each payload below is an info.json this backend cannot decode. The
+    // case that matters is a ROLLBACK: a newer backend persists a DirtyState this one does
+    // not have (RENDER_FAILED from #138, COMPILE_FAILED from #151) — simulated here with a
+    // name that is in no version's enum. One such file used to throw out of list() and
+    // take every other konstruction in the workspace with it.
+
+    @Test
+    fun anUnknownDirtyStateDegradesOnlyThatKonstruction() = assertOnlyTheReadableOnesList(
+        """{"konstruction":$BAD_KONSTRUCTION,"dirtyState":"$FUTURE_STATE"}"""
+    )
+
+    @Test
+    fun anUnknownTargetStateDegradesOnlyThatKonstruction() = assertOnlyTheReadableOnesList(
+        """{"konstruction":$BAD_KONSTRUCTION,"dirtyState":"CLEAN",""" +
+            """"targets":[{"name":"cube","state":"$FUTURE_STATE"}]}"""
+    )
+
+    @Test
+    fun aMissingDirtyStateDegradesOnlyThatKonstructionRatherThanReadingAsClean() =
+        assertOnlyTheReadableOnesList("""{"konstruction":$BAD_KONSTRUCTION}""")
+
+    @Test
+    fun aTruncatedInfoJsonDegradesOnlyThatKonstruction() =
+        assertOnlyTheReadableOnesList("""{"konstruction":{"name":"unrea""")
+
+    private fun assertOnlyTheReadableOnesList(unreadableInfo: String) = runBlocking {
+        workspace.create(Konstruction(name = "before", workspaceId = "ws1", id = ""))
+        val badDir = File(File(env.tempDir, "ws1"), "1").also { it.mkdirs() }
+        File(badDir, "info.json").writeText(unreadableInfo)
+        workspace.create(Konstruction(name = "after", workspaceId = "ws1", id = "2"))
+
+        assertEquals(listOf("after", "before"), workspace.list().map { it.name }.sorted())
+        // Degraded, not deleted: the file is untouched (a roll-forward reads it again), and
+        // its id stays taken, so a new konstruction cannot be created on top of it.
+        assertEquals(unreadableInfo, File(badDir, "info.json").readText())
+        assertEquals(
+            "3",
+            workspace.create(Konstruction(name = "new", workspaceId = "ws1", id = "")).id
+        )
+    }
+
+    private companion object {
+        const val FUTURE_STATE = "STATE_FROM_A_NEWER_BACKEND"
+        const val BAD_KONSTRUCTION = """{"name":"unreadable","workspaceId":"ws1","id":"1"}"""
     }
 }
