@@ -26,6 +26,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
@@ -58,6 +59,7 @@ class KotlinLspProcessExpiredEngineTest {
     private lateinit var launchLog: File
     private lateinit var fakeEngine: File
     private lateinit var hangingEngine: File
+    private lateinit var shortLivedEngine: File
 
     @Before
     fun setUp() {
@@ -86,15 +88,53 @@ class KotlinLspProcessExpiredEngineTest {
             )
             setExecutable(true)
         }
+        // #115's shape: answers `initialize` — so the failure count resets — then exits at once.
+        shortLivedEngine = File(tempDir, "short-lived-intellij-server").apply {
+            writeText(
+                """
+                #!/bin/bash
+                echo launch >> "${launchLog.absolutePath}"
+                len=0
+                while IFS= read -r line; do
+                  line=${'$'}{line%${'$'}'\r'}
+                  [ -z "${'$'}line" ] && break
+                  case "${'$'}line" in Content-Length:*) len=${'$'}{line#Content-Length: } ;; esac
+                done
+                body=${'$'}(head -c "${'$'}len")
+                id=${'$'}(printf '%s' "${'$'}body" | sed -n 's/.*"id": *\("[^"]*"\|[0-9]*\).*/\1/p')
+                resp='{"jsonrpc":"2.0","id":'"${'$'}id"',"result":{"capabilities":{}}}'
+                printf 'Content-Length: %d\r\n\r\n%s' "${'$'}{#resp}" "${'$'}resp"
+                echo exit >> "${exitLog.absolutePath}"
+                """.trimIndent()
+            )
+            setExecutable(true)
+        }
     }
+
+    private val exitLog get() = File(tempDir, "exits.txt")
 
     @After
     fun tearDown() {
         tempDir.deleteRecursively()
     }
 
-    private fun launches(): Int =
-        if (launchLog.exists()) launchLog.readLines().count { it.isNotBlank() } else 0
+    private fun launches(): Int = launchLog.lineCount()
+
+    private fun File.lineCount(): Int = if (exists()) readLines().count { it.isNotBlank() } else 0
+
+    /**
+     * One full #115 cycle: connect (spawn + answered handshake), then wait for the engine to
+     * die so the next connect has to respawn rather than reuse it. Returns whether it connected.
+     */
+    private suspend fun connectAndOutlive(lsp: KotlinLspProcess): Boolean {
+        val connected = lsp.connect(client(), INIT_PARAMS) != null
+        if (connected) {
+            while (exitLog.lineCount() < launches()) delay(20)
+            // The script logged its exit; give the OS a moment to reap it so isAlive is false.
+            delay(200)
+        }
+        return connected
+    }
 
     @Test
     fun anExpiredEngineIsTreatedAsUnavailable() = runBlocking {
@@ -199,6 +239,43 @@ class KotlinLspProcessExpiredEngineTest {
             "$ATTEMPTS attempts against an unresponsive engine must spawn exactly " +
                 "${KotlinLspProcess.MAX_CONSECUTIVE_FAILURES} JVMs and then stop"
         )
+        lsp.shutdown()
+    }
+
+    @Test
+    fun spawnsAreRateBoundedForAnEngineThatInitializesThenDies() = runBlocking {
+        val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = shortLivedEngine))
+
+        // Every cycle answers the handshake, which resets the consecutive-failure count — so
+        // only a bound that a good handshake does NOT reset can stop this (#115).
+        repeat(ATTEMPTS) { connectAndOutlive(lsp) }
+
+        // Equality, not <=, for the same reason as above: the bound must be shown to TRIP.
+        assertEquals(
+            KotlinLspProcess.MAX_SPAWNS_PER_WINDOW,
+            launches(),
+            "An engine that initializes and then dies must stop being respawned: $ATTEMPTS " +
+                "cycles inside one window must spawn exactly " +
+                "${KotlinLspProcess.MAX_SPAWNS_PER_WINDOW} JVMs and then stop."
+        )
+        lsp.shutdown()
+    }
+
+    @Test
+    fun anEngineThatDiesSlowerThanTheBoundKeepsBeingRespawned() = runBlocking {
+        // Control for the test above: same engine, but its deaths are spaced just wider than
+        // the bound allows, so every one of them must still be respawned and recover LSP.
+        var now = 0L
+        val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = shortLivedEngine)) { now }
+        val spacing =
+            KotlinLspProcess.SPAWN_WINDOW_MILLIS / KotlinLspProcess.MAX_SPAWNS_PER_WINDOW + 1
+
+        repeat(ATTEMPTS) {
+            assertTrue(connectAndOutlive(lsp), "cycle $it must get a usable engine")
+            now += spacing
+        }
+
+        assertEquals(ATTEMPTS, launches(), "every occasional death must be respawned")
         lsp.shutdown()
     }
 
