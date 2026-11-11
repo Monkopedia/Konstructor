@@ -61,7 +61,11 @@ class EngineSession(val server: KsrpcLanguageServer, val initializeResult: Initi
  * Everything here is gated on [Config.isKotlinLspAvailable]: if the binary is
  * unset/missing, [start] returns `null` and LSP stays off (never a crash).
  */
-class KotlinLspProcess private constructor(private val config: Config) {
+class KotlinLspProcess internal constructor(
+    private val config: Config,
+    /** Injectable so a test can show the spawn window both trip and age out. */
+    private val clock: () -> Long = System::currentTimeMillis
+) {
     private val hauler = hauler("KotlinLspProcess")
     private val lock = Mutex()
 
@@ -73,6 +77,13 @@ class KotlinLspProcess private constructor(private val config: Config) {
      * Reset only by an answered handshake — the same definition of usable [connect] uses.
      */
     private var consecutiveFailures = 0
+
+    /**
+     * When each spawn inside the last [SPAWN_WINDOW_MILLIS] happened, oldest first. Unlike
+     * [consecutiveFailures], nothing resets this: it answers "are we spawning JVMs faster than
+     * is reasonable", which an answered handshake says nothing about (#115).
+     */
+    private val recentSpawns = ArrayDeque<Long>()
 
     /** While `now < this`, spawning is refused outright and the bridge stays inert. */
     private var cooldownUntil = 0L
@@ -143,7 +154,7 @@ class KotlinLspProcess private constructor(private val config: Config) {
             shutdownLocked()
         }
         val binary = config.kotlinLspBinary ?: return null
-        val now = System.currentTimeMillis()
+        val now = clock()
         if (now < cooldownUntil) return null
         if (!admitSpawn(now)) return null
         return try {
@@ -214,16 +225,40 @@ class KotlinLspProcess private constructor(private val config: Config) {
      * A failure count cannot be outrun that way, and it is the more accurate rule besides —
      * a healthy engine that crashes and respawns cleanly should not be counted against a cap
      * whose whole purpose is to stop hammering a BROKEN one.
+     *
+     * The failure count alone cannot bound an engine that answers `initialize` and THEN dies
+     * (an expired build whose check runs late, an OOM, a crash on one file): every cycle
+     * resets it (#115). So spawns are also capped at [MAX_SPAWNS_PER_WINDOW] per
+     * [SPAWN_WINDOW_MILLIS], which nothing resets. The window is reachable for exactly the
+     * shape it exists for — such a cycle costs the probe plus a fast handshake, seconds, not
+     * minutes — while slow failures are still caught by the count above.
      */
     private suspend fun admitSpawn(now: Long): Boolean {
-        if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) return true
-        cooldownUntil = now + COOLDOWN_MILLIS
-        consecutiveFailures = 0
-        hauler.error(
-            "kotlin-lsp failed to become usable $MAX_CONSECUTIVE_FAILURES times running — no " +
-                "further spawns for ${COOLDOWN_MILLIS / 1000}s. LSP is off until then."
-        )
-        return false
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            cooldownUntil = now + COOLDOWN_MILLIS
+            consecutiveFailures = 0
+            hauler.error(
+                "kotlin-lsp failed to become usable $MAX_CONSECUTIVE_FAILURES times running — " +
+                    "no further spawns for ${COOLDOWN_MILLIS / 1000}s. LSP is off until then."
+            )
+            return false
+        }
+        while (recentSpawns.isNotEmpty() && now - recentSpawns.first() >= SPAWN_WINDOW_MILLIS) {
+            recentSpawns.removeFirst()
+        }
+        if (recentSpawns.size >= MAX_SPAWNS_PER_WINDOW) {
+            // Refuse until the oldest spawn ages out; the cooldown keeps this to one log line
+            // rather than one per cursor move.
+            cooldownUntil = recentSpawns.first() + SPAWN_WINDOW_MILLIS
+            hauler.error(
+                "kotlin-lsp was spawned $MAX_SPAWNS_PER_WINDOW times in " +
+                    "${SPAWN_WINDOW_MILLIS / 1000}s — it keeps dying after starting. No " +
+                    "further spawns for ${(cooldownUntil - now) / 1000}s. LSP is off until then."
+            )
+            return false
+        }
+        recentSpawns.addLast(now)
+        return true
     }
 
     /** Tear the subprocess down (best-effort, bounded). Safe to call multiple times. */
@@ -253,6 +288,11 @@ class KotlinLspProcess private constructor(private val config: Config) {
         internal const val MAX_CONSECUTIVE_FAILURES = 3
 
         internal const val COOLDOWN_MILLIS = 5 * 60_000L
+
+        /** Spawns allowed in any [SPAWN_WINDOW_MILLIS], however each one ended. */
+        internal const val MAX_SPAWNS_PER_WINDOW = 5
+
+        internal const val SPAWN_WINDOW_MILLIS = 10 * 60_000L
 
         // One warm subprocess per Config (i.e. per backend). The classpath is fixed, so
         // a single instance serves all konstructions (Phase 5 hardens multiplexing).
