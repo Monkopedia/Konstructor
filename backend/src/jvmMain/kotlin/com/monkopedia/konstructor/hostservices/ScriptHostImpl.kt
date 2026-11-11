@@ -27,6 +27,7 @@ import com.monkopedia.konstructor.common.KonstructionType.STL
 import com.monkopedia.konstructor.common.TaskStatus.SUCCESS
 import com.monkopedia.konstructor.lib.HostService
 import com.monkopedia.konstructor.lib.ScriptService
+import com.monkopedia.konstructor.tasks.LibsJar
 import java.io.File
 
 class ScriptHostImpl(
@@ -39,6 +40,16 @@ class ScriptHostImpl(
 
     private val hauler by lazy { hauler() }
 
+    /**
+     * Cached STLs live under the identity of the lib jar that rendered them (#132): the
+     * script hash alone can't tell that the library turning it into geometry changed.
+     * Entries from any other lib build, including the pre-#132 `cacheDir/<hash>.stl` files,
+     * are never read again.
+     */
+    private val libCacheDir by lazy {
+        File(cacheDir, LibsJar.getLibsIdentity(config)).also { it.mkdirs() }
+    }
+
     init {
         cacheDir.mkdirs()
     }
@@ -46,7 +57,7 @@ class ScriptHostImpl(
     override suspend fun supportsCaching(u: Unit): Boolean = config.cachingEnabled
 
     override suspend fun checkCached(hash: String): String? {
-        val target = File(cacheDir, "$hash.stl")
+        val target = File(libCacheDir, "$hash.stl")
         if (target.exists()) {
             return target.absolutePath
         }
@@ -79,7 +90,7 @@ class ScriptHostImpl(
     }
 
     override suspend fun storeCached(hash: String): String {
-        val target = File(cacheDir, "$hash.stl")
+        val target = File(libCacheDir, "$hash.stl")
         return target.absolutePath
     }
 

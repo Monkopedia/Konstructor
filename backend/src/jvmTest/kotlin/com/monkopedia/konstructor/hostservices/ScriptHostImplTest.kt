@@ -16,9 +16,11 @@
 package com.monkopedia.konstructor.hostservices
 
 import com.monkopedia.konstructor.Config
+import com.monkopedia.konstructor.tasks.LibsJar
 import com.monkopedia.konstructor.testutil.TestEnvironment
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -37,13 +39,32 @@ class ScriptHostImplTest {
     fun setUp() {
         env = TestEnvironment()
         cacheDir = File(env.tempDir, "cache")
-        host = ScriptHostImpl(
-            scriptManager = ScriptManager(env.config),
-            config = env.config,
-            workspaceId = "ws1",
-            konstructionId = "k1",
-            cacheDir = cacheDir
-        )
+        seedLibsJar("lib-a", "kcsg 0.4.5")
+        host = newHost()
+    }
+
+    private fun newHost() = ScriptHostImpl(
+        scriptManager = ScriptManager(env.config),
+        config = env.config,
+        workspaceId = "ws1",
+        konstructionId = "k1",
+        cacheDir = cacheDir
+    )
+
+    /**
+     * Stand in for the bundled lib jar (absent in a plain `:backend:jvmTest`) with a file of
+     * [content], as if the backend had been redeployed with a different lib/kcsg build.
+     * [TestEnvironment.close] clears the seeded path again.
+     */
+    private fun seedLibsJar(name: String, content: String) {
+        val jar = File(env.tempDir, "$name.jar").apply { writeText(content) }
+        LibsJar::class.java.getDeclaredField("libsFile").apply { isAccessible = true }
+            .set(LibsJar, jar)
+    }
+
+    /** What the lib side does on a cache store: write geometry to the path the host hands out. */
+    private suspend fun ScriptHostImpl.store(hash: String, geometry: String) {
+        File(storeCached(hash)).writeText(geometry)
     }
 
     @After
@@ -81,11 +102,38 @@ class ScriptHostImplTest {
 
     @Test
     fun testCheckCachedHit() = runBlocking {
-        cacheDir.mkdirs()
-        File(cacheDir, "abc.stl").writeText("stl data")
+        host.store("abc", "stl data")
         val result = host.checkCached("abc")
         assertNotNull(result)
         assertTrue(result.endsWith("abc.stl"))
+        assertEquals("stl data", File(result).readText())
+        Unit
+    }
+
+    /**
+     * #132: the cache key used to be the script's content hash alone, so after a kcsg/lib
+     * upgrade an unchanged script kept being served the geometry the OLD library produced.
+     * A different lib jar must miss.
+     */
+    @Test
+    fun testLibChangeMissesCache() = runBlocking {
+        host.store("abc", "geometry from lib-a")
+
+        seedLibsJar("lib-b", "kcsg 0.5.0")
+        assertNull(newHost().checkCached("abc"))
+        Unit
+    }
+
+    /** Control for [testLibChangeMissesCache]: the same lib still hits, from a fresh host. */
+    @Test
+    fun testSameLibStillHitsCache() = runBlocking {
+        host.store("abc", "geometry from lib-a")
+
+        // Identical bytes at a different path (e.g. a redeploy of the same build): still a hit.
+        seedLibsJar("lib-a-redeployed", "kcsg 0.4.5")
+        val result = newHost().checkCached("abc")
+        assertNotNull(result)
+        assertEquals("geometry from lib-a", File(result).readText())
         Unit
     }
 
