@@ -82,9 +82,10 @@ class KonstructionControllerImpl(
     private val saveContext: CoroutineContext = newSingleThreadContext("KonstructionController")
 ) : KonstructionController {
     private val hauler = hauler()
-    override val callSign: CallSign by lazy {
-        CallSign("$workspaceId.$id.${info.konstruction.name}")
-    }
+
+    // From the ids alone: every service call evaluates this before its body, so reading the
+    // name out of info.json here made an unreadable file break even close() and fetch() (#155).
+    override val callSign: CallSign = CallSign("$workspaceId.$id")
     private val pathController = PathController(config)
     override val paths = pathController[workspaceId, id]
     private val contentFileLock = Mutex()
@@ -198,8 +199,16 @@ class KonstructionControllerImpl(
     private fun ensureLoaded() {
         synchronized(this) {
             if (hasInitialized) return
-            infoImpl = paths.infoFile.inputStream().use { output ->
-                config.json.decodeFromStream(output)
+            // Not marked initialized on failure, so a repaired file is read on the next access.
+            infoImpl = try {
+                paths.infoFile.inputStream().use { input ->
+                    config.json.decodeFromStream(input)
+                }
+            } catch (e: Exception) {
+                throw IllegalStateException(
+                    "info.json unreadable for $workspaceId/$id: ${paths.infoFile}",
+                    e
+                )
             }
             hasInitialized = true
         }
