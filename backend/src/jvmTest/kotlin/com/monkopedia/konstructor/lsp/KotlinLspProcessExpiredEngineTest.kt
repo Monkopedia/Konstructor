@@ -78,12 +78,14 @@ class KotlinLspProcessExpiredEngineTest {
         }
         // #109's shape: up, holding its pipes open, answering nothing. Sleeping well beyond any
         // budget in this test is the whole point — the engine is never the thing that gives up.
+        // `exec` so the process the test kills IS the sleep: a child `sleep` would outlive bash,
+        // keep the inherited pipes open and hold Gradle's test task for ~10 minutes (#158).
         hangingEngine = File(tempDir, "hanging-intellij-server").apply {
             writeText(
                 """
                 #!/bin/bash
                 echo launch >> "${launchLog.absolutePath}"
-                sleep 600
+                exec sleep 600
                 """.trimIndent()
             )
             setExecutable(true)
