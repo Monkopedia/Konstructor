@@ -63,8 +63,12 @@ class EngineSession(val server: KsrpcLanguageServer, val initializeResult: Initi
  */
 class KotlinLspProcess internal constructor(
     private val config: Config,
-    /** Injectable so a test can show the spawn window both trip and age out. */
-    private val clock: () -> Long = System::currentTimeMillis
+    /**
+     * Milliseconds on a MONOTONIC clock with an arbitrary origin: the spawn window and the
+     * cooldowns are intervals, and a wall clock stepped by NTP or by hand would stretch or
+     * collapse them. Injectable so a test can show the spawn window both trip and age out.
+     */
+    internal val clock: () -> Long = { System.nanoTime() / 1_000_000 }
 ) {
     private val hauler = hauler("KotlinLspProcess")
     private val lock = Mutex()
@@ -74,19 +78,25 @@ class KotlinLspProcess internal constructor(
 
     /**
      * Consecutive spawns that failed to produce a *usable* engine, used to bound respawns.
-     * Reset only by an answered handshake — the same definition of usable [connect] uses.
+     * Reset by an answered handshake — the same definition of usable [connect] uses — and
+     * when it trips the cooldown; otherwise only by an explicit [shutdown], which no
+     * production path calls (see its KDoc).
      */
     private var consecutiveFailures = 0
 
     /**
      * When each spawn inside the last [SPAWN_WINDOW_MILLIS] happened, oldest first. Unlike
-     * [consecutiveFailures], nothing resets this: it answers "are we spawning JVMs faster than
+     * [consecutiveFailures], nothing resets this except an explicit [shutdown], which no
+     * production path calls (see its KDoc): it answers "are we spawning JVMs faster than
      * is reasonable", which an answered handshake says nothing about (#115).
      */
     private val recentSpawns = ArrayDeque<Long>()
 
-    /** While `now < this`, spawning is refused outright and the bridge stays inert. */
-    private var cooldownUntil = 0L
+    /**
+     * While `now < this`, spawning is refused outright and the bridge stays inert. Starts at
+     * [Long.MIN_VALUE], not 0, because [clock]'s origin is arbitrary and may be negative.
+     */
+    private var cooldownUntil = Long.MIN_VALUE
 
     /**
      * Lazily spawn (once) the warm subprocess, drive it through the LSP `initialize`
@@ -143,6 +153,9 @@ class KotlinLspProcess internal constructor(
     }
 
     /**
+     * Must be called holding [lock]: it reads and writes every piece of spawn state. [connect]
+     * is the only production caller and does; the single-threaded tests call it bare.
+     *
      * Internal rather than private so a test can drive the spawn path directly, without
      * needing a [KsrpcLanguageClient] forwarder for a subprocess that is never going to
      * answer. Not part of the public surface.
@@ -169,6 +182,9 @@ class KotlinLspProcess internal constructor(
                 .redirectOutput(ProcessBuilder.Redirect.PIPE)
                 .redirectError(ProcessBuilder.Redirect.INHERIT)
                 .start()
+            // Owned from here on, so every failure path below — including the catch — tears THIS
+            // process down via [shutdownLocked] instead of orphaning a live engine.
+            process = proc
             if (!isStillRunning(proc)) {
                 // An EXPIRED engine lands here (konstructor#84). It is present, executable,
                 // and `start()` returns normally — it just prints "This build of
@@ -186,12 +202,11 @@ class KotlinLspProcess internal constructor(
                         "engine as unavailable; LSP stays off. An expired build looks exactly " +
                         "like this."
                 )
-                runCatching { proc.destroyForcibly() }
+                shutdownLocked()
                 consecutiveFailures++
                 return null
             }
             val conn = (proc.inputStream to proc.outputStream).asLspConnection()
-            process = proc
             connection = conn
             conn
         } catch (t: Throwable) {
@@ -229,9 +244,12 @@ class KotlinLspProcess internal constructor(
      * The failure count alone cannot bound an engine that answers `initialize` and THEN dies
      * (an expired build whose check runs late, an OOM, a crash on one file): every cycle
      * resets it (#115). So spawns are also capped at [MAX_SPAWNS_PER_WINDOW] per
-     * [SPAWN_WINDOW_MILLIS], which nothing resets. The window is reachable for exactly the
+     * [SPAWN_WINDOW_MILLIS], which nothing resets except an explicit [shutdown] (no production
+     * path calls it; see its KDoc). The window is reachable for exactly the
      * shape it exists for — such a cycle costs the probe plus a fast handshake, seconds, not
      * minutes — while slow failures are still caught by the count above.
+     *
+     * `suspend` only because [hauler]'s logging is; nothing here waits.
      */
     private suspend fun admitSpawn(now: Long): Boolean {
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -261,9 +279,25 @@ class KotlinLspProcess internal constructor(
         return true
     }
 
-    /** Tear the subprocess down (best-effort, bounded). Safe to call multiple times. */
-    suspend fun shutdown() = lock.withLock { shutdownLocked() }
+    /**
+     * Tear the subprocess down (best-effort, bounded) and clear every respawn bound, so the next
+     * [connect] spawns afresh even mid-cooldown — the hook for "the engine was replaced, try
+     * again" without restarting the backend. Safe to call multiple times.
+     *
+     * Clearing the bounds is why this must not become a routine per-request teardown: called
+     * at that rate it would re-open the respawn storms [admitSpawn] exists to stop.
+     */
+    suspend fun shutdown() = lock.withLock {
+        shutdownLocked()
+        consecutiveFailures = 0
+        recentSpawns.clear()
+        cooldownUntil = Long.MIN_VALUE
+    }
 
+    /**
+     * Drop the handles and kill the process if still running. An already-exited process needs
+     * nothing more: the JDK's reaper closes its pipes when it exits.
+     */
     private fun shutdownLocked() {
         val proc = process
         process = null
