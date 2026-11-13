@@ -34,14 +34,14 @@ import com.monkopedia.konstructor.logging.writeBinary
 import com.monkopedia.konstructor.logging.writeText
 import java.io.File
 import java.io.InputStream
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.ExperimentalSerializationApi
 
-@OptIn(DelicateCoroutinesApi::class)
 class KonstructorImpl(private val config: Config) :
     Konstructor,
     LoggingService {
@@ -51,8 +51,19 @@ class KonstructorImpl(private val config: Config) :
     override val serviceName: String
         get() = "Konstructor"
 
-    // As long as the process is alive the konstructor should live.
-    private val scope = GlobalScope
+    /**
+     * The log plumbing runs here for as long as the process does, like the `GlobalScope` it
+     * replaces, but a failure in it is reported as a log-plumbing failure instead of reaching the
+     * JVM's default uncaught handler (konstructor#107), and one failed collector does not cancel
+     * its siblings. Printed, not logged, for the same reason as [WarehouseWrapper]'s delivery
+     * errors: what failed may be the logging itself.
+     */
+    private val scope = CoroutineScope(
+        SupervisorJob() + CoroutineExceptionHandler { _, thrown ->
+            System.err.println("Log plumbing failed: $thrown")
+            thrown.printStackTrace()
+        }
+    )
 
     init {
         scope.launch {

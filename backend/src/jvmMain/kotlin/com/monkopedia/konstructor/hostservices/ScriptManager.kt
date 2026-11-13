@@ -16,7 +16,9 @@
 package com.monkopedia.konstructor.hostservices
 
 import com.monkopedia.hauler.CallSign
+import com.monkopedia.hauler.asAsync
 import com.monkopedia.hauler.debug
+import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.hauler.warn
@@ -28,18 +30,24 @@ import com.monkopedia.konstructor.lib.ScriptService
 import com.monkopedia.konstructor.logging.WarehouseWrapper
 import com.monkopedia.konstructor.tasks.ExecUtil
 import com.monkopedia.ksrpc.toStub
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeout
 
 class ScriptManager private constructor(private val config: Config) {
     private val hauler by lazy { hauler() }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private val asyncHauler by lazy { hauler.asAsync(GlobalScope) }
 
     suspend fun getScript(paths: PathController.Paths, name: String): ScriptService =
         getScriptWithExit(paths, name).first
@@ -56,7 +64,6 @@ class ScriptManager private constructor(private val config: Config) {
      * unblocks it. Handing the exit `Deferred` to [ExecuteTask] lets it race the status wait
      * against process death and surface the kill promptly instead of hanging.
      */
-    @OptIn(DelicateCoroutinesApi::class)
     suspend fun getScriptWithExit(
         paths: PathController.Paths,
         name: String
@@ -76,12 +83,12 @@ class ScriptManager private constructor(private val config: Config) {
         val callSign = coroutineContext[CallSign.Key]
         // Release the lock when the subprocess exits — by normal exit or by any
         // of the kill paths below (caller cancellation, init failure, timeout).
-        GlobalScope.launch(callSign ?: EmptyCoroutineContext) {
-            hauler.info("Waiting for ${paths.workspaceId}/${paths.konstructionId}")
-            exec.exitCode.await()
-            hauler.info("Exit from ${paths.workspaceId}/${paths.konstructionId}")
-            lock.unlock()
-        }
+        releaseOnExit(
+            lock,
+            exec.exitCode,
+            "${paths.workspaceId}/${paths.konstructionId}",
+            callSign ?: EmptyCoroutineContext
+        )
         // If the caller is cancelled, reap the subprocess so its exit releases
         // the lock instead of leaking it until the force-kill timeout.
         coroutineContext[Job]?.invokeOnCompletion {
@@ -121,6 +128,35 @@ class ScriptManager private constructor(private val config: Config) {
             // Reap the subprocess so the watcher above releases the lock.
             exec.kill()
             throw InvalidScriptException("$name could not be initialized", t)
+        }
+    }
+
+    /**
+     * Releases [lock] once [exitCode] completes, however it completes.
+     *
+     * This runs in [GlobalScope], so nothing it throws has an owner to report to: unhandled, it
+     * reaches the JVM's default uncaught handler, which in a test run is charged to an unrelated
+     * test (konstructor#101, #107). The `finally` keeps a failed wait from leaving the lock held
+     * forever, and the handler logs the failure, including an unlock of a lock something else
+     * already released.
+     */
+    @OptIn(DelicateCoroutinesApi::class)
+    internal fun releaseOnExit(
+        lock: Mutex,
+        exitCode: Deferred<Int>,
+        label: String,
+        context: CoroutineContext = EmptyCoroutineContext
+    ): Job = GlobalScope.launch(
+        context + CoroutineExceptionHandler { _, thrown ->
+            asyncHauler.error("Script lock watcher for $label failed", thrown)
+        }
+    ) {
+        try {
+            hauler.info("Waiting for $label")
+            exitCode.await()
+            hauler.info("Exit from $label")
+        } finally {
+            lock.unlock()
         }
     }
 

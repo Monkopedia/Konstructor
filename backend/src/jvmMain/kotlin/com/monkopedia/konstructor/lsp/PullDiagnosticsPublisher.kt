@@ -171,7 +171,7 @@ internal class PullDiagnosticsPublisher(
      */
     fun onOpen(uri: String) {
         openDocs.add(uri)
-        scope.launch {
+        launchLogged("initial pull for $uri") {
             awaitReady()
             pullUntilPublished(uri)
         }
@@ -185,7 +185,7 @@ internal class PullDiagnosticsPublisher(
         openDocs.add(uri)
         changeJobs.put(
             uri,
-            scope.launch {
+            launchLogged("change pull for $uri") {
                 awaitReady()
                 delay(debounce)
                 pullOnce(uri)
@@ -211,10 +211,7 @@ internal class PullDiagnosticsPublisher(
         resultIds.remove(uri)
         changeJobs.remove(uri)?.cancel()
         if (clearOnClose) {
-            scope.launch {
-                runCatching { publish(uri, emptyList()) }
-                    .onFailure { hauler.error("clear-on-close publish failed for $uri", it) }
-            }
+            launchLogged("clear-on-close publish for $uri") { publish(uri, emptyList()) }
         }
     }
 
@@ -225,11 +222,30 @@ internal class PullDiagnosticsPublisher(
      * re-pulling breadth (all open docs), not just one.
      */
     fun onRefresh() {
-        scope.launch {
+        launchLogged("refresh pull") {
             awaitReady()
             for (uri in openDocs.toList()) {
                 pullOnce(uri)
             }
+        }
+    }
+
+    /**
+     * Launches [block] on [scope], logging whatever it throws as the failure of [what].
+     *
+     * Every trigger is fire-and-forget, and the bridge's scope is a bare `SupervisorJob`, so a
+     * failure left unhandled — [awaitReady] throwing, say — would reach the JVM's default
+     * uncaught handler with nothing tying it back here (konstructor#107). The guard lives here
+     * rather than on the injected scope so it holds for whatever scope this is given.
+     */
+    private fun launchLogged(what: String, block: suspend () -> Unit): Job = scope.launch {
+        try {
+            block()
+        } catch (t: Throwable) {
+            // Our own cancellation — a superseded change pull, or the scope's teardown (#80) — is
+            // how these end normally, not a failure.
+            coroutineContext.ensureActive()
+            hauler.error("$what failed", t)
         }
     }
 
