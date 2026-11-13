@@ -101,12 +101,18 @@ class KonstructionServiceImpl(
     /**
      * Fire-and-forget shell shared by the `request*` methods: launches [block] on [scope]
      * inside a named [callContext], bounded by [callTimeout].
+     *
+     * A failure is logged by [callContext], under the request's call sign, and then stops here.
+     * Nothing awaits this launch, so callContext's rethrow had nowhere to go but the JVM's
+     * default uncaught handler (konstructor#107).
      */
     private fun launchRequest(name: String, block: suspend () -> Unit) {
         scope.launch {
-            callContext("$name.launch", baseCallSign = konstructionController.callSign) {
-                withTimeout(callTimeout) {
-                    block()
+            runCatching {
+                callContext("$name.launch", baseCallSign = konstructionController.callSign) {
+                    withTimeout(callTimeout) {
+                        block()
+                    }
                 }
             }
         }
