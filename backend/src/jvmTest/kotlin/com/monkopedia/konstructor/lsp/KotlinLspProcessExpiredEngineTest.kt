@@ -130,8 +130,13 @@ class KotlinLspProcessExpiredEngineTest {
 
     @After
     fun tearDown() {
-        // Whatever a failing test leaked must not outlive it and hold Gradle open (#158).
-        hangingPids().forEach { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
+        // Whatever a failing test leaked must not outlive it and hold Gradle open (#158). Only a
+        // `sleep` is killed, so a PID the OS has since reused for something else is left alone.
+        hangingPids().forEach { pid ->
+            ProcessHandle.of(pid)
+                .filter { it.info().command().orElse("").endsWith("/sleep") }
+                .ifPresent { it.destroyForcibly() }
+        }
         tempDir.deleteRecursively()
     }
 

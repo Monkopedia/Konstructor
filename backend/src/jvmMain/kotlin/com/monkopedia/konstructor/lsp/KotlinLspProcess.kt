@@ -78,13 +78,16 @@ class KotlinLspProcess internal constructor(
 
     /**
      * Consecutive spawns that failed to produce a *usable* engine, used to bound respawns.
-     * Reset only by an answered handshake — the same definition of usable [connect] uses.
+     * Reset by an answered handshake — the same definition of usable [connect] uses — and
+     * when it trips the cooldown; otherwise only by an explicit [shutdown], which no
+     * production path calls (see its KDoc).
      */
     private var consecutiveFailures = 0
 
     /**
      * When each spawn inside the last [SPAWN_WINDOW_MILLIS] happened, oldest first. Unlike
-     * [consecutiveFailures], nothing resets this: it answers "are we spawning JVMs faster than
+     * [consecutiveFailures], nothing resets this except an explicit [shutdown], which no
+     * production path calls (see its KDoc): it answers "are we spawning JVMs faster than
      * is reasonable", which an answered handshake says nothing about (#115).
      */
     private val recentSpawns = ArrayDeque<Long>()
@@ -241,7 +244,8 @@ class KotlinLspProcess internal constructor(
      * The failure count alone cannot bound an engine that answers `initialize` and THEN dies
      * (an expired build whose check runs late, an OOM, a crash on one file): every cycle
      * resets it (#115). So spawns are also capped at [MAX_SPAWNS_PER_WINDOW] per
-     * [SPAWN_WINDOW_MILLIS], which nothing resets. The window is reachable for exactly the
+     * [SPAWN_WINDOW_MILLIS], which nothing resets except an explicit [shutdown] (no production
+     * path calls it; see its KDoc). The window is reachable for exactly the
      * shape it exists for — such a cycle costs the probe plus a fast handshake, seconds, not
      * minutes — while slow failures are still caught by the count above.
      *
