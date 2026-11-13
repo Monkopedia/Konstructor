@@ -20,8 +20,11 @@ import com.monkopedia.lsp.ClientCapabilities
 import com.monkopedia.lsp.DefaultLanguageClient
 import com.monkopedia.lsp.InitializeParams
 import java.io.File
+import kotlin.concurrent.thread
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -85,6 +88,7 @@ class KotlinLspProcessExpiredEngineTest {
                 """
                 #!/bin/bash
                 echo launch >> "${launchLog.absolutePath}"
+                echo ${'$'}${'$'} >> "${pidLog.absolutePath}"
                 exec sleep 600
                 """.trimIndent()
             )
@@ -115,8 +119,19 @@ class KotlinLspProcessExpiredEngineTest {
 
     private val exitLog get() = File(tempDir, "exits.txt")
 
+    /** PIDs the hanging engine reports; `exec` makes each one the very process the JVM holds. */
+    private val pidLog get() = File(tempDir, "pids.txt")
+
+    private fun hangingPids(): List<Long> = if (pidLog.exists()) {
+        pidLog.readLines().filter { it.isNotBlank() }.map { it.trim().toLong() }
+    } else {
+        emptyList()
+    }
+
     @After
     fun tearDown() {
+        // Whatever a failing test leaked must not outlive it and hold Gradle open (#158).
+        hangingPids().forEach { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
         tempDir.deleteRecursively()
     }
 
@@ -206,8 +221,8 @@ class KotlinLspProcessExpiredEngineTest {
         assertEquals(1, launches(), "the probe should have actually launched the engine once")
 
         // The hung engine must be DISCARDED, not cached: the next attempt spawns a fresh process
-        // (bounded by MAX_SPAWNS_PER_WINDOW) instead of queueing behind a corpse that has already
-        // proved it will not answer.
+        // (bounded by MAX_CONSECUTIVE_FAILURES, see below) instead of queueing behind a corpse
+        // that has already proved it will not answer.
         assertNotNull(lsp.ensureConnection(), "a live-but-mute process still passes liveness")
         assertEquals(2, launches(), "the unresponsive engine must be discarded, not reused")
         lsp.shutdown()
@@ -278,6 +293,86 @@ class KotlinLspProcessExpiredEngineTest {
         }
 
         assertEquals(ATTEMPTS, launches(), "every occasional death must be respawned")
+        lsp.shutdown()
+    }
+
+    @Test
+    fun theDefaultClockIsMonotonic() {
+        // Interval arithmetic on the wall clock stretches or collapses the spawn window and the
+        // cooldowns whenever NTP or a person steps it. A test cannot step the system clock, so
+        // pin the source instead: the default must be System.nanoTime's timeline, not epoch time.
+        val lsp = KotlinLspProcess(Config(tempDir))
+        val drift = abs(lsp.clock() - System.nanoTime() / 1_000_000)
+        assertTrue(
+            drift < 60_000,
+            "the default clock must be monotonic (System.nanoTime), but differs from it by " +
+                "${drift}ms — epoch milliseconds would differ by decades"
+        )
+    }
+
+    @Test
+    fun aMonotonicClockWithANegativeOriginStillSpawns() = runBlocking {
+        // System.nanoTime's origin is arbitrary and may be negative, so "now" can be below zero.
+        // A cooldown that starts at 0 would then refuse every spawn before the first one.
+        val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = fakeEngine)) { -1_000_000L }
+
+        assertNull(lsp.ensureConnection())
+        assertEquals(1, launches(), "a negative clock reading must not read as mid-cooldown")
+    }
+
+    @Test
+    fun aSpawnThatThrowsDoesNotOrphanTheEngine() = runBlocking {
+        val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = hangingEngine))
+        // Interrupting the readiness probe makes the spawn throw AFTER start(): the engine is up,
+        // but the failure lands in the catch. Gated on the engine having reported in, so the
+        // interrupt can only arrive once there is a live process to orphan.
+        val caller = Thread.currentThread()
+        val interrupter = thread {
+            while (hangingPids().isEmpty()) Thread.sleep(10)
+            caller.interrupt()
+        }
+        try {
+            assertNull(lsp.ensureConnection(), "a spawn that throws must report unavailable")
+        } finally {
+            interrupter.join()
+            Thread.interrupted()
+        }
+
+        val pid = hangingPids().single()
+        assertFalse(
+            ProcessHandle.of(pid).map { it.isAlive }.orElse(false),
+            "the engine a failed spawn started must be torn down, not left running as an orphan"
+        )
+    }
+
+    @Test
+    fun shutdownClearsTheFailureCooldown() = runBlocking {
+        val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = fakeEngine))
+        repeat(ATTEMPTS) { lsp.ensureConnection() }
+        assertEquals(KotlinLspProcess.MAX_CONSECUTIVE_FAILURES, launches(), "cooldown tripped")
+
+        lsp.shutdown()
+        lsp.ensureConnection()
+
+        assertEquals(
+            KotlinLspProcess.MAX_CONSECUTIVE_FAILURES + 1,
+            launches(),
+            "shutdown() must clear the cooldown so a replaced engine is tried at once"
+        )
+    }
+
+    @Test
+    fun shutdownClearsTheSpawnWindow() = runBlocking {
+        // Clearing cooldownUntil alone is not enough here: the window still holds its spawns and
+        // would re-trip on the very next attempt.
+        val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = shortLivedEngine)) { 0L }
+        repeat(KotlinLspProcess.MAX_SPAWNS_PER_WINDOW + 1) { connectAndOutlive(lsp) }
+        assertEquals(KotlinLspProcess.MAX_SPAWNS_PER_WINDOW, launches(), "window tripped")
+
+        lsp.shutdown()
+
+        assertTrue(connectAndOutlive(lsp), "shutdown() must clear the spawn window")
+        assertEquals(KotlinLspProcess.MAX_SPAWNS_PER_WINDOW + 1, launches())
         lsp.shutdown()
     }
 
