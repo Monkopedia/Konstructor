@@ -15,8 +15,8 @@
  */
 package com.monkopedia.konstructor.tasks
 
+import com.monkopedia.konstructor.testutil.recordFailures
 import java.io.IOException
-import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -26,7 +26,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 
 /**
@@ -61,12 +60,12 @@ class ExecProcessLeakTest {
      */
     @Test
     fun uncaughtExceptionRecorderIsNotBlind() = runBlocking {
-        val seen = recordUncaught {
+        val seen = recordFailures {
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 throw IOException("deliberate positive-control leak")
             }
             delay(SETTLE_MS)
-        }
+        }.uncaught
         assertTrue(
             seen.isNotEmpty(),
             "The uncaught-exception recorder saw nothing when handed a deliberate " +
@@ -77,7 +76,7 @@ class ExecProcessLeakTest {
 
     @Test
     fun runningASubprocessToCompletionLeavesNoUncaughtException() = runBlocking {
-        val seen = recordUncaught {
+        val seen = recordFailures {
             // The pump has to be BLOCKED IN A READ when the streams close — that is the
             // only state producing "Stream closed" rather than a clean EOF. A command that
             // writes and exits will not do it: stderr hits EOF as the process dies and
@@ -99,42 +98,12 @@ class ExecProcessLeakTest {
             val exit = withTimeout(30_000) { process.exitCode.await() }
             assertEquals(0, exit, "probe subprocess should exit cleanly")
             delay(SETTLE_MS)
-        }
+        }.uncaught
         assertTrue(
             seen.isEmpty(),
             "Running a subprocess to completion leaked ${seen.size} uncaught " +
                 "exception(s): " + seen.joinToString { "${it::class.simpleName}: ${it.message}" }
         )
-    }
-
-    /**
-     * Runs [block] with a recording default uncaught handler, restoring the previous one,
-     * then DRAINS anything `kotlinx-coroutines-test` stashed on the way past.
-     *
-     * The drain is not tidiness — without it this file reproduces the very bug it guards.
-     * `ExceptionCollector.handleException` stashes an exception into `unprocessedExceptions`
-     * whenever no `runTest` is active (and still forwards it to the thread handler, which is
-     * how the recorder sees it), and that collector latches on for the rest of the fork after
-     * the first `runTest`. The next `TestScope.enter()` drains the stash and throws
-     * `UncaughtExceptionsBeforeTest` — so the deliberate leak below would fail an unrelated
-     * test later in the run, which is exactly konstructor#101's signature.
-     *
-     * It was green only by ordering luck: every `runTest` class in this module currently
-     * happens to be scanned before this one. Adding a `runTest` class that sorts after it
-     * would have turned this red on a stranger. Entering and discarding one `runTest` here
-     * consumes the stash at a known point instead.
-     */
-    private inline fun recordUncaught(block: () -> Unit): List<Throwable> {
-        val seen = CopyOnWriteArrayList<Throwable>()
-        val previous = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { _, thrown -> seen += thrown }
-        try {
-            block()
-        } finally {
-            Thread.setDefaultUncaughtExceptionHandler(previous)
-            runCatching { runTest { } }
-        }
-        return seen
     }
 
     private companion object {
