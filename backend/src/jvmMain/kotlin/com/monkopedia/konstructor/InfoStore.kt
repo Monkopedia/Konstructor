@@ -41,6 +41,9 @@ import kotlinx.serialization.json.encodeToStream
  */
 internal const val INFO_JSON = "info.json"
 
+/** Marks a deleted item's kept directory; see [deleteKeepingId]. */
+internal const val DELETED_MARKER = ".deleted"
+
 /**
  * Every immediate subdirectory of [this] that holds a readable [INFO_JSON], decoded as [T].
  *
@@ -58,7 +61,7 @@ internal const val INFO_JSON = "info.json"
  */
 internal suspend inline fun <reified T> File.listInfo(json: Json): List<T> =
     listFiles()?.mapNotNull { child ->
-        if (!child.isDirectory) return@mapNotNull null
+        if (!child.isDirectory || File(child, DELETED_MARKER).exists()) return@mapNotNull null
         val infoFile = File(child, INFO_JSON)
         if (!infoFile.exists()) return@mapNotNull null
         try {
@@ -88,20 +91,25 @@ internal fun File.usedIds(): Collection<String> =
     listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
 
 /**
- * Delete the item stored in [this] directory but keep the directory itself, empty, as a
- * tombstone so its id stays in [usedIds] and is never handed out again.
+ * Delete the item stored in [this] directory but keep the directory itself, holding only
+ * [DELETED_MARKER], as a tombstone so its id stays in [usedIds] and is never handed out again.
  *
  * Reusing a deleted id is not safe: controllers are cached per `(workspaceId, id)` for the
  * process lifetime (#126), so a new item on a reused id was served the deleted one's name,
  * type and targets, and its first edit persisted them over the new info.json; the frontend
- * likewise keys per-target colours and visibility by id (konstructor#165). An empty
- * directory has no [INFO_JSON], so [listInfo] already skips it.
+ * likewise keys per-target colours and visibility by id (konstructor#165).
  *
- * [INFO_JSON] goes first so the item drops out of listings before the rest is removed.
+ * The marker, not a missing [INFO_JSON], is what makes it deleted. A controller outlives the
+ * delete (an open editor's debounced save, a compile or render finishing), and once the
+ * directory is kept its late persist would otherwise recreate [INFO_JSON] and bring the item
+ * back, across restarts too. So [listInfo] skips a marked directory whatever else is in it,
+ * and [writeInfo] refuses to write into one. The marker is written first so the item is
+ * gone from listings before anything is removed.
  */
 internal fun File.deleteKeepingId() {
-    File(this, INFO_JSON).delete()
-    listFiles()?.forEach { it.deleteRecursively() }
+    val marker = File(this, DELETED_MARKER)
+    marker.createNewFile()
+    listFiles()?.forEach { if (it != marker) it.deleteRecursively() }
 }
 
 /**
@@ -198,6 +206,9 @@ internal const val ID_CLAIM_ATTEMPTS = 32
  * file is a sibling so the move stays within one filesystem, which is what makes it atomic.
  */
 internal inline fun <reified T> writeInfo(targetInfo: File, json: Json, value: T) {
+    if (File(targetInfo.parentFile, DELETED_MARKER).exists()) {
+        throw IOException("${targetInfo.parentFile} has been deleted")
+    }
     // The temp name must be UNIQUE per write, and it must NOT be deleted on success.
     // A fixed name plus `finally { delete() }` made two concurrent writers to the same
     // info.json collide: writer A's cleanup unlinked writer B's in-flight temp, and

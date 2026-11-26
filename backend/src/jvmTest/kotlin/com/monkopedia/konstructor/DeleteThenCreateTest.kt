@@ -26,6 +26,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -106,5 +107,34 @@ class DeleteThenCreateTest {
         val third = workspace.create(Konstruction("third", ws.id, ""))
         assertTrue(third.id !in setOf(first.id, second.id), "reused id ${third.id}")
         assertEquals(setOf("first", "third"), workspace.list().map { it.name }.toSet())
+    }
+
+    /**
+     * A controller that outlives the delete (an open editor's debounced save, a compile or
+     * render finishing) persists info.json after the directory was emptied. The kept id
+     * directory must not let that bring the item back, now or after a restart.
+     *
+     * The controller is built with [Dispatchers.Unconfined] so its fire-and-forget persist
+     * runs before the assignment returns; with the production single-thread context the
+     * same write lands at some later point instead.
+     */
+    @Test
+    fun lateSaveAfterKonstructionDeleteDoesNotResurrectIt() = runBlocking {
+        val ws = konstructor.create(Space(id = "", name = "ws"))
+        val workspace = konstructor.get(ws.id)
+        val kept = workspace.create(Konstruction("a", ws.id, ""))
+        val deleted = workspace.create(Konstruction("b", ws.id, ""))
+        val controller =
+            KonstructionControllerImpl(env.config, ws.id, deleted.id, Dispatchers.Unconfined)
+        val info = controller.info
+        workspace.delete(deleted)
+
+        controller.write("// late edit")
+        controller.info = info.copy(konstruction = deleted.copy(name = "ghost"))
+        // Positive control: the late persist really ran rather than failing outright.
+        assertTrue(controller.paths.contentFile.exists(), "late write never reached disk")
+
+        assertEquals(listOf(kept), workspace.list())
+        assertEquals(listOf(kept), WorkspaceImpl(Config(env.tempDir), ws.id).list())
     }
 }
