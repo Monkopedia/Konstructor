@@ -29,6 +29,7 @@ import com.monkopedia.konstructor.lib.ScriptConfiguration
 import com.monkopedia.konstructor.lib.ScriptService
 import com.monkopedia.konstructor.logging.WarehouseWrapper
 import com.monkopedia.konstructor.tasks.ExecUtil
+import com.monkopedia.konstructor.tasks.ExecUtil.ExecProcess
 import com.monkopedia.ksrpc.toStub
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -43,7 +44,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeout
 
-class ScriptManager private constructor(private val config: Config) {
+/**
+ * [startProcess] is a seam for tests (konstructor#164); production goes through the companion,
+ * which always passes [ExecUtil.executeWithChannel].
+ */
+class ScriptManager internal constructor(
+    private val config: Config,
+    private val startProcess: (String) -> ExecProcess
+) {
     private val hauler by lazy { hauler() }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -77,9 +85,15 @@ class ScriptManager private constructor(private val config: Config) {
             paths.konstructionId
         ).scriptLock
         lock.lock()
-        hauler.debug("Opening script for ${paths.workspaceId}/${paths.konstructionId}")
-
-        val exec = ExecUtil.executeWithChannel(command)
+        val exec = try {
+            hauler.debug("Opening script for ${paths.workspaceId}/${paths.konstructionId}")
+            startProcess(command)
+        } catch (t: Throwable) {
+            // No exit watcher exists yet to release the lock, so a failed start must, or every
+            // later execute for this konstruction waits forever (konstructor#164).
+            lock.unlock()
+            throw t
+        }
         val callSign = coroutineContext[CallSign.Key]
         // Release the lock when the subprocess exits — by normal exit or by any
         // of the kill paths below (caller cancellation, init failure, timeout).
@@ -166,7 +180,7 @@ class ScriptManager private constructor(private val config: Config) {
         override fun invoke(config: Config): ScriptManager {
             synchronized(managers) {
                 return managers.getOrPut(config) {
-                    ScriptManager(config)
+                    ScriptManager(config, ExecUtil::executeWithChannel)
                 }
             }
         }
