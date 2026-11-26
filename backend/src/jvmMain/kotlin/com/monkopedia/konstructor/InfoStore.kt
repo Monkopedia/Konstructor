@@ -88,6 +88,23 @@ internal fun File.usedIds(): Collection<String> =
     listFiles()?.filter { it.isDirectory }?.map { it.name } ?: emptyList()
 
 /**
+ * Delete the item stored in [this] directory but keep the directory itself, empty, as a
+ * tombstone so its id stays in [usedIds] and is never handed out again.
+ *
+ * Reusing a deleted id is not safe: controllers are cached per `(workspaceId, id)` for the
+ * process lifetime (#126), so a new item on a reused id was served the deleted one's name,
+ * type and targets, and its first edit persisted them over the new info.json; the frontend
+ * likewise keys per-target colours and visibility by id (konstructor#165). An empty
+ * directory has no [INFO_JSON], so [listInfo] already skips it.
+ *
+ * [INFO_JSON] goes first so the item drops out of listings before the rest is removed.
+ */
+internal fun File.deleteKeepingId() {
+    File(this, INFO_JSON).delete()
+    listFiles()?.forEach { it.deleteRecursively() }
+}
+
+/**
  * The lowest non-negative integer, as a string, that is not in [usedIds].
  *
  * Membership is tested against a hash set, so allocating an id is linear in the number

@@ -70,7 +70,7 @@ class WorkspaceImpl(private val config: Config, private val workspaceId: String)
         if (!targetInfo.exists()) {
             throw IllegalArgumentException("Can't find workspace $item")
         }
-        targetInfo.parentFile.deleteRecursively()
+        targetInfo.parentFile.deleteKeepingId()
     }
 
     private val workspaceDir = File(config.dataDir, workspaceId)

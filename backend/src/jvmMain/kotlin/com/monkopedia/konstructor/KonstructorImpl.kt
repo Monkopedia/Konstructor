@@ -110,7 +110,7 @@ class KonstructorImpl(private val config: Config) :
         if (!targetInfo.exists()) {
             throw IllegalArgumentException("Can't find workspace $item")
         }
-        targetInfo.parentFile.deleteRecursively()
+        targetInfo.parentFile.deleteKeepingId()
     }
 
     override suspend fun getGlobalShipper(u: Unit): Shipper = callContext("getGlobalShipper") {
