@@ -18,7 +18,10 @@
 package com.monkopedia.konstructor
 
 import com.monkopedia.konstructor.common.Space
+import com.monkopedia.konstructor.common.TaskResult
+import com.monkopedia.konstructor.common.TaskStatus
 import java.io.File
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -26,6 +29,12 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.descriptors.element
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.encoding.encodeStructure
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
@@ -128,5 +137,47 @@ class InfoStoreTest {
     fun tryClaimIdSucceedsOnceAndOnlyOnce() {
         assertNotNull(tryClaimId(root, "5"), "the first claim must win")
         assertNull(tryClaimId(root, "5"), "a second claim on the same id must lose")
+    }
+
+    @Test
+    fun aWriteThatDiesMidStreamLeavesThePreviousResult() {
+        // #166: compile.json and result.json were written in place, and outputStream()
+        // truncates on open, so a write that died partway left a torn file that
+        // lastCompileResult() / lastRenderResult() then threw on.
+        val target = File(root, "compile.json")
+        writeInfo(target, json, TaskResult(status = TaskStatus.SUCCESS))
+
+        assertFailsWith<IOException> {
+            writeInfo(target, json, DiesMidWrite())
+        }
+
+        val read = target.inputStream().use { json.decodeFromStream<TaskResult>(it) }
+        assertEquals(TaskResult(status = TaskStatus.SUCCESS), read)
+    }
+}
+
+/**
+ * Encodes its opening field, then throws, standing in for a process killed mid-write. The
+ * serializer is written by hand because the backend's tests are not compiled with the
+ * serialization plugin; `serializer<T>()` finds it through the companion.
+ */
+internal class DiesMidWrite {
+    companion object {
+        fun serializer(): KSerializer<DiesMidWrite> = Killed
+    }
+
+    private object Killed : KSerializer<DiesMidWrite> {
+        override val descriptor = buildClassSerialDescriptor("DiesMidWrite") {
+            element<String>("status")
+            element<String>("messages")
+        }
+
+        override fun serialize(encoder: Encoder, value: DiesMidWrite) =
+            encoder.encodeStructure(descriptor) {
+                encodeStringElement(descriptor, 0, "FAILURE")
+                throw IOException("killed mid-write")
+            }
+
+        override fun deserialize(decoder: Decoder): DiesMidWrite = error("write-only")
     }
 }

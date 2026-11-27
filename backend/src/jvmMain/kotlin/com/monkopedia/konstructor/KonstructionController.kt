@@ -42,7 +42,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.decodeFromStream
-import kotlinx.serialization.json.encodeToStream
 
 /**
  * What a render touched.
@@ -131,9 +130,9 @@ class KonstructionControllerImpl(
             val compileTask =
                 CompileTask(config = config, input = paths.kotlinFile, output = paths.compileOutput)
             val result = compileTask.execute()
-            paths.compileResultFile.outputStream().use { output ->
-                config.json.encodeToStream(result, output)
-            }
+            // Atomic, like info.json: an in-place write killed midway left a torn
+            // compile.json that lastCompileResult() then threw on (#166).
+            writeInfo(paths.compileResultFile, config.json, result)
         }
     }
 
@@ -162,9 +161,7 @@ class KonstructionControllerImpl(
             for (target in renderedTargets.attemptedTargets - result.taskArguments.toSet()) {
                 File(paths.renderOutput, "$target.stl").delete()
             }
-            paths.renderResultFile.outputStream().use { output ->
-                config.json.encodeToStream(result, output)
-            }
+            writeInfo(paths.renderResultFile, config.json, result)
             return renderedTargets
         }
     }
