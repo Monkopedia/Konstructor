@@ -204,6 +204,8 @@ internal const val ID_CLAIM_ATTEMPTS = 32
  * Writing to a sibling temp file and moving it into place with [ATOMIC_MOVE] closes that:
  * a reader sees either the previous file or the complete new one, never a prefix. The temp
  * file is a sibling so the move stays within one filesystem, which is what makes it atomic.
+ * The same holds if the write dies partway (a throw, or the process killed): the target is
+ * untouched, which is why compile.json and result.json go through here too (#166).
  */
 internal inline fun <reified T> writeInfo(targetInfo: File, json: Json, value: T) {
     if (File(targetInfo.parentFile, DELETED_MARKER).exists()) {
