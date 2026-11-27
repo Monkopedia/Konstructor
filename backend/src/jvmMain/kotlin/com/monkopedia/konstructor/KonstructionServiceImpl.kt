@@ -37,6 +37,7 @@ import com.monkopedia.konstructor.common.KonstructionListener
 import com.monkopedia.konstructor.common.KonstructionRender
 import com.monkopedia.konstructor.common.KonstructionService
 import com.monkopedia.konstructor.common.KonstructionTarget
+import com.monkopedia.konstructor.common.LspStatus
 import com.monkopedia.konstructor.common.TaskMessage
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.common.TaskStatus.FAILURE
@@ -45,6 +46,7 @@ import com.monkopedia.konstructor.logging.LoggingService
 import com.monkopedia.konstructor.logging.WarehouseWrapper
 import com.monkopedia.konstructor.logging.callContext
 import com.monkopedia.konstructor.lsp.BridgeLanguageServer
+import com.monkopedia.konstructor.lsp.KotlinLspProcess
 import com.monkopedia.lsp.KsrpcLanguageClient
 import com.monkopedia.lsp.KsrpcLanguageServer
 import io.ktor.utils.io.ByteReadChannel
@@ -139,6 +141,9 @@ class KonstructionServiceImpl(
             // (CI), so the absence of the engine never crashes konstructor.
             BridgeLanguageServer(config, workspaceId, id, client)
         }
+
+    // The engine is one per backend, so every konstruction reports the same thing (#159).
+    override suspend fun lspStatus(u: Unit): LspStatus = KotlinLspProcess.forConfig(config).status()
 
     override suspend fun close() =
         callContext("close", baseCallSign = konstructionController.callSign) {

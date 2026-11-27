@@ -17,6 +17,7 @@ package com.monkopedia.konstructor.frontend.ui.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -82,6 +83,7 @@ import com.monkopedia.kodemirror.view.onSave
 import com.monkopedia.kodemirror.view.saveKeymap
 import com.monkopedia.kodemirror.view.select
 import com.monkopedia.konstructor.common.KonstructionType
+import com.monkopedia.konstructor.common.LspStatus
 import com.monkopedia.konstructor.frontend.reportLspDiagnostics
 import com.monkopedia.konstructor.frontend.viewmodel.EditorThemeName
 import com.monkopedia.konstructor.frontend.viewmodel.KeymapName
@@ -91,6 +93,7 @@ import com.monkopedia.konstructor.frontend.viewmodel.UiState
 import com.monkopedia.konstructor.frontend.viewmodel.WorkspaceViewModel
 import konstructor.frontend.generated.resources.JetBrainsMono_Regular
 import konstructor.frontend.generated.resources.Res
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.Font
 import org.koin.compose.koinInject
@@ -105,6 +108,7 @@ fun EditorPane(modifier: Modifier = Modifier) {
     val uiState by konstructionVm.state.collectAsState()
     val messages by konstructionVm.messages.collectAsState()
     val activeMessage by konstructionVm.activeMessage.collectAsState()
+    val lspWarning = lspUnavailableText(rememberLspStatus(konstructionVm))
 
     // Load konstruction content when selection changes
     LaunchedEffect(selectedKonId, konstructions) {
@@ -152,34 +156,38 @@ fun EditorPane(modifier: Modifier = Modifier) {
             }
         }
 
-        // Status footer overlay, pinned full-width to the bottom of the pane.
-        val statusModifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
-        when (uiState) {
-            UiState.LOADING -> StatusBar("Loading...", Color(0xFF64B5F6), statusModifier)
+        // Status footer overlay, pinned full-width to the bottom of the pane. The LSP
+        // warning stacks above the usual line so neither hides the other (#159).
+        Column(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
+            val statusModifier = Modifier.fillMaxWidth()
+            lspWarning?.let { StatusBar(it, Color(0xFFFFB74D), statusModifier) }
+            when (uiState) {
+                UiState.LOADING -> StatusBar("Loading...", Color(0xFF64B5F6), statusModifier)
 
-            UiState.SAVING -> StatusBar("Saving...", Color(0xFFFFB74D), statusModifier)
+                UiState.SAVING -> StatusBar("Saving...", Color(0xFFFFB74D), statusModifier)
 
-            UiState.COMPILING -> StatusBar("Compiling...", Color(0xFFFFB74D), statusModifier)
+                UiState.COMPILING -> StatusBar("Compiling...", Color(0xFFFFB74D), statusModifier)
 
-            UiState.EXECUTING -> StatusBar("Executing...", Color(0xFFFFB74D), statusModifier)
+                UiState.EXECUTING -> StatusBar("Executing...", Color(0xFFFFB74D), statusModifier)
 
-            UiState.DEFAULT -> {
-                // Context-aware footer (restores pre-migration behavior): when the
-                // cursor sits on a line that has a compiler message, show that
-                // message's text; otherwise fall back to the message count.
-                val active = activeMessage
-                when {
-                    active != null -> StatusBar(
-                        active.message,
-                        Color(0xFFEF5350),
-                        statusModifier
-                    )
+                UiState.DEFAULT -> {
+                    // Context-aware footer (restores pre-migration behavior): when the
+                    // cursor sits on a line that has a compiler message, show that
+                    // message's text; otherwise fall back to the message count.
+                    val active = activeMessage
+                    when {
+                        active != null -> StatusBar(
+                            active.message,
+                            Color(0xFFEF5350),
+                            statusModifier
+                        )
 
-                    messages.isNotEmpty() -> StatusBar(
-                        "${messages.size} message(s)",
-                        Color(0xFFEF5350),
-                        statusModifier
-                    )
+                        messages.isNotEmpty() -> StatusBar(
+                            "${messages.size} message(s)",
+                            Color(0xFFEF5350),
+                            statusModifier
+                        )
+                    }
                 }
             }
         }
@@ -420,6 +428,31 @@ private fun EditorContent(
         )
     }
 }
+
+/**
+ * Poll the backend for whether a respawn bound is holding the kotlin-lsp engine back (#159).
+ * Null while LSP is off, before a konstruction loads, or when the poll fails (an older backend
+ * has no `/lsp_status`) — all of which mean "nothing to warn about". Polled rather than pushed:
+ * the state changes at most every few minutes, and polling is what clears the warning on its own
+ * once the bound expires.
+ */
+@Composable
+private fun rememberLspStatus(konstructionVm: KonstructionViewModel): LspStatus? {
+    val settingsVm = koinInject<SettingsViewModel>()
+    val lspEnabled by settingsVm.lspEnabled.collectAsState()
+    val currentKonstruction by konstructionVm.currentKonstruction.collectAsState()
+    return produceState<LspStatus?>(null, lspEnabled, currentKonstruction) {
+        value = null
+        if (!lspEnabled) return@produceState
+        val service = konstructionVm.currentService ?: return@produceState
+        while (true) {
+            value = runCatching { service.lspStatus() }.getOrNull()
+            delay(LSP_STATUS_POLL_MILLIS)
+        }
+    }.value
+}
+
+private const val LSP_STATUS_POLL_MILLIS = 10_000L
 
 @Composable
 private fun StatusBar(text: String, color: Color, modifier: Modifier = Modifier) {

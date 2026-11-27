@@ -85,6 +85,14 @@ interface KonstructionService : RpcBidiService {
      */
     @KsMethod("/lsp")
     suspend fun lsp(client: KsrpcLanguageClient): KsrpcLanguageServer
+
+    /**
+     * Whether the kotlin-lsp engine is currently held back by a respawn bound, and for how long
+     * (#159). Lets the editor say "LSP unavailable" instead of just going quiet. Appended last:
+     * ksrpc routes by endpoint name, so an older backend simply fails the call.
+     */
+    @KsMethod("/lsp_status")
+    suspend fun lspStatus(u: Unit = Unit): LspStatus
 }
 
 @KsService
