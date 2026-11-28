@@ -28,6 +28,7 @@ import com.monkopedia.lsp.DiagnosticOptions
 import com.monkopedia.lsp.DidOpenTextDocumentParams
 import com.monkopedia.lsp.DocumentDiagnosticParams
 import com.monkopedia.lsp.DocumentDiagnosticReport
+import com.monkopedia.lsp.HoverParams
 import com.monkopedia.lsp.InitializeParams
 import com.monkopedia.lsp.InitializeResult
 import com.monkopedia.lsp.InitializedParams
@@ -38,8 +39,11 @@ import com.monkopedia.lsp.ServerCapabilitiesDiagnosticProvider
 import com.monkopedia.lsp.TextDocumentCompletionResult
 import com.monkopedia.lsp.TextDocumentIdentifier
 import com.monkopedia.lsp.TextDocumentItem
+import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipOutputStream
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -49,6 +53,9 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
@@ -67,7 +74,12 @@ import kotlinx.coroutines.withTimeout
  *  - concurrent failing calls single-flight the reconnect (one respawn, not N),
  *  - after teardown the bridge never resurrects the delegate, and
  *  - the replaced connection's scope is cancelled, so work launched against the dead engine (the
- *    diagnostics pull) stops there and then rather than running on (#80).
+ *    diagnostics pull) stops there and then rather than running on (#80), and
+ *  - a bridge that found NO engine at `initialize` keeps asking, so it comes alive when the engine
+ *    does, without a burst of requests multiplying spawns past [KotlinLspProcess]'s bound (#171).
+ *
+ * The #171 spawn-bound tests drive a REAL [KotlinLspProcess] against a fake launcher script, so
+ * the "This build of intellij-server has expired" lines they print are that fake, not a failure.
  */
 class BridgeLanguageServerReconnectTest {
 
@@ -374,5 +386,157 @@ class BridgeLanguageServerReconnectTest {
         // Must not throw (no cascade) — just return the inert fallback.
         val result = bridge.textDocumentCompletion(completionAt())
         assertNull(result, "a still-dead engine degrades to inert, never throwing out")
+    }
+
+    private fun hoverAt(): HoverParams = HoverParams(
+        textDocument = TextDocumentIdentifier(uri = frontendUri),
+        position = Position(line = 0u, character = 0u)
+    )
+
+    private fun initParams() =
+        InitializeParams(capabilities = ClientCapabilities(), rootUri = "file:///$workspaceId")
+
+    @Test
+    fun `a bridge with no engine at initialize comes alive when the engine does`() = runBlocking {
+        seedContent("val a = 1\n")
+        // The first engine fails its `initialize` handshake; after that, connectEngine reports the
+        // engine unavailable (a respawn bound in force) until [boundExpired] flips.
+        val failsInit = FakeEngine(id = 1, crashed = AtomicBoolean(true))
+        val recovered = FakeEngine(id = 2)
+        val boundExpired = AtomicBoolean(false)
+        val attempts = AtomicInteger()
+        val bridge = FakeEngineBridge(env.config, workspaceId, konstructionId) {
+            when {
+                attempts.getAndIncrement() == 0 -> failsInit
+                boundExpired.get() -> recovered
+                else -> null
+            }
+        }
+
+        bridge.initialize(initParams())
+        bridge.initialized(InitializedParams())
+        bridge.textDocumentDidOpen(openParams("val a = 1\n"))
+        assertNull(bridge.textDocumentCompletion(completionAt()), "inert while the bound holds")
+
+        // The bound expires; the SAME session (no reopen, no re-initialize) must now get completions.
+        boundExpired.set(true)
+        val result = bridge.textDocumentCompletion(completionAt())
+
+        assertTrue(
+            result is TextDocumentCompletionResult.CompletionItemArray,
+            "an inert bridge must pick the engine up once it is available again; got $result"
+        )
+        assertEquals(1, recovered.initializes.size, "the handshake ran on the recovered engine")
+        assertEquals(1, recovered.initializedCalls.size, "the editor's `initialized` was replayed")
+        // The document opened while inert was captured and replayed, so the engine analyzes it.
+        assertTrue(
+            recovered.didOpens.single().textDocument.text.contains("val a = 1"),
+            "the document opened while inert must be replayed to the recovered engine"
+        )
+        assertEquals(1, recovered.completions.size, "the completion ran on the recovered engine")
+        bridge.close()
+    }
+
+    /** A launcher that logs each launch and exits like an expired build (#84). */
+    private fun expiredEngine(launchLog: File): File =
+        env.tempDir.resolve("fake-intellij-server").apply {
+            writeText(
+                """
+                #!/bin/bash
+                echo launch >> "${launchLog.absolutePath}"
+                echo "This build of intellij-server has expired" >&2
+                exit 1
+                """.trimIndent()
+            )
+            setExecutable(true)
+        }
+
+    private fun File.lineCount(): Int = if (exists()) readLines().count { it.isNotBlank() } else 0
+
+    /** A bridge on a REAL [KotlinLspProcess] for [config], whose monotonic clock is [now]. */
+    private fun realEngineBridge(config: Config, clock: () -> Long) = BridgeLanguageServer(
+        config,
+        workspaceId,
+        konstructionId,
+        object : DefaultLanguageClient() {},
+        KotlinLspProcess(config, clock)
+    )
+
+    @Test
+    fun `a burst of requests while inert does not spawn past the bound`() = runBlocking {
+        seedContent("val a = 1\n")
+        val launchLog = env.tempDir.resolve("launches.txt")
+        val config = Config(env.tempDir, kotlinLspBinary = expiredEngine(launchLog))
+        val now = AtomicLong(0)
+        val bridge = realEngineBridge(config) { now.get() }
+
+        bridge.initialize(initParams())
+        assertEquals(1, launchLog.lineCount(), "initialize launched the engine once, and it died")
+        bridge.initialized(InitializedParams())
+        bridge.textDocumentDidOpen(openParams("val a = 1\n"))
+
+        // A burst: concurrent completions, then a cursor sweep of hovers, all while inert.
+        (1..BURST).map {
+            async(Dispatchers.IO) { bridge.textDocumentCompletion(completionAt()) }
+        }.awaitAll().forEach { assertNull(it, "a dead engine yields no completions") }
+        repeat(BURST) { assertNull(bridge.textDocumentHover(hoverAt())) }
+
+        // Equality, not <=: "at most the cap" is also satisfied by a bridge that never asks again,
+        // which is the #171 defect. All these requests must spawn exactly the cap, then stop.
+        assertEquals(
+            KotlinLspProcess.MAX_CONSECUTIVE_FAILURES,
+            launchLog.lineCount(),
+            "an inert bridge retries through KotlinLspProcess, whose failure count caps the spawns"
+        )
+
+        // Once the cooldown has run out, the same session asks again — one spawn, not a burst.
+        now.set(KotlinLspProcess.COOLDOWN_MILLIS + 1)
+        // (Two, because a third would hit the spawn window: five spawns in ten minutes.)
+        repeat(2) { bridge.textDocumentHover(hoverAt()) }
+        assertEquals(
+            KotlinLspProcess.MAX_CONSECUTIVE_FAILURES + 2,
+            launchLog.lineCount(),
+            "after the cooldown the inert bridge resumes asking, still one spawn per request"
+        )
+        bridge.close()
+    }
+
+    @Test
+    fun `with no engine configured an inert bridge never reaches the spawn path`() = runBlocking {
+        seedContent("val a = 1\n")
+        // [KotlinLspProcess] reads its clock only once past the binary check, on the way to a
+        // spawn, so a clock that is never read means no spawn was even considered.
+        suspend fun clockReadsFor(binary: File?): Int {
+            val reads = AtomicInteger()
+            val config = Config(env.tempDir, kotlinLspBinary = binary)
+            val bridge = realEngineBridge(config) { reads.incrementAndGet().toLong() }
+            bridge.initialize(initParams())
+            bridge.initialized(InitializedParams())
+            bridge.textDocumentDidOpen(openParams("val a = 1\n"))
+            repeat(BURST) {
+                assertNull(bridge.textDocumentCompletion(completionAt()))
+                assertNull(bridge.textDocumentHover(hoverAt()))
+            }
+            bridge.close()
+            return reads.get()
+        }
+
+        // Positive control: the same instrument DOES see a configured engine's spawn path.
+        assertTrue(
+            clockReadsFor(expiredEngine(env.tempDir.resolve("launches.txt"))) > 0,
+            "control: a configured engine reaches the spawn path"
+        )
+        assertEquals(0, clockReadsFor(null), "no binary configured: nothing to spawn")
+        // A configured-but-missing binary gets past ensureConnection's own null check, so only
+        // connect()'s isKotlinLspAvailable short-circuit keeps this at zero.
+        assertEquals(
+            0,
+            clockReadsFor(env.tempDir.resolve("missing-intellij-server")),
+            "a missing binary must short-circuit on isKotlinLspAvailable"
+        )
+    }
+
+    private companion object {
+        const val BURST = 20
     }
 }
