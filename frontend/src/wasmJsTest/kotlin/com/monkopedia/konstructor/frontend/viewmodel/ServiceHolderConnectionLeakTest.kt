@@ -27,6 +27,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -48,17 +49,18 @@ class ServiceHolderConnectionLeakTest {
         // Every attempt gets as far as allocating a connection and then fails
         // its first ping — the "backend is down" case.
         val factory = CountingConnectionFactory(successfulPingsPerConnection = 0)
-        ServiceHolder(factory, backgroundScope)
+        ServiceHolder(factory, backgroundScope, MutableStateFlow(true))
 
         // NB: advanceTimeBy (not advanceUntilIdle) — the holder runs in
         // backgroundScope, and advanceUntilIdle only drains foreground work.
-        advanceTimeBy(30_001)
+        // Backoff puts attempts at 0, 1, 3, 7, 15, 31, 61s.
+        advanceTimeBy(61_001)
         runCurrent()
 
         // Instrument check: the loop really did retry many times.
         assertTrue(
-            factory.created >= 10,
-            "expected the reconnect loop to have made >= 10 attempts, made ${factory.created}"
+            factory.created >= 7,
+            "expected the reconnect loop to have made >= 7 attempts, made ${factory.created}"
         )
         assertEquals(
             factory.created,
@@ -74,7 +76,7 @@ class ServiceHolderConnectionLeakTest {
         // the "backend restarted under us" case, where the old client is
         // abandoned in favour of a new one.
         val factory = CountingConnectionFactory(successfulPingsPerConnection = 1)
-        ServiceHolder(factory, backgroundScope)
+        ServiceHolder(factory, backgroundScope, MutableStateFlow(true))
 
         advanceTimeBy(130_001)
         runCurrent()
@@ -93,10 +95,25 @@ class ServiceHolderConnectionLeakTest {
     }
 
     @Test
+    fun hiddenTabPausesReconnectAttempts() = runTest {
+        val factory = CountingConnectionFactory(successfulPingsPerConnection = 0)
+        val visible = MutableStateFlow(false)
+        ServiceHolder(factory, backgroundScope, visible)
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, factory.created, "only the initial attempt while the tab is hidden")
+
+        visible.value = true
+        runCurrent()
+        assertEquals(2, factory.created, "becoming visible retries immediately")
+    }
+
+    @Test
     fun cancellingTheScopeClosesTheLiveConnection() = runTest {
         val factory = CountingConnectionFactory(successfulPingsPerConnection = Int.MAX_VALUE)
         val scope = CoroutineScope(backgroundScope.coroutineContext + Job())
-        ServiceHolder(factory, scope)
+        ServiceHolder(factory, scope, MutableStateFlow(true))
 
         advanceTimeBy(1)
         assertEquals(1, factory.created)

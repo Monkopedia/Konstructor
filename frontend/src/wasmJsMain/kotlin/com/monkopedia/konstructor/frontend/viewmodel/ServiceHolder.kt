@@ -28,10 +28,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -39,13 +44,6 @@ import kotlinx.coroutines.withContext
  * How long to wait between keep-alive pings on an established connection.
  */
 private const val KEEP_ALIVE_INTERVAL_MS = 10_000L
-
-/**
- * How long to wait before starting the next connection attempt. Deliberately a
- * flat interval — changing the retry cadence (backoff/jitter/caps) is a policy
- * question tracked separately from the resource handling here.
- */
-private const val RECONNECT_DELAY_MS = 3_000L
 
 /**
  * One attempt's worth of connection state: the stub callers talk to, plus every
@@ -72,10 +70,16 @@ internal fun interface ConnectionFactory {
 
 class ServiceHolder internal constructor(
     private val connectionFactory: ConnectionFactory,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    tabVisibility: Flow<Boolean>
 ) {
 
-    constructor() : this(WebSocketConnectionFactory(), MainScope())
+    constructor() : this(WebSocketConnectionFactory(), MainScope(), documentVisibility())
+
+    // Shared in the holder's scope, so the underlying listener is removed when
+    // the scope is cancelled.
+    private val tabVisible = tabVisibility.stateIn(scope, SharingStarted.Eagerly, true)
+    private val backoff = ReconnectBackoff()
 
     private val _service = MutableStateFlow<Konstructor?>(null)
     val service: StateFlow<Konstructor?> = _service.asStateFlow()
@@ -98,6 +102,7 @@ class ServiceHolder internal constructor(
                 stub.ping()
                 _service.value = stub
                 _connected.value = true
+                backoff.reset()
                 // Keep-alive loop
                 while (true) {
                     delay(KEEP_ALIVE_INTERVAL_MS)
@@ -122,7 +127,7 @@ class ServiceHolder internal constructor(
                 // release them rather than abandoning them.
                 connection?.closeQuietly()
             }
-            delay(RECONNECT_DELAY_MS)
+            backoff.awaitNextAttempt(tabVisible)
         }
     }
 
@@ -136,6 +141,28 @@ class ServiceHolder internal constructor(
         }
     }
 }
+
+/**
+ * Whether the page is visible (`document.visibilityState != "hidden"`), updated
+ * on every `visibilitychange`. The listener is removed when collection stops.
+ */
+private fun documentVisibility(): Flow<Boolean> = callbackFlow {
+    val removeListener = addVisibilityListener { visible -> trySend(visible) }
+    send(isDocumentVisible())
+    awaitClose { removeListener() }
+}
+
+@JsFun("() => document.visibilityState !== 'hidden'")
+private external fun isDocumentVisible(): Boolean
+
+@JsFun(
+    """(cb) => {
+    var listener = function() { cb(document.visibilityState !== 'hidden'); };
+    document.addEventListener('visibilitychange', listener);
+    return () => { document.removeEventListener('visibilitychange', listener); };
+}"""
+)
+private external fun addVisibilityListener(onChange: (Boolean) -> Unit): () -> Unit
 
 /**
  * The real factory: opens a websocket to the page's own origin.

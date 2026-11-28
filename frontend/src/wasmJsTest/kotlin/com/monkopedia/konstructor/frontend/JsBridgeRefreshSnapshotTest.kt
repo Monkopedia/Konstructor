@@ -35,6 +35,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -182,7 +183,8 @@ private class BridgeFixture(
 private fun bridgeFixture(scope: CoroutineScope): BridgeFixture {
     val serviceHolder = ServiceHolder(
         ConnectionFactory { FakeServiceConnection() },
-        scope
+        scope,
+        MutableStateFlow(true)
     )
     val spaceListVm = SpaceListViewModel(serviceHolder, WorkspaceMutations(serviceHolder))
     return BridgeFixture(serviceHolder, spaceListVm, SettingsViewModel())
