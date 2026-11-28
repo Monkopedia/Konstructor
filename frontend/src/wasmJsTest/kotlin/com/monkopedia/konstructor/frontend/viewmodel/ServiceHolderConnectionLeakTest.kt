@@ -81,9 +81,12 @@ class ServiceHolderConnectionLeakTest {
         advanceTimeBy(130_001)
         runCurrent()
 
+        // Each cycle is a 10s keep-alive plus a 1s backoff, because a successful
+        // connect resets the backoff: attempts at 0, 11, ..., 121s. Without the
+        // reset the delays keep growing and only 7 attempts fit in this window.
         assertTrue(
-            factory.created >= 5,
-            "expected >= 5 connect/drop cycles, saw ${factory.created}"
+            factory.created >= 12,
+            "expected >= 12 connect/drop cycles, saw ${factory.created}"
         )
         // At most the one connection currently established is still open; every
         // earlier cycle's connection must already have been closed.
