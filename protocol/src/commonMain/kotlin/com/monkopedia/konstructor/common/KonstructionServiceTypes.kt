@@ -48,3 +48,31 @@ data class TaskResult(
     val status: TaskStatus,
     val messages: List<TaskMessage> = emptyList()
 )
+
+/**
+ * Whether the backend will currently hand the editor a kotlin-lsp engine (#159).
+ *
+ * The two non-[AVAILABLE] states are the respawn bounds that keep a broken engine from being
+ * spawned in a loop. Both clear on their own after [LspStatus.retryInMillis]; until then completion
+ * and diagnostics come back empty while compile and render carry on as normal.
+ *
+ * Wire note: append new cases LAST, as with [DirtyState], so existing serial names never move.
+ */
+@Serializable
+enum class LspEngineState {
+    /** Not held back by a respawn bound. Says nothing about whether an engine is configured. */
+    AVAILABLE,
+
+    /** The engine failed to become usable several times running; spawning is paused. */
+    FAILURE_COOLDOWN,
+
+    /** The engine was spawned too often in the spawn window (#157); spawning is paused. */
+    SPAWN_WINDOW
+}
+
+@Serializable
+data class LspStatus(
+    val state: LspEngineState = LspEngineState.AVAILABLE,
+    /** How long until spawning is allowed again; 0 when [state] is [LspEngineState.AVAILABLE]. */
+    val retryInMillis: Long = 0
+)

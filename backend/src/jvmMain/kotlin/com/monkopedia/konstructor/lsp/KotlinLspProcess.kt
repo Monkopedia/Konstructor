@@ -19,6 +19,8 @@ import com.monkopedia.hauler.error
 import com.monkopedia.hauler.hauler
 import com.monkopedia.hauler.info
 import com.monkopedia.konstructor.Config
+import com.monkopedia.konstructor.common.LspEngineState
+import com.monkopedia.konstructor.common.LspStatus
 import com.monkopedia.ksrpc.channels.SingleChannelConnection
 import com.monkopedia.lsp.InitializeParams
 import com.monkopedia.lsp.InitializeResult
@@ -93,10 +95,14 @@ class KotlinLspProcess internal constructor(
     private val recentSpawns = ArrayDeque<Long>()
 
     /**
-     * While `now < this`, spawning is refused outright and the bridge stays inert. Starts at
-     * [Long.MIN_VALUE], not 0, because [clock]'s origin is arbitrary and may be negative.
+     * While `now < until`, spawning is refused outright and the bridge stays inert; null when no
+     * bound has tripped. One object rather than two fields so [status], which reads it without
+     * [lock], always sees an `until` and a reason that belong together.
      */
-    private var cooldownUntil = Long.MIN_VALUE
+    @Volatile
+    private var cooldown: Cooldown? = null
+
+    private class Cooldown(val until: Long, val reason: LspEngineState)
 
     /**
      * Lazily spawn (once) the warm subprocess, drive it through the LSP `initialize`
@@ -141,7 +147,7 @@ class KotlinLspProcess internal constructor(
                 // (bounded by [admitSpawn]) instead of queueing behind an engine that has
                 // already proved it will not answer.
                 shutdownLocked()
-                consecutiveFailures++
+                recordFailure()
                 null
             } catch (t: Throwable) {
                 // Our own cancellation must propagate; anything else degrades LSP to off.
@@ -168,7 +174,7 @@ class KotlinLspProcess internal constructor(
         }
         val binary = config.kotlinLspBinary ?: return null
         val now = clock()
-        if (now < cooldownUntil) return null
+        if (cooldown?.let { now < it.until } == true) return null
         if (!admitSpawn(now)) return null
         return try {
             val systemPath = config.kotlinLspSystemPath.absolutePath
@@ -203,7 +209,7 @@ class KotlinLspProcess internal constructor(
                         "like this."
                 )
                 shutdownLocked()
-                consecutiveFailures++
+                recordFailure()
                 return null
             }
             val conn = (proc.inputStream to proc.outputStream).asLspConnection()
@@ -212,7 +218,7 @@ class KotlinLspProcess internal constructor(
         } catch (t: Throwable) {
             hauler.error("Failed to spawn kotlin-lsp subprocess", t)
             shutdownLocked()
-            consecutiveFailures++
+            recordFailure()
             null
         }
     }
@@ -233,8 +239,8 @@ class KotlinLspProcess internal constructor(
      * request traffic" means paced by how fast someone moves the mouse. Each attempt is a
      * fresh ~2GB JVM; #84 records that taking prod down for six days.
      *
-     * Counts CONSECUTIVE FAILURES rather than spawns-per-time-window, because a window is a
-     * bound whose reachability depends on how long each failure takes: with a handshake
+     * Counts CONSECUTIVE FAILURES ([recordFailure] trips that cooldown) rather than
+     * spawns-per-time-window, because a window is a bound whose reachability depends on how long each failure takes: with a handshake
      * deadline in play a failed attempt costs the probe plus the deadline, so the earliest
      * attempts age out of the window before the last one arrives and the cap can never trip.
      * A failure count cannot be outrun that way, and it is the more accurate rule besides —
@@ -252,31 +258,49 @@ class KotlinLspProcess internal constructor(
      * `suspend` only because [hauler]'s logging is; nothing here waits.
      */
     private suspend fun admitSpawn(now: Long): Boolean {
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            cooldownUntil = now + COOLDOWN_MILLIS
-            consecutiveFailures = 0
-            hauler.error(
-                "kotlin-lsp failed to become usable $MAX_CONSECUTIVE_FAILURES times running — " +
-                    "no further spawns for ${COOLDOWN_MILLIS / 1000}s. LSP is off until then."
-            )
-            return false
-        }
         while (recentSpawns.isNotEmpty() && now - recentSpawns.first() >= SPAWN_WINDOW_MILLIS) {
             recentSpawns.removeFirst()
         }
         if (recentSpawns.size >= MAX_SPAWNS_PER_WINDOW) {
             // Refuse until the oldest spawn ages out; the cooldown keeps this to one log line
             // rather than one per cursor move.
-            cooldownUntil = recentSpawns.first() + SPAWN_WINDOW_MILLIS
+            val until = recentSpawns.first() + SPAWN_WINDOW_MILLIS
+            cooldown = Cooldown(until, LspEngineState.SPAWN_WINDOW)
             hauler.error(
                 "kotlin-lsp was spawned $MAX_SPAWNS_PER_WINDOW times in " +
                     "${SPAWN_WINDOW_MILLIS / 1000}s — it keeps dying after starting. No " +
-                    "further spawns for ${(cooldownUntil - now) / 1000}s. LSP is off until then."
+                    "further spawns for ${(until - now) / 1000}s. LSP is off until then."
             )
             return false
         }
         recentSpawns.addLast(now)
         return true
+    }
+
+    /**
+     * Count a spawn that did not produce a usable engine, and start the failure cooldown the
+     * moment the count reaches [MAX_CONSECUTIVE_FAILURES] — not on the next attempt — so
+     * [status] reports the editor as dark as soon as it is.
+     */
+    private suspend fun recordFailure() {
+        if (++consecutiveFailures < MAX_CONSECUTIVE_FAILURES) return
+        cooldown = Cooldown(clock() + COOLDOWN_MILLIS, LspEngineState.FAILURE_COOLDOWN)
+        consecutiveFailures = 0
+        hauler.error(
+            "kotlin-lsp failed to become usable $MAX_CONSECUTIVE_FAILURES times running — " +
+                "no further spawns for ${COOLDOWN_MILLIS / 1000}s. LSP is off until then."
+        )
+    }
+
+    /**
+     * Whether a respawn bound is holding the engine back right now, and for how long (#159).
+     * Lock-free on purpose: [connect] holds [lock] for up to a whole handshake deadline, and the
+     * editor's status poll must not queue behind it.
+     */
+    fun status(): LspStatus {
+        val current = cooldown ?: return LspStatus()
+        val remaining = current.until - clock()
+        return if (remaining > 0) LspStatus(current.reason, remaining) else LspStatus()
     }
 
     /**
@@ -291,7 +315,7 @@ class KotlinLspProcess internal constructor(
         shutdownLocked()
         consecutiveFailures = 0
         recentSpawns.clear()
-        cooldownUntil = Long.MIN_VALUE
+        cooldown = null
     }
 
     /**

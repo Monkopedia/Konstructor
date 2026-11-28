@@ -20,6 +20,7 @@ import com.monkopedia.konstructor.Config
 import com.monkopedia.konstructor.common.KonstructionInfo
 import com.monkopedia.konstructor.common.KonstructionListener
 import com.monkopedia.konstructor.common.KonstructionService
+import com.monkopedia.konstructor.common.LspStatus
 import com.monkopedia.konstructor.common.TaskResult
 import com.monkopedia.konstructor.testutil.TestEnvironment
 import com.monkopedia.ksrpc.channels.Connection
@@ -110,6 +111,7 @@ class LspSubserviceLeakTest {
         override suspend fun requestKonstruct(target: String) = error("unused")
         override suspend fun requestKonstructs(targets: List<String>) = error("unused")
         override suspend fun getShipper(u: Unit): Shipper = error("unused")
+        override suspend fun lspStatus(u: Unit): LspStatus = error("unused")
     }
 
     @Test

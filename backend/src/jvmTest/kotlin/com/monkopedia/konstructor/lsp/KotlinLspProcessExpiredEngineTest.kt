@@ -16,6 +16,8 @@
 package com.monkopedia.konstructor.lsp
 
 import com.monkopedia.konstructor.Config
+import com.monkopedia.konstructor.common.LspEngineState
+import com.monkopedia.konstructor.common.LspStatus
 import com.monkopedia.lsp.ClientCapabilities
 import com.monkopedia.lsp.DefaultLanguageClient
 import com.monkopedia.lsp.InitializeParams
@@ -368,7 +370,7 @@ class KotlinLspProcessExpiredEngineTest {
 
     @Test
     fun shutdownClearsTheSpawnWindow() = runBlocking {
-        // Clearing cooldownUntil alone is not enough here: the window still holds its spawns and
+        // Clearing the cooldown alone is not enough here: the window still holds its spawns and
         // would re-trip on the very next attempt.
         val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = shortLivedEngine)) { 0L }
         repeat(KotlinLspProcess.MAX_SPAWNS_PER_WINDOW + 1) { connectAndOutlive(lsp) }
@@ -378,6 +380,62 @@ class KotlinLspProcessExpiredEngineTest {
 
         assertTrue(connectAndOutlive(lsp), "shutdown() must clear the spawn window")
         assertEquals(KotlinLspProcess.MAX_SPAWNS_PER_WINDOW + 1, launches())
+        lsp.shutdown()
+    }
+
+    @Test
+    fun theFailureCooldownIsReportedWithItsRetryTimeAndClears() = runBlocking {
+        // #159: the cooldown used to be visible only as a log line. The editor polls status()
+        // to say "LSP unavailable (retrying in N min)", so it must name the bound and the time.
+        var now = 0L
+        val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = fakeEngine)) { now }
+
+        repeat(KotlinLspProcess.MAX_CONSECUTIVE_FAILURES - 1) { lsp.ensureConnection() }
+        assertEquals(LspStatus(), lsp.status(), "below the cap nothing is held back yet")
+
+        lsp.ensureConnection()
+        assertEquals(
+            LspStatus(LspEngineState.FAILURE_COOLDOWN, KotlinLspProcess.COOLDOWN_MILLIS),
+            lsp.status(),
+            "the failure that reaches the cap must be reported at once, not on the next attempt"
+        )
+
+        now += 60_000
+        assertEquals(
+            LspStatus(LspEngineState.FAILURE_COOLDOWN, KotlinLspProcess.COOLDOWN_MILLIS - 60_000),
+            lsp.status(),
+            "the retry time must count down"
+        )
+
+        now = KotlinLspProcess.COOLDOWN_MILLIS
+        assertEquals(LspStatus(), lsp.status(), "the warning must clear when the cooldown ends")
+        lsp.ensureConnection()
+        assertEquals(
+            KotlinLspProcess.MAX_CONSECUTIVE_FAILURES + 1,
+            launches(),
+            "and a cleared status must mean a spawn really is allowed again"
+        )
+    }
+
+    @Test
+    fun theSpawnWindowIsReportedWithItsRetryTimeAndClearsOnRecovery() = runBlocking {
+        var now = 0L
+        val lsp = KotlinLspProcess(Config(tempDir, kotlinLspBinary = shortLivedEngine)) { now }
+        repeat(KotlinLspProcess.MAX_SPAWNS_PER_WINDOW) { connectAndOutlive(lsp) }
+        assertEquals(LspStatus(), lsp.status(), "an engine that answered is not held back")
+
+        now = 1_000
+        assertFalse(connectAndOutlive(lsp), "the next respawn must be refused")
+        assertEquals(
+            LspStatus(LspEngineState.SPAWN_WINDOW, KotlinLspProcess.SPAWN_WINDOW_MILLIS - 1_000),
+            lsp.status(),
+            "the refusal must name the spawn window and when its oldest spawn ages out"
+        )
+
+        now = KotlinLspProcess.SPAWN_WINDOW_MILLIS
+        assertEquals(LspStatus(), lsp.status(), "the warning must clear when the window ages out")
+        assertTrue(connectAndOutlive(lsp), "and the engine must actually come back")
+        assertEquals(LspStatus(), lsp.status(), "a recovered engine reports available")
         lsp.shutdown()
     }
 
